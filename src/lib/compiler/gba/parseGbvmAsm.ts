@@ -29,6 +29,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_CALL: 0x04,
   VM_JUMP: 0x09,
   VM_CALL_FAR: 0x0a,
+  VM_LOOP: 0x07,
+  VM_SWITCH: 0x08, // special-cased below (consumes a trailing .dw case table)
   VM_PUSH_VALUE_IND: 0x10,
   VM_PUSH_VALUE: 0x11,
   VM_RESERVE: 0x12,
@@ -48,6 +50,7 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_RAISE: 0x27,
   VM_SET_INDIRECT: 0x28,
   VM_GET_INDIRECT: 0x29,
+  VM_TEST_TERMINATE: 0x2a,
   VM_POLL_LOADED: 0x2b,
   VM_PUSH_REFERENCE: 0x2c,
   VM_ACTOR_ACTIVATE: 0x31,
@@ -58,6 +61,9 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_INPUT_GET: 0x54,
   VM_FADE: 0x57, // gbavm no-op
   VM_SET_SPRITE_MODE: 0x5d, // gbavm no-op
+  VM_ACTOR_GET_ANGLE: 0x86,
+  VM_SIN_SCALE: 0x89,
+  VM_COS_SCALE: 0x8a,
   VM_MEMSET: 0x76,
   VM_MEMCPY: 0x77,
 };
@@ -102,6 +108,9 @@ const SKIP_MACROS = new Set<string>([
   "VM_SET_CONST_INT8", // writes an engine-symbol address (e.g. _fade_frames_per_step)
   "VM_SET_CONST_UINT8",
   "VM_SET_CONST_INT16",
+  // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
+  // its RNG once at boot from a hardware timer instead (P0).
+  "VM_RANDOMIZE",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -230,6 +239,14 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
   const skipped: string[] = [];
   let inRpn = false;
   let rpnBytes: number[] = [];
+  // VM_SWITCH accumulates the ".dw value, label" case table that follows it.
+  let pendingSwitch:
+    | {
+        operands: [number, number, number];
+        size: number;
+        cases: { value: number; target: { label: string } }[];
+      }
+    | null = null;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
 
   const DIRECTIVES = /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry)\b/;
@@ -263,6 +280,29 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
       continue;
     }
 
+    if (pendingSwitch) {
+      // Consume the `.dw value, label` case-table lines emitted after VM_SWITCH.
+      const dw = mnemonic === ".dw" ? splitArgs(argStr) : null;
+      if (!dw || dw.length < 2) {
+        throw new Error(
+          `VM_SWITCH expected a ".dw value, label" case but got "${line}"`,
+        );
+      }
+      pendingSwitch.cases.push({
+        value: ev(dw[0]),
+        target: { label: dw[1].replace(/:+$/, "") },
+      });
+      if (pendingSwitch.cases.length === pendingSwitch.size) {
+        items.push({
+          kind: "switch",
+          operands: pendingSwitch.operands,
+          cases: pendingSwitch.cases,
+        });
+        pendingSwitch = null;
+      }
+      continue;
+    }
+
     // Label definition (jump/call target).
     const labelDef = mnemonic.match(/^([A-Za-z_][\w]*::?|\d+\$:)$/);
     if (labelDef && argStr === "") {
@@ -273,6 +313,17 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
 
     if (mnemonic === "VM_RPN") { inRpn = true; rpnBytes = []; continue; }
     if (mnemonic === "VM_STOP") { items.push({ kind: "stop" }); continue; }
+    if (mnemonic === "VM_SWITCH") {
+      // VM_SWITCH IDX, SIZE, N  followed by SIZE `.dw value, label` case lines.
+      const a = splitArgs(argStr);
+      const size = ev(a[1]);
+      pendingSwitch = { operands: [ev(a[0]), size, ev(a[2])], size, cases: [] };
+      if (size === 0) {
+        items.push({ kind: "switch", operands: pendingSwitch.operands, cases: [] });
+        pendingSwitch = null;
+      }
+      continue;
+    }
 
     if (SKIP_MACROS.has(mnemonic)) {
       skipped.push(`${mnemonic} ${argStr.trim()}`.trim());
@@ -302,5 +353,6 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
   }
 
   if (inRpn) throw new Error("Unterminated VM_RPN block (no .R_STOP)");
+  if (pendingSwitch) throw new Error("Incomplete VM_SWITCH case table");
   return { items, skipped };
 }

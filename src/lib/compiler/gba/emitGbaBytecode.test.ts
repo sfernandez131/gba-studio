@@ -51,6 +51,47 @@ describe("emitGbaBytecode", () => {
       emitGbaBytecode([{ kind: "op", op: 0x41, operands: [0] }]), // DISPLAY_TEXT (not yet ported)
     ).toThrow(/No GBA encoding for opcode 0x41/);
   });
+
+  test("encodes a VM_SWITCH header + relocatable 6-byte case entries", () => {
+    const items: GbaItem[] = [
+      {
+        kind: "switch",
+        operands: [-1, 2, 0], // idx .ARG0, size 2, n 0
+        cases: [
+          { value: 1, target: { label: "a" } },
+          { value: 2, target: { label: "b" } },
+        ],
+      },
+      { kind: "label", name: "a" }, // offset 17 (right after the 5+6+6 = 17-byte switch)
+      { kind: "op", op: 0x18, operands: [] }, // IDLE (1 byte) at offset 17
+      { kind: "label", name: "b" }, // offset 18
+      { kind: "stop" },
+    ];
+    const { bytes, relocations } = emitGbaBytecode(items);
+    // header: op + idx(-1 => 0xFFFF LE) + size + n
+    expect(bytes.slice(0, 5)).toEqual([0x08, 0xff, 0xff, 0x02, 0x00]);
+    // case 0: value 1 (LE) at 5..6, ptr placeholder at 7..10
+    expect(bytes.slice(5, 7)).toEqual([0x01, 0x00]);
+    expect(bytes.slice(7, 11)).toEqual([0x00, 0x00, 0x00, 0x00]);
+    // case 1: value 2 (LE) at 11..12, ptr placeholder at 13..16
+    expect(bytes.slice(11, 13)).toEqual([0x02, 0x00]);
+    // the two 4-byte ptr fields relocate to labels "a" (17) and "b" (18)
+    expect(relocations).toEqual([
+      { at: 7, target: 17 },
+      { at: 13, target: 18 },
+    ]);
+    expect(bytes[17]).toBe(0x18); // IDLE
+    expect(bytes[18]).toBe(0x00); // STOP
+  });
+
+  test("encodes the new trig/angle opcodes (0x86/0x89) little-endian", () => {
+    const { bytes } = emitGbaBytecode([
+      { kind: "op", op: 0x86, operands: [-2, -1] }, // ACTOR_GET_ANGLE idx=-2, dest=-1
+      { kind: "op", op: 0x89, operands: [-1, -2, 5] }, // SIN_SCALE idx=-1, angle=-2, scale=5
+    ]);
+    expect(bytes.slice(0, 5)).toEqual([0x86, 0xfe, 0xff, 0xff, 0xff]);
+    expect(bytes.slice(5, 11)).toEqual([0x89, 0xff, 0xff, 0xfe, 0xff, 0x05]);
+  });
 });
 
 describe("formatGbaProgramC", () => {
