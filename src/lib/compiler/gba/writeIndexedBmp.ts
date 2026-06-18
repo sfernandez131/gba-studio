@@ -44,7 +44,10 @@ export function indexedImageToBmp(
     }
   }
 
-  const PALETTE_COLORS = 16;
+  // A 16-colour BMP is copied straight to grit (one palette); >16 colours makes
+  // Butano quantize per-tile into up to 16 4bpp palettes, which needs a 256-entry
+  // palette in the BMP (butano/tools/bmp.py).
+  const PALETTE_COLORS = palette.length > 16 ? 256 : 16;
   const FILE_HEADER = 14;
   const DIB_HEADER = 40;
   const paletteBytes = PALETTE_COLORS * 4;
