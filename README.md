@@ -42,24 +42,37 @@ GBA Studio is split into two repos, mirroring GB Studio's own editor + engine la
 - [x] **Port the GBVM core** — interpreter & opcode dispatch, full RPN evaluator, control
   flow, and the 16-thread scheduler *(verified on emulated GBA hardware)*
 
-**Engine & pipeline**
-- [ ] Port the GBVM hardware command handlers onto Butano (actors/sprites, backgrounds, camera, input)
-- [ ] Rewrite the asset converters for GBA formats (4bpp tiles, 16-color palettes, hardware metasprites)
-- [ ] Rewrite the build pipeline to invoke devkitARM/Butano (Build → `.gba`)
+**Engine & pipeline — the editor now builds to `.gba` end-to-end**
+- [x] **Hardware command handlers (core slice)** — actors, sprites & input drive Butano on
+  real GBA hardware *(backgrounds & camera still to come)*
+- [x] **GBA bytecode emit layer** — the editor's opcode stream → little-endian `gbavm`
+  bytecode + a relocation table
+- [x] **Codegen → engine bridge** — GB Studio's compiled GBVM assembly is parsed straight
+  into `gbavm` bytecode, so real editor-authored scenes run
+- [x] **Build pipeline → `.gba`** — `gb-studio-cli make:gba project.gbsproj out.gba` runs the
+  editor's codegen → bridge → devkitARM/Butano → a runnable ROM *(GUI **Build** button next)*
+- [ ] Asset converters for GBA formats (4bpp tiles, 16-color palettes, hardware metasprites)
+- [ ] Multi-scene builds — cross-script linking, scene runtime, fades & camera
 - [ ] Swap the in-app preview emulator (binjgb → mGBA)
 - [ ] Update editor limits & palette model for GBA (240×160, 128 sprites, larger palettes)
 
 **Milestone**
-- [ ] **Proof of concept:** a player-controllable walking sprite on GBA, built end-to-end from the editor
+- [ ] **Proof of concept:** a player-controllable walking sprite on GBA, built end-to-end
+  from the editor — *in progress: an editor-authored scene already builds to a `.gba` and
+  renders its actor on GBA; player movement & input are next*
 
 **Beyond the PoC:** affine / Mode-7 effects, a sampled-audio music workflow, link-cable
 multiplayer, and the optional-code escape hatch.
 
 ## Status
 
-The hardest part is already done: **GB Studio's bytecode VM now runs natively on the GBA's
-ARM CPU.** Current focus is the hardware bridge — making VM opcodes drive Butano so the
-editor's scenes, sprites, and input render on real GBA hardware.
+Two milestones down. **GB Studio's bytecode VM runs natively on the GBA**, and the editor now
+**builds a project to a real `.gba` end-to-end**: it runs GB Studio's own codegen, bridges the
+compiled bytecode to the `gbavm` engine, assembles it with devkitARM + Butano, and an
+editor-authored scene's actor renders on GBA hardware — via `gb-studio-cli make:gba`. Current
+focus: broadening the hardware handlers (backgrounds, camera, movement) and the GBA asset
+pipeline so full scenes render, then the GUI **Build** button and player input for the
+walking-sprite proof of concept.
 
 ## Building from source
 
@@ -73,10 +86,16 @@ yarn fetch-deps   # initializes the GBVM submodule and fetches build tools
 yarn start
 ```
 
-The GBA engine ([`gbavm`](https://github.com/sfernandez131/gbavm)) currently builds
-separately with devkitARM + Butano; wiring the editor's **Build** button to emit `.gba`
-is on the roadmap above. For the GB Studio editor's CLI and full documentation, see the
-upstream [GB Studio docs](https://www.gbstudio.dev/docs).
+The editor can now build a project to a `.gba` through the `gbavm` engine from the CLI:
+
+```bash
+gb-studio-cli make:gba project.gbsproj out.gba   # requires devkitARM + Butano
+```
+
+Wiring the GUI **Build** button is next. The GBA engine
+([`gbavm`](https://github.com/sfernandez131/gbavm)) also builds standalone with devkitARM +
+Butano. For the GB Studio editor's CLI and full documentation, see the upstream
+[GB Studio docs](https://www.gbstudio.dev/docs).
 
 ## Credits & license
 
