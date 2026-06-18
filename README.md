@@ -43,23 +43,24 @@ GBA Studio is split into two repos, mirroring GB Studio's own editor + engine la
   flow, and the 16-thread scheduler *(verified on emulated GBA hardware)*
 
 **Engine & pipeline — the editor now builds to `.gba` end-to-end**
-- [x] **Hardware command handlers (core slice)** — actors, sprites & input drive Butano on
-  real GBA hardware *(backgrounds & camera still to come)*
+- [x] **Hardware command handlers (core slice)** — actors, sprites, backgrounds & input drive
+  Butano on real GBA hardware *(camera still to come)*
 - [x] **GBA bytecode emit layer** — the editor's opcode stream → little-endian `gbavm`
   bytecode + a relocation table
 - [x] **Codegen → engine bridge** — GB Studio's compiled GBVM assembly is parsed straight
   into `gbavm` bytecode, so real editor-authored scenes run
 - [x] **Build pipeline → `.gba`** — `gb-studio-cli make:gba project.gbsproj out.gba` runs the
   editor's codegen → bridge → devkitARM/Butano → a runnable ROM *(GUI **Build** button next)*
-- [ ] Asset converters for GBA formats (4bpp tiles, 16-color palettes, hardware metasprites)
+- [x] **Asset converters** — scene backgrounds + actor metasprites convert to GBA formats and
+  render as real art *(mono palette; full colour palettes next)*
 - [ ] Multi-scene builds — cross-script linking, scene runtime, fades & camera
 - [ ] Swap the in-app preview emulator (binjgb → mGBA)
 - [ ] Update editor limits & palette model for GBA (240×160, 128 sprites, larger palettes)
 
 **Milestone**
-- [ ] **Proof of concept:** a player-controllable walking sprite on GBA, built end-to-end
-  from the editor — *in progress: an editor-authored scene already builds to a `.gba` and
-  renders its actor on GBA; player movement & input are next*
+- [x] **Proof of concept:** a player-controllable walking sprite on GBA, built end-to-end
+  from the editor — *an actor "On Update" script (d-pad → move), authored in the editor and
+  compiled through the pipeline, walks the sprite under d-pad control on GBA*
 
 ### Beyond the PoC — the road to a finished product
 
@@ -67,8 +68,8 @@ The unchecked items above are the first concrete steps of a longer arc: reaching
 parity with GB Studio on the GBA, then the GBA-only features that justify the fork.
 The broad phases, from the proof of concept to a shippable tool:
 
-1. **Real scenes** — full asset pipeline (4bpp tiles, 16-color palette banks, hardware
-   metasprites, fonts) so scenes render with their actual art instead of placeholders.
+1. **Real scenes** ✅ — backgrounds + actor metasprites convert to GBA formats and render as
+   real art (mono; full colour palette banks + fonts still to come).
 2. **Gameplay** — player + input-driven movement, camera, tile/actor collision, per-frame
    actor update scripts, and the gameplay opcode set.
 3. **Dialogue, UI & scene flow** — text/dialogue, overlay menus, variables, and multi-scene
@@ -87,13 +88,12 @@ make GBA Studio worth using and shippable.
 
 ## Status
 
-Two milestones down. **GB Studio's bytecode VM runs natively on the GBA**, and the editor now
-**builds a project to a real `.gba` end-to-end**: it runs GB Studio's own codegen, bridges the
-compiled bytecode to the `gbavm` engine, assembles it with devkitARM + Butano, and an
-editor-authored scene's actor renders on GBA hardware — via `gb-studio-cli make:gba`. Current
-focus: broadening the hardware handlers (backgrounds, camera, movement) and the GBA asset
-pipeline so full scenes render, then the GUI **Build** button and player input for the
-walking-sprite proof of concept.
+**Phase 1 (the asset pipeline) is done.** GB Studio's bytecode VM runs natively on the GBA, the
+editor **builds a project to a real `.gba` end-to-end** (`gb-studio-cli make:gba`), and scenes
+now render as **real art**: the converted background plus each actor as its actual spritesheet
+sprite, facing its movement direction, walking under d-pad control. Next up: full colour
+palettes, then Phase 2 gameplay — tile/actor collision, the scene-type player controller, and
+the gameplay opcode set.
 
 ## Building from source
 
