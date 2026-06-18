@@ -84,6 +84,7 @@ const buildProject = async ({
     // gbavm (Butano/devkitARM) engine into a .gba. See src/lib/compiler/gba/.
     await ejectGbaBuild({
       projectData: project,
+      projectRoot,
       outputRoot,
       compiledData,
       progress,
