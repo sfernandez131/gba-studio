@@ -1,121 +1,91 @@
-# GB Studio
+# GBA Studio
 
-[![Github Actions Status](https://github.com/chrismaltby/gb-studio/actions/workflows/main.yml/badge.svg?branch=develop)](https://github.com/chrismaltby/gb-studio/actions?query=branch%3Adevelop) [![Storybook](https://img.shields.io/badge/Storybook-FF4785?logo=storybook&logoColor=white)](https://chrismaltby.github.io/gb-studio/storybook) [![Code Coverage](https://img.shields.io/badge/Coverage-blue?logo=jest&logoColor=white)](https://chrismaltby.github.io/gb-studio/coverage)
+> ⚠️ **Experimental — work in progress.** GBA Studio is an independent fork of
+> [GB Studio](https://github.com/chrismaltby/gb-studio). It is **not affiliated with or
+> endorsed by** the GB Studio project.
 
-Copyright (c) 2019-2026 Chris Maltby, released under the [MIT license](https://opensource.org/licenses/MIT).
+**GBA Studio takes GB Studio's drag-and-drop game editor and retargets it from the original
+Game Boy to the Game Boy Advance** — so you can build GBA games the same no-code way, then
+reach for hardware the Game Boy never had.
 
-Patreon: [gbstudiodev](https://www.patreon.com/gbstudiodev)  
-Twitter: [@maltby](https://www.twitter.com/maltby)  
-Reddit: [/r/gbstudio](https://www.reddit.com/r/gbstudio)  
-Discord: [Join Chat](https://discord.gg/bxerKnc)
+![The GB Studio editor that GBA Studio is built on](gbstudio.gif)
 
-GB Studio is a quick and easy to use retro adventure game creator for Game Boy available for Mac, Linux and Windows.
-For more information see the [GB Studio](https://www.gbstudio.dev) site
+## Goal
 
-![GB Studio](gbstudio.gif)
+- **Keep the GB Studio experience.** Same visual editor, scenes, sprites, dialogue, and
+  event scripting. 100% no-code by default.
+- **Target the GBA natively.** Replace the Game Boy / GBDK backend with a
+  [Butano](https://github.com/GValiente/butano) + devkitARM engine that produces real
+  `.gba` ROMs.
+- **Unlock GBA-only features.** 240×160 screen, thousands of on-screen colors, 128 hardware
+  sprites, rotation/scaling (affine) backgrounds and sprites, sampled audio, link-cable play.
+- **Optional code, always.** No code required — but an opt-in escape hatch for power users
+  (custom script events → custom C++/Butano), layered so the visual builder stays the default.
 
-GB Studio consists of an [Electron](https://electronjs.org/) game builder application and a C based game engine using [GBDK](http://gbdk.sourceforge.net/).
+## How it's built
 
-## Installation
+GBA Studio is split into two repos, mirroring GB Studio's own editor + engine layout:
 
-Download a release for your operating system from the [GB Studio Downloads](https://www.gbstudio.dev/download) page.
+| Part | What | Repo |
+| --- | --- | --- |
+| **Editor** | GB Studio's Electron/React app (this repo), being retargeted for GBA | `sfernandez131/gba-studio` |
+| **Engine** | GB Studio's **GBVM** bytecode VM, ported from Z80/GBDK to C/C++ on **Butano** | [`sfernandez131/gbavm`](https://github.com/sfernandez131/gbavm) |
 
-Or to run from source, clone this repo then:
+**Toolchain:** devkitARM + Butano + Maxmod (replacing GBDK/SDCC + hUGEDriver), with **mGBA** for preview.
 
-- Install [NodeJS](https://nodejs.org/) (required version is given in [.nvmrc](.nvmrc))
+## Roadmap
 
-```bash
-> cd gb-studio
-> corepack enable
-> yarn
-> npm run fetch-deps
-> npm start
-```
+**Foundation**
+- [x] Baseline GB Studio editor running from source
+- [x] GBA toolchain verified (devkitARM 16.1.0 + Butano → `.gba`)
+- [x] `gbavm` engine skeleton boots on GBA
+- [x] **Port the GBVM core** — interpreter & opcode dispatch, full RPN evaluator, control
+  flow, and the 16-thread scheduler *(verified on emulated GBA hardware)*
 
-After checking out a new version you may also need to fetch dependencies again to ensure you have the latest version of GBVM + GBDK etc.
+**Engine & pipeline**
+- [ ] Port the GBVM hardware command handlers onto Butano (actors/sprites, backgrounds, camera, input)
+- [ ] Rewrite the asset converters for GBA formats (4bpp tiles, 16-color palettes, hardware metasprites)
+- [ ] Rewrite the build pipeline to invoke devkitARM/Butano (Build → `.gba`)
+- [ ] Swap the in-app preview emulator (binjgb → mGBA)
+- [ ] Update editor limits & palette model for GBA (240×160, 128 sprites, larger palettes)
 
-```bash
-> cd gb-studio
-> npm run fetch-deps
-```
+**Milestone**
+- [ ] **Proof of concept:** a player-controllable walking sprite on GBA, built end-to-end from the editor
 
-GB Studio currently uses Node 21.7.1. If you have [NVM](https://github.com/nvm-sh/nvm) installed you can use the included `.nvmrc` to switch to the supported Node version.
+**Beyond the PoC:** affine / Mode-7 effects, a sampled-audio music workflow, link-cable
+multiplayer, and the optional-code escape hatch.
 
-```bash
-> cd gb-studio
-> nvm use
-```
+## Status
 
-## GB Studio CLI
+The hardest part is already done: **GB Studio's bytecode VM now runs natively on the GBA's
+ARM CPU.** Current focus is the hardware bridge — making VM opcodes drive Butano so the
+editor's scenes, sprites, and input render on real GBA hardware.
 
-Install GB Studio from source as above then
+## Building from source
 
-```bash
-> npm run make:cli
-> yarn link
-# From any folder you can now run gb-studio-cli
-> $(yarn bin gb-studio-cli) -V
-4.1.2
-> $(yarn bin gb-studio-cli) --help
-```
-
-### Update the CLI
-
-Pull the latest code and run make:cli again, yarn link is only needed for the first run.
-
-```bash
-> npm run make:cli
-```
-
-### CLI Examples
-
-- **Export Project**
-
-  ```bash
-  > $(yarn bin gb-studio-cli) export path/to/project.gbsproj out/
-  ```
-
-  Export GBDK project from gbsproj to out directory
-
-- **Export Data**
-  ```bash
-  > $(yarn bin gb-studio-cli) export -d path/to/project.gbsproj out/
-  ```
-  Export only src/data and include/data from gbsproj to out directory
-- **Make ROM**
-
-  ```bash
-  > $(yarn bin gb-studio-cli) make:rom path/to/project.gbsproj out/game.gb
-  ```
-
-  Make a ROM file from gbsproj
-
-- **Make Pocket**
-
-  ```bash
-  > $(yarn bin gb-studio-cli) make:pocket path/to/project.gbsproj out/game.pocket
-  ```
-
-  Make a Pocket file from gbsproj
-
-- **Make Web**
-  ```bash
-  > $(yarn bin gb-studio-cli) make:web path/to/project.gbsproj out/
-  ```
-  Make a Web build from gbsproj
-
-## Documentation
-
-[GB Studio Documentation](https://www.gbstudio.dev/docs)
-
-## Note For Translators
-
-If you'd like to help contribute new language localisations to GB Studio you can do so by submitting pull requests adding or updating the JSON files found here https://github.com/chrismaltby/gb-studio/tree/develop/src/lang
-
-If you're looking to update an existing translation with content that is missing, there is a handy script that lists keys found in the English localisation that are not found and copies them to your localisation
+The editor is GB Studio and builds the same way — install [Node.js](https://nodejs.org/)
+(version in [.nvmrc](.nvmrc)), then:
 
 ```bash
-npm run missing-translations lang
-# e.g. npm run missing-translations de
-# e.g. npm run missing-translations en-GB
+corepack enable
+yarn
+yarn fetch-deps   # initializes the GBVM submodule and fetches build tools
+yarn start
 ```
+
+The GBA engine ([`gbavm`](https://github.com/sfernandez131/gbavm)) currently builds
+separately with devkitARM + Butano; wiring the editor's **Build** button to emit `.gba`
+is on the roadmap above. For the GB Studio editor's CLI and full documentation, see the
+upstream [GB Studio docs](https://www.gbstudio.dev/docs).
+
+## Credits & license
+
+GBA Studio is a fork of **[GB Studio](https://github.com/chrismaltby/gb-studio)** by Chris
+Maltby and contributors — an extraordinary project that makes this possible. GB Studio is
+Copyright (c) 2019–2026 Chris Maltby, released under the
+[MIT license](https://opensource.org/licenses/MIT); **this fork retains that license** (see
+[LICENSE](LICENSE)). Please support the original project:
+[Patreon](https://www.patreon.com/gbstudiodev) · [gbstudio.dev](https://www.gbstudio.dev).
+
+The GBA engine builds on [Butano](https://github.com/GValiente/butano) by Gustavo Valiente
+and the [devkitPro](https://devkitpro.org/) toolchain.
