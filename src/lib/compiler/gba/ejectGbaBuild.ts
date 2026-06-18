@@ -11,8 +11,9 @@
 // happens in the gbavm engine tree (gbaEngineRoot); an isolated/vendored build
 // dir is a later packaging concern.
 
-import { writeFile, ensureDir, pathExists } from "fs-extra";
+import { writeFile, readFile, ensureDir, pathExists } from "fs-extra";
 import Path from "path";
+import { PNG } from "pngjs";
 import { gbaEngineRoot } from "consts";
 import { ProjectResources } from "shared/lib/resources/types";
 import { assetFilename } from "shared/lib/helpers/assets";
@@ -21,6 +22,7 @@ import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
 import { parseGbvmAsm } from "./parseGbvmAsm";
 import { emitGbaBytecode, formatGbaProgramC } from "./emitGbaBytecode";
 import { indexedImageToBmp, hexToRgb } from "./writeIndexedBmp";
+import type { Rgb } from "./writeIndexedBmp";
 import { buildSpriteSheet, SpriteSheetInput } from "./writeSpriteSheet";
 
 type EjectGbaOptions = {
@@ -108,42 +110,101 @@ const ejectGbaBuild = async ({
     );
   }
 
+  // --- Colour handling -------------------------------------------------------
+  // Mono projects remap to the 4 GB shades (tileDataIndexFn + the customColors
+  // palette). Colour/mixed projects read each image's true colours; Butano then
+  // quantizes >16-colour images into per-tile 4bpp palettes. Index 0 is reserved
+  // for the transparent backdrop (bg) / sprite transparency.
+  const isColor = (settings.colorMode ?? "mono") !== "mono";
+  const readTrueColor = async (
+    file: string,
+    transparentFromAlpha: boolean,
+  ): Promise<{
+    img: { width: number; height: number; data: Uint8Array };
+    palette: Rgb[];
+  }> => {
+    const png = PNG.sync.read(await readFile(file));
+    const data = new Uint8Array(png.width * png.height);
+    const palette: Rgb[] = [[0, 0, 0]]; // 0 reserved (transparent / backdrop)
+    const map = new Map<number, number>();
+    let clamped = false;
+    // Sprites key transparency on alpha and - for opaque/colour-keyed PNGs - on
+    // the top-left pixel's colour, since GB Studio sprite art uses a transparent
+    // background colour rather than an alpha channel.
+    const keyColor =
+      transparentFromAlpha && png.data[3] >= 128
+        ? (png.data[0] << 16) | (png.data[1] << 8) | png.data[2]
+        : -2;
+    for (let i = 0; i < data.length; i++) {
+      const r = png.data[i * 4];
+      const g = png.data[i * 4 + 1];
+      const b = png.data[i * 4 + 2];
+      const rgb = (r << 16) | (g << 8) | b;
+      if (
+        transparentFromAlpha &&
+        (png.data[i * 4 + 3] < 128 || rgb === keyColor)
+      ) {
+        data[i] = 0;
+        continue;
+      }
+      let idx = map.get(rgb);
+      if (idx === undefined) {
+        if (palette.length >= 256) {
+          idx = 255;
+          clamped = true;
+        } else {
+          idx = palette.length;
+          palette.push([r, g, b] as Rgb);
+          map.set(rgb, idx);
+        }
+      }
+      data[i] = idx;
+    }
+    if (clamped) {
+      warnings(`GBA: "${Path.basename(file)}" has >255 colours; extras clamped`);
+    }
+    return { img: { width: png.width, height: png.height, data }, palette };
+  };
+
   // --- Background -> graphics/scene_bg.bmp (Butano regular_bg via grit) --------
   // gbavm always links bn::regular_bg_items::scene_bg, so always emit it; a
-  // project with no start-scene background gets a solid backdrop. Mono palette
-  // matches tileDataIndexFn (index 0 = lightest .. 3 = darkest).
+  // project with no start-scene background gets a solid backdrop.
   await ensureDir(Path.join(gbaEngineRoot, "graphics"));
-  // GBA background colour 0 is transparent, so the image pixels use indices 1..4
-  // (the 4 GB shades, tileDataIndexFn order: 1 = lightest .. 4 = darkest) and the
-  // bg renders fully opaque. Index 0 stays the (unused) backdrop entry; only the
-  // canvas padding around the GB-sized image falls back to the backdrop.
-  const palette = [
-    hexToRgb(settings.customColorsBlack || "202850"), // 0: backdrop (transparent in bg)
-    hexToRgb(settings.customColorsWhite || "E8F8E0"), // 1: lightest
-    hexToRgb(settings.customColorsLight || "B0F088"), // 2
-    hexToRgb(settings.customColorsDark || "509878"), // 3
-    hexToRgb(settings.customColorsBlack || "202850"), // 4: darkest
-  ];
   const background = projectData.backgrounds.find(
     (bg) => bg.id === startScene.backgroundId,
   );
   let bmp: Buffer;
-  if (background) {
+  if (!background) {
+    bmp = indexedImageToBmp(
+      { width: 8, height: 8, data: new Uint8Array(64) },
+      [hexToRgb(settings.customColorsBlack || "202850")],
+      { align: 256 },
+    );
+  } else if (isColor) {
+    progress(`Converting background ${background.filename} (colour)...`);
+    const { img, palette } = await readTrueColor(
+      assetFilename(projectRoot, "backgrounds", background),
+      false,
+    );
+    bmp = indexedImageToBmp(img, palette, { align: 256 });
+  } else {
     progress(`Converting background ${background.filename}...`);
-    const img = await readFileToIndexedImage(
+    // GBA bg colour 0 is transparent, so map the 4 GB shades to indices 1..4.
+    const palette = [
+      hexToRgb(settings.customColorsBlack || "202850"),
+      hexToRgb(settings.customColorsWhite || "E8F8E0"),
+      hexToRgb(settings.customColorsLight || "B0F088"),
+      hexToRgb(settings.customColorsDark || "509878"),
+      hexToRgb(settings.customColorsBlack || "202850"),
+    ];
+    const src = await readFileToIndexedImage(
       assetFilename(projectRoot, "backgrounds", background),
       tileDataIndexFn,
     );
-    const data = new Uint8Array(img.data.length);
-    for (let i = 0; i < data.length; i++) data[i] = (img.data[i] & 0x03) + 1;
+    const data = new Uint8Array(src.data.length);
+    for (let i = 0; i < data.length; i++) data[i] = (src.data[i] & 0x03) + 1;
     bmp = indexedImageToBmp(
-      { width: img.width, height: img.height, data },
-      palette,
-      { align: 256 },
-    );
-  } else {
-    bmp = indexedImageToBmp(
-      { width: 8, height: 8, data: new Uint8Array(64) },
+      { width: src.width, height: src.height, data },
       palette,
       { align: 256 },
     );
@@ -172,12 +233,20 @@ const ejectGbaBuild = async ({
     const actor = startScene.actors[i];
     const sprite = projectData.sprites.find((s) => s.id === actor.spriteSheetId);
     if (!sprite || !sprite.states || sprite.states.length === 0) continue;
-    let img;
+    let img: { width: number; height: number; data: Uint8Array };
+    let palette = spritePalette;
     try {
-      img = await readFileToIndexedImage(
-        assetFilename(projectRoot, "sprites", sprite),
-        tileDataIndexFn,
-      );
+      if (isColor) {
+        ({ img, palette } = await readTrueColor(
+          assetFilename(projectRoot, "sprites", sprite),
+          true,
+        ));
+      } else {
+        img = await readFileToIndexedImage(
+          assetFilename(projectRoot, "sprites", sprite),
+          tileDataIndexFn,
+        );
+      }
     } catch (e) {
       warnings(`GBA: could not read sprite "${sprite.filename}"`);
       continue;
@@ -191,7 +260,7 @@ const ejectGbaBuild = async ({
     const name = `scene_sprite_${idx}`;
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
-      indexedImageToBmp(sheet.sheet, spritePalette, { align: 8 }),
+      indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
     );
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${name}.json`),
