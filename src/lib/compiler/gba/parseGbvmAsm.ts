@@ -34,6 +34,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_RESERVE: 0x12,
   VM_SET: 0x13,
   VM_SET_CONST: 0x14,
+  VM_IF: 0x0f,
+  VM_IF_CONST: 0x1a,
   VM_JOIN: 0x16,
   VM_TERMINATE: 0x17,
   VM_IDLE: 0x18,
@@ -60,10 +62,28 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_MEMCPY: 0x77,
 };
 
+// On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
+// VM_INPUT_GET (0x54), which reads the live keypad bitmask via the hardware bridge.
+// vm.i declares `VM_GET_INT8 IDX, ADDR`; INPUT_GET's spec is [joyid, idx], so we emit
+// joyid 0 + the destination index. Keeps all GBA-specific input handling in the
+// bridge (no change to the shared codegen / GB path).
+const gbaInputGet = (args: string[], ev: (s: string) => number): GbaItem[] => {
+  const [idx, addr] = args;
+  if (addr === undefined || !/_joypads/.test(addr)) {
+    throw new Error(
+      `VM_GET_*INT8 source "${addr ?? ""}" is not supported on GBA (only the joypad read is bridged)`,
+    );
+  }
+  return [{ kind: "op", op: 0x54, operands: [0, ev(idx)] }];
+};
+
 // Macros that are GBVM convenience wrappers (vm.i expands them); we expand them too.
 // Each returns the GbaItems it represents, or null to drop it (with a logged note).
 type ExpandFn = (args: string[], ev: (s: string) => number) => GbaItem[] | null;
 const EXPAND_MACROS: Record<string, ExpandFn> = {
+  // GBA input: read the live keypad bitmask instead of GB Studio's _joypads WRAM.
+  VM_GET_INT8: (a, ev) => gbaInputGet(a, ev),
+  VM_GET_UINT8: (a, ev) => gbaInputGet(a, ev),
   // VM_FADE_IN/OUT IS_MODAL -> VM_FADE <flags>. gbavm's fade is a no-op, so the
   // exact flag bits are irrelevant; we keep the IN/OUT distinction for readability.
   VM_FADE_IN: () => [{ kind: "op", op: 0x57, operands: [0x02] }],
@@ -102,6 +122,10 @@ const BASE_CONSTS: Record<string, number> = {
   ".ISQRT": 26, ".RND": 27,
   // rpn memory-access type tags (char codes) - only needed if REF_MEM is supported
   ".MEM_I8": 0x69, ".MEM_U8": 0x75, ".MEM_I16": 0x49,
+  // stack-arg aliases (vm.i: .ARG0 = -1 .. .ARG16 = -17)
+  ".ARG0": -1, ".ARG1": -2, ".ARG2": -3, ".ARG3": -4, ".ARG4": -5, ".ARG5": -6,
+  ".ARG6": -7, ".ARG7": -8, ".ARG8": -9, ".ARG9": -10, ".ARG10": -11, ".ARG11": -12,
+  ".ARG12": -13, ".ARG13": -14, ".ARG14": -15, ".ARG15": -16, ".ARG16": -17,
 };
 
 // RPN sub-instruction (.R_*) opcode bytes (signed VM_OP_* values as unsigned bytes).
