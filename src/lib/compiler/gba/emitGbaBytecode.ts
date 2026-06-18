@@ -23,11 +23,14 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x02: ["u8"], // POP n
   0x04: ["ptr"], // CALL addr
   0x05: ["u8"], // RET n
+  0x06: ["i16", "u8", "u8", "ptr"], // GET_FAR idx, size, bank, addr (addr = far DATA symbol; resolved in P1)
   0x07: ["i16", "ptr", "u8"], // LOOP idx, label, n
   0x08: ["i16", "u8", "u8"], // SWITCH idx, size, n (+ a 6-byte-per-case jump table)
   0x09: ["ptr"], // JUMP label
   0x0a: ["u8", "ptr"], // CALL_FAR bank, addr
   0x0b: ["u8"], // RET_FAR n
+  0x0d: ["u8", "ptr", "u8", "i16"], // INVOKE bank, fn, nparams, idx (fn = native engine symbol; resolved in P1)
+  0x0e: ["u8", "ptr", "i16", "u8"], // BEGINTHREAD bank, proc, handle, nargs (proc = cross-blob script symbol; resolved in P1)
   0x0f: ["u8", "i16", "i16", "ptr", "u8"], // IF cond, idxA, idxB, label, n
   0x10: ["i16"], // PUSH_VALUE_IND idx
   0x11: ["i16"], // PUSH_VALUE idx
@@ -187,6 +190,17 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
         }
         const target = labelOffsets.get(operand.label);
         if (target === undefined) {
+          // A "_"-prefixed name is an external symbol — another script proc
+          // (VM_BEGINTHREAD), a native engine function (VM_INVOKE/VM_CALL_NATIVE),
+          // or far data (VM_GET_FAR) — not a label in this blob. Resolving those is
+          // P1's job (whole-project compile + link + symbol registry); say so plainly
+          // rather than emitting a bare "unknown label".
+          if (operand.label.startsWith("_")) {
+            throw new Error(
+              `External symbol "${operand.label}" can't be resolved within a single bytecode blob — ` +
+                `cross-blob/native-symbol linking lands in P1 (whole-project compile + link).`,
+            );
+          }
           throw new Error(`Unknown label "${operand.label}"`);
         }
         relocations.push({ at: bytes.length, target });

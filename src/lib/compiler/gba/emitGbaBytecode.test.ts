@@ -92,6 +92,36 @@ describe("emitGbaBytecode", () => {
     expect(bytes.slice(0, 5)).toEqual([0x86, 0xfe, 0xff, 0xff, 0xff]);
     expect(bytes.slice(5, 11)).toEqual([0x89, 0xff, 0xff, 0xfe, 0xff, 0x05]);
   });
+
+  test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
+    // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
+    const items: GbaItem[] = [
+      { kind: "label", name: "proc" }, // offset 0
+      { kind: "op", op: 0x18, operands: [] }, // IDLE (1 byte) — proc body
+      // BEGINTHREAD bank=0, proc->"proc", handle=.ARG0(-1), nargs=0  (op at offset 1)
+      { kind: "op", op: 0x0e, operands: [0, { label: "proc" }, -1, 0] },
+      { kind: "stop" },
+    ];
+    const { bytes, relocations } = emitGbaBytecode(items);
+    expect(bytes[0]).toBe(0x18); // proc body (IDLE) at offset 0
+    // op + bank(u8) + proc(ptr placeholder) + handle(i16 LE) + nargs(u8)
+    expect(bytes[1]).toBe(0x0e);
+    expect(bytes[2]).toBe(0x00); // bank
+    expect(bytes.slice(3, 7)).toEqual([0x00, 0x00, 0x00, 0x00]); // proc ptr placeholder
+    expect(bytes.slice(7, 9)).toEqual([0xff, 0xff]); // handle = -1 (.ARG0) LE
+    expect(bytes[9]).toBe(0x00); // nargs
+    expect(bytes[10]).toBe(0x00); // STOP
+    // the proc ptr at offset 3 relocates to label "proc" (offset 0)
+    expect(relocations).toEqual([{ at: 3, target: 0 }]);
+  });
+
+  test("rejects an external (cross-blob/native) ptr with a P1 diagnostic", () => {
+    expect(() =>
+      emitGbaBytecode([
+        { kind: "op", op: 0x0e, operands: [0, { label: "_other_script" }, -1, 0] },
+      ]),
+    ).toThrow(/External symbol "_other_script".*lands in P1/s);
+  });
 });
 
 describe("formatGbaProgramC", () => {

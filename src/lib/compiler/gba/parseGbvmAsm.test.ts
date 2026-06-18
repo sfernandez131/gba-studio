@@ -203,4 +203,43 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       parseGbvmAsm("        VM_SWITCH .ARG0, 2, 0\n        .dw 1, 1$\n"),
     ).toThrow(/Incomplete VM_SWITCH case table/);
   });
+
+  // The remaining P0 control-flow opcodes reference symbols OUTSIDE the blob:
+  // VM_BEGINTHREAD -> another script proc, VM_INVOKE/VM_CALL_NATIVE -> a native
+  // engine fn, VM_GET_FAR -> far data. The encoding is bridged (P0); resolving the
+  // target is P1. The `___bank_*` bank symbol folds to 0 (GBA is flat, no banking).
+  test("bridges VM_BEGINTHREAD encoding (bank symbol folds to 0; proc is a ptr label)", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
+    );
+    expect(items).toEqual([
+      {
+        kind: "op",
+        op: 0x0e,
+        operands: [0, { label: "_my_thread" }, -1, 0],
+      },
+    ]);
+  });
+
+  test("bridges VM_INVOKE / VM_CALL_NATIVE / VM_GET_FAR encodings", () => {
+    expect(parseGbvmAsm("        VM_INVOKE ___bank_wait, _wait_frames, 1, .ARG0\n").items).toEqual([
+      { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 1, -1] },
+    ]);
+    expect(parseGbvmAsm("        VM_CALL_NATIVE ___bank_fn, _native_fn\n").items).toEqual([
+      { kind: "op", op: 0x2d, operands: [0, { label: "_native_fn" }] },
+    ]);
+    // VM_GET_FAR IDX, SIZE, BANK, ADDR
+    expect(parseGbvmAsm("        VM_GET_FAR .ARG0, .GET_WORD, ___bank_data, _far_data\n").items).toEqual([
+      { kind: "op", op: 0x06, operands: [-1, 1, 0, { label: "_far_data" }] },
+    ]);
+  });
+
+  test("emitting an unresolved external symbol reports the P1 dependency", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
+    );
+    expect(() => emitGbaBytecode(items)).toThrow(
+      /External symbol "_my_thread".*lands in P1/s,
+    );
+  });
 });

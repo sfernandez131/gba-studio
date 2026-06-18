@@ -31,6 +31,14 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_CALL_FAR: 0x0a,
   VM_LOOP: 0x07,
   VM_SWITCH: 0x08, // special-cased below (consumes a trailing .dw case table)
+  // Cross-blob / native / far-data opcodes: the encoding is bridged here (P0), but
+  // their ptr targets are symbols outside this blob (another script proc, a native
+  // engine fn, or far data). Those only resolve once P1 adds whole-project linking;
+  // until then the emitter raises a precise "resolved in P1" error if one is used.
+  VM_GET_FAR: 0x06,
+  VM_INVOKE: 0x0d,
+  VM_BEGINTHREAD: 0x0e,
+  VM_CALL_NATIVE: 0x2d,
   VM_PUSH_VALUE_IND: 0x10,
   VM_PUSH_VALUE: 0x11,
   VM_RESERVE: 0x12,
@@ -118,6 +126,8 @@ const SKIP_MACROS = new Set<string>([
 const BASE_CONSTS: Record<string, number> = {
   // sprite mode
   ".MODE_8X8": 0, ".MODE_8X16": 1,
+  // VM_GET_FAR object size
+  ".GET_BYTE": 0, ".GET_WORD": 1,
   // directions
   ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
   // fade
@@ -174,6 +184,10 @@ function makeEvaluator(consts: Record<string, number>) {
     // Substitute identifiers (.NAME or NAME) with their constant values.
     s = s.replace(/\.?[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
       if (tok in consts) return `(${consts[tok]})`;
+      // `___bank_<symbol>` is a GB bank-number linker symbol. The GBA is flat
+      // (no banking) and every engine handler ignores the bank operand, so any
+      // bank symbol folds to 0.
+      if (tok.startsWith("___bank_")) return "(0)";
       throw new Error(`Unknown symbol "${tok}" in expression "${raw}"`);
     });
     if (!/^[-+*/%|&^<>()~\s0-9xX]+$/.test(s)) {
