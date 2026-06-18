@@ -61,8 +61,29 @@ GBA Studio is split into two repos, mirroring GB Studio's own editor + engine la
   from the editor — *in progress: an editor-authored scene already builds to a `.gba` and
   renders its actor on GBA; player movement & input are next*
 
-**Beyond the PoC:** affine / Mode-7 effects, a sampled-audio music workflow, link-cable
-multiplayer, and the optional-code escape hatch.
+### Beyond the PoC — the road to a finished product
+
+The unchecked items above are the first concrete steps of a longer arc: reaching
+parity with GB Studio on the GBA, then the GBA-only features that justify the fork.
+The broad phases, from the proof of concept to a shippable tool:
+
+1. **Real scenes** — full asset pipeline (4bpp tiles, 16-color palette banks, hardware
+   metasprites, fonts) so scenes render with their actual art instead of placeholders.
+2. **Gameplay** — player + input-driven movement, camera, tile/actor collision, per-frame
+   actor update scripts, and the gameplay opcode set.
+3. **Dialogue, UI & scene flow** — text/dialogue, overlay menus, variables, and multi-scene
+   transitions (the scene stack + cross-script linking).
+4. **Audio** — music + sound effects on GBA (Maxmod), wired to the editor's sound workflow.
+5. **Save & systems → GB Studio parity** — SRAM saves and the remaining engine systems; the
+   bundled **gbs2** sample game builds and plays end-to-end on GBA.
+6. **GBA-native editor** — GUI **Build** button, GBA limits & palette model, in-app **mGBA**
+   preview.
+7. **GBA superpowers** — affine / Mode-7 rotation-scaling, thousands of colors, sampled
+   audio, link-cable multiplayer, and the optional-code (C++/Butano) escape hatch.
+8. **Ship** — vendored engine, bundled toolchain, cross-platform builds, docs & releases.
+
+Phases 1–5 are the bulk of the work (GB Studio itself is years of development); 7–8 are what
+make GBA Studio worth using and shippable.
 
 ## Status
 
