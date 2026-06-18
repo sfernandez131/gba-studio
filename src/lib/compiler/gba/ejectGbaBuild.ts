@@ -58,23 +58,55 @@ const ejectGbaBuild = async ({
     );
   }
 
-  progress(`Generating GBA bytecode from ${scriptKey}...`);
-  const { items, skipped } = parseGbvmAsm(asm);
-  for (const note of skipped) {
-    warnings(`GBA: deferred unsupported instruction "${note}"`);
-  }
-  const program = emitGbaBytecode(items);
-
   await ensureDir(Path.join(gbaEngineRoot, "src"));
-  await writeFile(
-    Path.join(gbaEngineRoot, "src", "game_script.c"),
-    formatGbaProgramC("game_script", program) + "\n",
+
+  // Bridge one compiled GBVM .s into gbavm bytecode and write it as a named C blob.
+  const writeBlob = async (asmText: string, blobName: string, fileName: string) => {
+    const { items, skipped } = parseGbvmAsm(asmText);
+    for (const note of skipped) {
+      warnings(`GBA: deferred unsupported instruction "${note}"`);
+    }
+    const program = emitGbaBytecode(items);
+    await writeFile(
+      Path.join(gbaEngineRoot, "src", fileName),
+      formatGbaProgramC(blobName, program) + "\n",
+    );
+    return program;
+  };
+
+  // Blob 1 - the start scene's init script -> game_script (runs once at boot).
+  progress(`Generating GBA bytecode from ${scriptKey}...`);
+  const initProg = await writeBlob(asm, "game_script", "game_script.c");
+
+  // Blob 2 - the first actor's update script -> actor_update_script, a persistent
+  // per-frame thread that self-loops via VM_IDLE/VM_JUMP. gbavm always links this
+  // symbol, so emit a do-nothing STOP program when no actor has an update script.
+  const updActor = startScene.actors.find(
+    (actor) => compiledData.files[`${actor.symbol}_update.s`] !== undefined,
   );
+  let updProg;
+  if (updActor) {
+    const updKey = `${updActor.symbol}_update.s`;
+    progress(`Generating GBA bytecode from ${updKey}...`);
+    updProg = await writeBlob(
+      compiledData.files[updKey],
+      "actor_update_script",
+      "actor_update_script.c",
+    );
+  } else {
+    updProg = emitGbaBytecode([{ kind: "stop" }]);
+    await writeFile(
+      Path.join(gbaEngineRoot, "src", "actor_update_script.c"),
+      formatGbaProgramC("actor_update_script", updProg) + "\n",
+    );
+  }
+
   // The built .gba is collected here by makeGbaBuild (mirrors build/rom for GBDK).
   await ensureDir(Path.join(outputRoot, "build", "gba"));
 
   progress(
-    `GBA bytecode: ${program.bytes.length} bytes, ${program.relocations.length} relocations`,
+    `GBA bytecode: init ${initProg.bytes.length}b/${initProg.relocations.length} relocs, ` +
+      `update ${updProg.bytes.length}b/${updProg.relocations.length} relocs`,
   );
 };
 

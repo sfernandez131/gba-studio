@@ -89,4 +89,42 @@ describe("parseGbvmAsm", () => {
     );
     expect(items).toEqual([{ kind: "op", op: 0x14, operands: [12, 1] }]);
   });
+
+  // The walking-PoC input path: the editor's joypad read (VM_GET_INT8 from
+  // _joypads) is retargeted to VM_INPUT_GET, and the IF_INPUT check compiles to
+  // VM_IF_CONST against .ARG0. Both must bridge cleanly with a label relocation.
+  test("bridges the GBA input read + VM_IF_CONST from an update script", () => {
+    const asm = `
+.LOCAL_IN = -4
+_actor_update::
+        VM_GET_INT8     .LOCAL_IN, ^/(_joypads + 1)/
+        VM_RPN
+            .R_REF      .LOCAL_IN
+            .R_INT8     1
+            .R_OPERATOR .B_AND
+            .R_STOP
+        VM_IF_CONST     .NE, .ARG0, 0, 1$, 1
+        VM_JUMP         2$
+1$:
+        VM_IDLE
+2$:
+        VM_STOP
+`;
+    const { items } = parseGbvmAsm(asm);
+    // joypad read -> INPUT_GET joyid 0, dest idx -4
+    expect(items.find((i) => i.kind === "op" && i.op === 0x54)).toEqual({
+      kind: "op",
+      op: 0x54,
+      operands: [0, -4],
+    });
+    // IF_INPUT -> IF_CONST .NE(6), .ARG0(-1), B=0, label 1$, n=1
+    expect(items.find((i) => i.kind === "op" && i.op === 0x1a)).toEqual({
+      kind: "op",
+      op: 0x1a,
+      operands: [6, -1, 0, { label: "1$" }, 1],
+    });
+    // The label targets resolve to relocations (IF_CONST ptr + JUMP ptr).
+    const { relocations } = emitGbaBytecode(items);
+    expect(relocations.length).toBe(2);
+  });
 });
