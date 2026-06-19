@@ -107,15 +107,42 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
   VM_RET_FAR: (a, ev) => [{ kind: "op", op: 0x0b, operands: [a.length ? ev(a[0]) : 0] }],
   VM_RET_FAR_N: (a, ev) => [{ kind: "op", op: 0x0b, operands: [ev(a[0])] }],
+  // Engine-symbol writes -> an RPN raw-memory write to the symbol's address (mirrors
+  // vm.i). ADDR is arg 0, the value/source is arg 1. The 32-bit address is a "ram"
+  // symbolic relocation the linker resolves to the engine var it allocates.
+  // VM_SET_CONST_*: write a constant.  VM_SET_*: write VM variable IDXA's value.
+  VM_SET_CONST_INT8: (a, ev) => [memSetItem(MEM_I8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev)],
+  VM_SET_CONST_UINT8: (a, ev) => [memSetItem(MEM_U8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev)],
+  VM_SET_CONST_INT16: (a, ev) => {
+    const v = ev(a[1]);
+    return [memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev)];
+  },
+  VM_SET_CONST_UINT16: (a, ev) => {
+    const v = ev(a[1]);
+    return [memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev)];
+  },
+  VM_SET_INT8: (a, ev) => {
+    const i = ev(a[1]);
+    return [memSetItem(MEM_I8, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+  },
+  VM_SET_UINT8: (a, ev) => {
+    const i = ev(a[1]);
+    return [memSetItem(MEM_U8, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+  },
+  VM_SET_INT16: (a, ev) => {
+    const i = ev(a[1]);
+    return [memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+  },
+  VM_SET_UINT16: (a, ev) => {
+    const i = ev(a[1]);
+    return [memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+  },
 };
 
 // Macros we intentionally drop during bring-up (need machinery not yet ported).
 // Dropping is safe for these specific ops on gbavm's stubbed scaffold; each drop
 // is reported so nothing disappears silently.
 const SKIP_MACROS = new Set<string>([
-  "VM_SET_CONST_INT8", // writes an engine-symbol address (e.g. _fade_frames_per_step)
-  "VM_SET_CONST_UINT8",
-  "VM_SET_CONST_INT16",
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
@@ -154,7 +181,68 @@ const RPN_REF = 0xfd; // -3
 const RPN_REF_IND = 0xfc; // -4
 const RPN_REF_SET = 0xfb; // -5
 const RPN_REF_SET_IND = 0xfa; // -6
+const RPN_REF_MEM = 0xf9; // -7  raw-memory read  (engine symbol; 32-bit addr on GBA)
+const RPN_REF_MEM_SET = 0xf8; // -8  raw-memory write (engine symbol)
+const RPN_REF_MEM_IND = 0xf7; // -9  raw-memory indirect
 const RPN_STOP = 0x00;
+
+// RPN raw-memory type tags (vm.h VM_OP_MEM_*): the access width.
+const MEM_I8 = 0x69; // 'i'
+const MEM_U8 = 0x75; // 'u'
+const MEM_I16 = 0x49; // 'I'
+
+// A 4-byte address field inside an RPN stream that targets an engine symbol; the
+// linker resolves `symbol` to its address. `at` is the offset within the rpn bytes.
+interface RpnReloc {
+  at: number;
+  symbol: string;
+}
+
+// Extract a bare engine symbol ("_fade_frames_per_step") from an RPN address
+// operand, unwrapping SDCC's ^!..! / ^/(..)/ forms. Returns undefined for a
+// numeric/computed address (handled as a literal instead).
+const bareSymbol = (raw: string): string | undefined => {
+  let s = raw.trim();
+  const w = s.match(/^\^\/\((.*)\)\/$/) || s.match(/^\^!(.*)!$/);
+  if (w) s = w[1].trim();
+  s = s.replace(/:+$/, "");
+  return /^_[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? s : undefined;
+};
+
+// Push a 4-byte raw-memory address into an RPN stream: a relocation when ADDR is
+// an engine symbol (the linker patches in &symbol), else a literal little-endian
+// address. Used by .R_REF_MEM* and the VM_SET_*INT8/16 expansions.
+const pushMemAddr = (
+  addrArg: string,
+  out: number[],
+  relocs: RpnReloc[],
+  ev: (s: string) => number,
+): void => {
+  const sym = bareSymbol(addrArg);
+  if (sym) {
+    relocs.push({ at: out.length, symbol: sym });
+    out.push(0, 0, 0, 0); // placeholder, patched at load
+  } else {
+    const v = ev(addrArg);
+    out.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff);
+  }
+};
+
+// Build the RPN GbaItem for a "write to engine symbol ADDR" macro
+// (VM_SET_CONST_INT8/16, VM_SET_INT8/16). `leadBytes` push the value/source onto
+// the RPN stack; then a raw-memory write of width `memTag` to the 32-bit ADDR.
+const memSetItem = (
+  memTag: number,
+  leadBytes: number[],
+  addrArg: string,
+  ev: (s: string) => number,
+): GbaItem => {
+  const bytes: number[] = [...leadBytes, RPN_REF_MEM_SET, memTag];
+  const relocs: RpnReloc[] = [];
+  pushMemAddr(addrArg, bytes, relocs, ev);
+  bytes.push(RPN_STOP);
+  return { kind: "rpn", bytes, relocs };
+};
 
 export interface ParseResult {
   items: GbaItem[];
@@ -207,7 +295,13 @@ const encodeRpnRef = (op: number, idx: number): number[] => [op, idx & 0xff, (id
  * byte stream gbavm's vm_rpn() reads (terminated with 0x00). Stack/heap refs only;
  * raw-memory refs (.R_REF_MEM*) are not supported on GBA yet and throw.
  */
-function parseRpnLine(mnemonic: string, args: string[], ev: (s: string) => number, out: number[]): boolean {
+function parseRpnLine(
+  mnemonic: string,
+  args: string[],
+  ev: (s: string) => number,
+  out: number[],
+  relocs: RpnReloc[],
+): boolean {
   switch (mnemonic) {
     case ".R_INT8": out.push(RPN_INT8, ev(args[0]) & 0xff); return false;
     case ".R_INT16": { const v = ev(args[0]); out.push(RPN_INT16, v & 0xff, (v >> 8) & 0xff); return false; }
@@ -217,10 +311,20 @@ function parseRpnLine(mnemonic: string, args: string[], ev: (s: string) => numbe
     case ".R_REF_SET_IND": out.push(...encodeRpnRef(RPN_REF_SET_IND, ev(args[0]))); return false;
     case ".R_OPERATOR": out.push(ev(args[0]) & 0xff); return false;
     case ".R_STOP": out.push(RPN_STOP); return true; // block complete
-    case ".R_REF_MEM":
+    // Raw-memory ops: `.R_REF_MEM* TYPE, ADDR` -> opcode + type tag + 32-bit ADDR
+    // (an engine-symbol relocation, the GBA-specific part).
     case ".R_REF_MEM_SET":
+      out.push(RPN_REF_MEM_SET, ev(args[0]) & 0xff);
+      pushMemAddr(args[1], out, relocs, ev);
+      return false;
+    case ".R_REF_MEM":
+      out.push(RPN_REF_MEM, ev(args[0]) & 0xff);
+      pushMemAddr(args[1], out, relocs, ev);
+      return false;
     case ".R_REF_MEM_IND":
-      throw new Error(`RPN raw-memory op ${mnemonic} not supported on GBA yet (needs 32-bit symbol relocation)`);
+      out.push(RPN_REF_MEM_IND, ev(args[0]) & 0xff);
+      pushMemAddr(args[1], out, relocs, ev);
+      return false;
     default:
       throw new Error(`Unknown RPN sub-instruction "${mnemonic}"`);
   }
@@ -253,6 +357,7 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
   const skipped: string[] = [];
   let inRpn = false;
   let rpnBytes: number[] = [];
+  let rpnRelocs: RpnReloc[] = [];
   // VM_SWITCH accumulates the ".dw value, label" case table that follows it.
   let pendingSwitch:
     | {
@@ -289,8 +394,17 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
 
     if (inRpn) {
       const args = splitArgs(argStr);
-      const done = parseRpnLine(mnemonic, args, ev, rpnBytes);
-      if (done) { items.push({ kind: "rpn", bytes: rpnBytes }); inRpn = false; rpnBytes = []; }
+      const done = parseRpnLine(mnemonic, args, ev, rpnBytes, rpnRelocs);
+      if (done) {
+        items.push(
+          rpnRelocs.length > 0
+            ? { kind: "rpn", bytes: rpnBytes, relocs: rpnRelocs }
+            : { kind: "rpn", bytes: rpnBytes },
+        );
+        inRpn = false;
+        rpnBytes = [];
+        rpnRelocs = [];
+      }
       continue;
     }
 
@@ -325,7 +439,7 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
       continue;
     }
 
-    if (mnemonic === "VM_RPN") { inRpn = true; rpnBytes = []; continue; }
+    if (mnemonic === "VM_RPN") { inRpn = true; rpnBytes = []; rpnRelocs = []; continue; }
     if (mnemonic === "VM_STOP") { items.push({ kind: "stop" }); continue; }
     if (mnemonic === "VM_SWITCH") {
       // VM_SWITCH IDX, SIZE, N  followed by SIZE `.dw value, label` case lines.

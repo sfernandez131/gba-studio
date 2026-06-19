@@ -75,7 +75,14 @@ export type GbaItem =
   | { kind: "label"; name: string }
   | { kind: "op"; op: number; operands: (number | { label: string })[] }
   | { kind: "stop" }
-  | { kind: "rpn"; bytes: number[] } // raw RPN stream incl. terminator (pre-encoded for now)
+  | {
+      // raw RPN stream incl. terminator. `relocs` mark 4-byte engine-symbol
+      // address fields inside the stream (RPN raw-memory ops, .R_REF_MEM*), which
+      // the linker resolves like any other symbolic relocation (kind "ram").
+      kind: "rpn";
+      bytes: number[];
+      relocs?: { at: number; symbol: string }[]; // `at` is an offset within `bytes`
+    }
   | {
       // VM_SWITCH: a fixed header + a 6-byte-per-case relocatable jump table.
       kind: "switch";
@@ -88,9 +95,24 @@ export interface GbaReloc {
   target: number; // byte offset of the target label within the blob
 }
 
+// A reference to a symbol defined outside this blob. `kind` says what it is, which
+// determines how the project linker (linkGbaProgram, M1) resolves it:
+//   "code" - another script proc (&proc array) or a native engine fn / far data.
+//   "ram"  - a writable engine RAM variable (the target of an RPN raw-memory write,
+//            e.g. VM_SET_CONST_INT8 _fade_frames_per_step). The linker allocates it.
+// The byte offset is known here, but the address isn't (it's a C/linker symbol), so
+// the linker emits a `&symbol` field the engine patches in at load.
+export type GbaSymKind = "code" | "ram";
+export interface GbaSymReloc {
+  at: number; // byte offset of the 4-byte field to patch
+  symbol: string; // the external symbol name (as written in the GBVM .s, e.g. "_other_script")
+  kind: GbaSymKind;
+}
+
 export interface GbaProgram {
   bytes: number[];
   relocations: GbaReloc[];
+  symRelocs: GbaSymReloc[];
 }
 
 const operandSize = (t: GbaOperandType): number =>
@@ -139,6 +161,7 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
 
   const bytes: number[] = [];
   const relocations: GbaReloc[] = [];
+  const symRelocs: GbaSymReloc[] = [];
   const push8 = (v: number) => bytes.push(v & 0xff);
   const push16 = (v: number) => {
     bytes.push(v & 0xff);
@@ -156,7 +179,13 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
     }
     if (item.kind === "rpn") {
       push8(0x15);
+      const rpnStart = bytes.length;
       for (const b of item.bytes) push8(b);
+      // Engine-symbol address fields inside the RPN stream become "ram" symbolic
+      // relocations at their absolute offset in the proc.
+      for (const r of item.relocs ?? []) {
+        symRelocs.push({ at: rpnStart + r.at, symbol: r.symbol, kind: "ram" });
+      }
       continue;
     }
     if (item.kind === "switch") {
@@ -189,21 +218,18 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
           );
         }
         const target = labelOffsets.get(operand.label);
-        if (target === undefined) {
-          // A "_"-prefixed name is an external symbol — another script proc
-          // (VM_BEGINTHREAD), a native engine function (VM_INVOKE/VM_CALL_NATIVE),
-          // or far data (VM_GET_FAR) — not a label in this blob. Resolving those is
-          // P1's job (whole-project compile + link + symbol registry); say so plainly
-          // rather than emitting a bare "unknown label".
-          if (operand.label.startsWith("_")) {
-            throw new Error(
-              `External symbol "${operand.label}" can't be resolved within a single bytecode blob — ` +
-                `cross-blob/native-symbol linking lands in P1 (whole-project compile + link).`,
-            );
-          }
+        if (target !== undefined) {
+          relocations.push({ at: bytes.length, target });
+        } else if (operand.label.startsWith("_")) {
+          // A "_"-prefixed name is an external code symbol — another script proc
+          // (VM_BEGINTHREAD/CALL_FAR), a native engine function (VM_INVOKE/
+          // VM_CALL_NATIVE), or far data (VM_GET_FAR) — not a label in this blob.
+          // Record it as a symbolic relocation; the project linker (linkGbaProgram)
+          // resolves it to a `&symbol` field the engine patches in at load.
+          symRelocs.push({ at: bytes.length, symbol: operand.label, kind: "code" });
+        } else {
           throw new Error(`Unknown label "${operand.label}"`);
         }
-        relocations.push({ at: bytes.length, target });
         push32placeholder();
       } else {
         if (typeof operand !== "number") {
@@ -217,7 +243,7 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
     });
   }
 
-  return { bytes, relocations };
+  return { bytes, relocations, symRelocs };
 }
 
 /** Format an emitted program as C source for the gbavm build (used in M2). */

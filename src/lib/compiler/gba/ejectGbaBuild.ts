@@ -20,7 +20,12 @@ import { assetFilename } from "shared/lib/helpers/assets";
 import { tileDataIndexFn } from "shared/lib/tiles/tileData";
 import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
 import { parseGbvmAsm } from "./parseGbvmAsm";
-import { emitGbaBytecode, formatGbaProgramC } from "./emitGbaBytecode";
+import {
+  linkGbaProgram,
+  formatGbaEntriesC,
+  cNameOf,
+  GbaProc,
+} from "./linkGbaProgram";
 import { indexedImageToBmp, hexToRgb } from "./writeIndexedBmp";
 import type { Rgb } from "./writeIndexedBmp";
 import { buildSpriteSheet, SpriteSheetInput } from "./writeSpriteSheet";
@@ -58,57 +63,83 @@ const ejectGbaBuild = async ({
   if (!startScene) {
     throw new Error("GBA build: project has no scenes to build");
   }
-  // compileData keys per-scene init scripts as `${scene.symbol}_init.s`.
-  const scriptKey = `${startScene.symbol}_init.s`;
-  const asm = compiledData.files[scriptKey];
-  if (asm === undefined) {
-    throw new Error(
-      `GBA build: start scene init script "${scriptKey}" not found in compiled output`,
-    );
-  }
-
   await ensureDir(Path.join(gbaEngineRoot, "src"));
 
-  // Bridge one compiled GBVM .s into gbavm bytecode and write it as a named C blob.
-  const writeBlob = async (asmText: string, blobName: string, fileName: string) => {
+  // --- Link the start scene's script graph -> gba_program.c + gba_entries.c ----
+  // A GBVM proc symbol "_foo" is compiled to the file keyed "foo.s"; a symbol with
+  // no such file is not a project script (it's a native engine fn, an engine RAM
+  // var, or far data) and is left for the linker to report as `unresolved`.
+  const scriptForSymbol = (symbol: string): string | undefined =>
+    compiledData.files[`${cNameOf(symbol)}.s`];
+
+  // Entry points the engine runs: the start scene init (once) and each actor
+  // update script (a persistent per-frame thread + the actor's runtime index;
+  // the player is 0, placed actors are 1..).
+  const sceneInitSymbol = `_${startScene.symbol}_init`;
+  if (scriptForSymbol(sceneInitSymbol) === undefined) {
+    throw new Error(
+      `GBA build: start scene init script "${cNameOf(sceneInitSymbol)}.s" not found in compiled output`,
+    );
+  }
+  const actorUpdates: { symbol: string; cName: string; index: number }[] = [];
+  startScene.actors.forEach((actor, i) => {
+    const symbol = `_${actor.symbol}_update`;
+    if (scriptForSymbol(symbol) !== undefined) {
+      actorUpdates.push({ symbol, cName: cNameOf(symbol), index: i + 1 });
+    }
+  });
+
+  // Collect every reachable proc: the entry scripts + the transitive closure of
+  // their script -> script references (Call Script / threads). parseGbvmAsm drops
+  // deferred ops (warned); the linker resolves cross-proc refs and reports the
+  // rest (native/engine/far data) as unresolved.
+  const procs: GbaProc[] = [];
+  const collected = new Set<string>();
+  const queue: string[] = [sceneInitSymbol, ...actorUpdates.map((u) => u.symbol)];
+  while (queue.length > 0) {
+    const symbol = queue.shift() as string;
+    if (collected.has(symbol)) continue;
+    const asmText = scriptForSymbol(symbol);
+    if (asmText === undefined) continue;
     const { items, skipped } = parseGbvmAsm(asmText);
     for (const note of skipped) {
       warnings(`GBA: deferred unsupported instruction "${note}"`);
     }
-    const program = emitGbaBytecode(items);
-    await writeFile(
-      Path.join(gbaEngineRoot, "src", fileName),
-      formatGbaProgramC(blobName, program) + "\n",
-    );
-    return program;
-  };
+    collected.add(symbol);
+    procs.push({ symbol, items });
+    for (const item of items) {
+      if (item.kind !== "op") continue;
+      for (const operand of item.operands) {
+        if (
+          typeof operand === "object" &&
+          "label" in operand &&
+          operand.label.startsWith("_") &&
+          scriptForSymbol(operand.label) !== undefined
+        ) {
+          queue.push(operand.label);
+        }
+      }
+    }
+  }
 
-  // Blob 1 - the start scene's init script -> game_script (runs once at boot).
-  progress(`Generating GBA bytecode from ${scriptKey}...`);
-  const initProg = await writeBlob(asm, "game_script", "game_script.c");
-
-  // Blob 2 - the first actor's update script -> actor_update_script, a persistent
-  // per-frame thread that self-loops via VM_IDLE/VM_JUMP. gbavm always links this
-  // symbol, so emit a do-nothing STOP program when no actor has an update script.
-  const updActor = startScene.actors.find(
-    (actor) => compiledData.files[`${actor.symbol}_update.s`] !== undefined,
+  progress(
+    `Linking ${procs.length} script proc(s) for scene "${startScene.name}"...`,
   );
-  let updProg;
-  if (updActor) {
-    const updKey = `${updActor.symbol}_update.s`;
-    progress(`Generating GBA bytecode from ${updKey}...`);
-    updProg = await writeBlob(
-      compiledData.files[updKey],
-      "actor_update_script",
-      "actor_update_script.c",
-    );
-  } else {
-    updProg = emitGbaBytecode([{ kind: "stop" }]);
-    await writeFile(
-      Path.join(gbaEngineRoot, "src", "actor_update_script.c"),
-      formatGbaProgramC("actor_update_script", updProg) + "\n",
+  const linked = linkGbaProgram(procs);
+  for (const u of linked.unresolved) {
+    warnings(
+      `GBA: deferred external symbol "${u.symbol}" (referenced by ${cNameOf(u.fromProc)}) — ` +
+        `native/engine/far-data linking lands in a later milestone`,
     );
   }
+  await writeFile(Path.join(gbaEngineRoot, "src", "gba_program.c"), linked.source);
+  await writeFile(
+    Path.join(gbaEngineRoot, "src", "gba_entries.c"),
+    formatGbaEntriesC(
+      cNameOf(sceneInitSymbol),
+      actorUpdates.map((u) => ({ cName: u.cName, index: u.index })),
+    ),
+  );
 
   // --- Colour handling -------------------------------------------------------
   // Mono projects remap to the 4 GB shades (tileDataIndexFn + the customColors
@@ -316,9 +347,11 @@ const ejectGbaBuild = async ({
   // The built .gba is collected here by makeGbaBuild (mirrors build/rom for GBDK).
   await ensureDir(Path.join(outputRoot, "build", "gba"));
 
+  const totalBytes = linked.procs.reduce((n, p) => n + p.program.bytes.length, 0);
   progress(
-    `GBA bytecode: init ${initProg.bytes.length}b/${initProg.relocations.length} relocs, ` +
-      `update ${updProg.bytes.length}b/${updProg.relocations.length} relocs; ` +
+    `GBA link: ${linked.procs.length} proc(s)/${totalBytes}b, ` +
+      `${linked.unresolved.length} deferred external(s); ` +
+      `scene init "${cNameOf(sceneInitSymbol)}", ${actorUpdates.length} actor update(s); ` +
       `background ${background ? background.filename : "(none)"}`,
   );
 };
