@@ -22,7 +22,7 @@ import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
 import { parseGbvmAsm } from "./parseGbvmAsm";
 import {
   linkGbaProgram,
-  formatGbaEntriesC,
+  formatGbaScenesC,
   cNameOf,
   GbaProc,
 } from "./linkGbaProgram";
@@ -133,11 +133,21 @@ const ejectGbaBuild = async ({
     );
   }
   await writeFile(Path.join(gbaEngineRoot, "src", "gba_program.c"), linked.source);
+  // M2a.1: a one-entry scene table (only the start scene is built yet); multi-scene
+  // builds land in M2a.2. The start scene is index 0.
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_entries.c"),
-    formatGbaEntriesC(
-      cNameOf(sceneInitSymbol),
-      actorUpdates.map((u) => ({ cName: u.cName, index: u.index })),
+    Path.join(gbaEngineRoot, "src", "gba_scenes.c"),
+    formatGbaScenesC(
+      [
+        {
+          initCName: cNameOf(sceneInitSymbol),
+          actorUpdates: actorUpdates.map((u) => ({
+            cName: u.cName,
+            index: u.index,
+          })),
+        },
+      ],
+      0,
     ),
   );
 
