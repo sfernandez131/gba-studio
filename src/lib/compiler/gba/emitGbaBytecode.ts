@@ -55,6 +55,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x2c: ["i16"], // PUSH_REFERENCE idx
   0x2d: ["u8", "ptr"], // CALL_NATIVE bank, ptr
   0x31: ["i16"], // ACTOR_ACTIVATE actor
+  0x32: ["i16", "u8"], // ACTOR_SET_DIR actor, dir
   0x33: ["i16"], // ACTOR_DEACTIVATE actor
   0x35: ["i16"], // ACTOR_SET_POS idx
   0x3a: ["i16"], // ACTOR_GET_POS idx
@@ -62,6 +63,10 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
   0x5d: ["u8"], // SET_SPRITE_MODE mode (gbavm: no-op stub)
+  0x68: [], // SCENE_PUSH
+  0x69: [], // SCENE_POP
+  0x6a: [], // SCENE_POP_ALL
+  0x6b: [], // SCENE_STACK_RESET
   0x86: ["i16", "i16"], // ACTOR_GET_ANGLE idx, dest
   0x89: ["i16", "i16", "u8"], // SIN_SCALE idx, idxAngle, scale
   0x8a: ["i16", "i16", "u8"], // COS_SCALE idx, idxAngle, scale
@@ -81,6 +86,13 @@ export type GbaItem =
       kind: "switch";
       operands: [number, number, number]; // idx, size, n
       cases: { value: number; target: { label: string } }[];
+    }
+  | {
+      // Scene change: VM_RAISE EXCEPTION_CHANGE_SCENE + an inline 2-byte scene
+      // INDEX (not the GB far-pointer — there are no banks, and a scene index
+      // can't be a relocation target). The engine reads the index in vm_raise.
+      kind: "changeScene";
+      sceneIndex: number;
     };
 
 export interface GbaReloc {
@@ -110,6 +122,9 @@ function itemSize(item: GbaItem): number {
     case "switch":
       // 5-byte header (op + i16 idx + u8 size + u8 n) + 6 bytes per case entry.
       return opByteSize(GBA_OPCODE_SPECS[0x08]) + item.cases.length * 6;
+    case "changeScene":
+      // 0x27 RAISE + code(u8) + size(u8) + 2 inline scene-index bytes.
+      return 5;
     case "op": {
       const spec = GBA_OPCODE_SPECS[item.op];
       if (!spec) {
@@ -179,6 +194,14 @@ function encodeImage(items: GbaItem[]): {
         relocations.push({ at: bytes.length, target });
         push32placeholder();
       }
+      continue;
+    }
+    if (item.kind === "changeScene") {
+      // VM_RAISE EXCEPTION_CHANGE_SCENE(2), size 2, then the 2-byte scene index.
+      push8(0x27);
+      push8(2); // EXCEPTION_CHANGE_SCENE
+      push8(2); // size = 2 inline bytes (the GB far-ptr is replaced by an index)
+      push16(item.sceneIndex);
       continue;
     }
     const spec = GBA_OPCODE_SPECS[item.op];

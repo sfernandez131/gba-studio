@@ -62,6 +62,7 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_POLL_LOADED: 0x2b,
   VM_PUSH_REFERENCE: 0x2c,
   VM_ACTOR_ACTIVATE: 0x31,
+  VM_ACTOR_SET_DIR: 0x32,
   VM_ACTOR_DEACTIVATE: 0x33,
   VM_ACTOR_SET_POS: 0x35,
   VM_ACTOR_GET_POS: 0x3a,
@@ -69,6 +70,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_INPUT_GET: 0x54,
   VM_FADE: 0x57, // gbavm no-op
   VM_SET_SPRITE_MODE: 0x5d, // gbavm no-op
+  VM_SCENE_PUSH: 0x68,
+  VM_SCENE_POP: 0x69,
+  VM_SCENE_POP_ALL: 0x6a,
+  VM_SCENE_STACK_RESET: 0x6b,
   VM_ACTOR_GET_ANGLE: 0x86,
   VM_SIN_SCALE: 0x89,
   VM_COS_SCALE: 0x8a,
@@ -128,6 +133,8 @@ const BASE_CONSTS: Record<string, number> = {
   ".MODE_8X8": 0, ".MODE_8X16": 1,
   // VM_GET_FAR object size
   ".GET_BYTE": 0, ".GET_WORD": 1,
+  // VM_RAISE exception codes (vm.i) — note: no leading dot
+  EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3, EXCEPTION_LOAD: 4,
   // directions
   ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
   // fade
@@ -232,7 +239,11 @@ function parseRpnLine(mnemonic: string, args: string[], ev: (s: string) => numbe
  * `entrySymbol`, when given, restricts parsing to that routine's body (handy when a
  * file defines several `_name::` routines); otherwise the whole file is parsed.
  */
-export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
+export function parseGbvmAsm(
+  asm: string,
+  entrySymbol?: string,
+  sceneSymbolToIndex?: Record<string, number>,
+): ParseResult {
   const consts: Record<string, number> = { ...BASE_CONSTS };
 
   // First pass: collect local `.X = n` / `SYM = n` constant defines so forward
@@ -262,6 +273,7 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
         cases: { value: number; target: { label: string } }[];
       }
     | null = null;
+  let pendingChangeScene = false; // VM_RAISE CHANGE_SCENE awaiting its IMPORT_FAR_PTR_DATA
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
   let foundEntry: string | undefined; // first `_<name>::` label = the proc entry
 
@@ -343,6 +355,33 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
       }
       continue;
     }
+    if (mnemonic === "VM_RAISE") {
+      // A change-scene raise is rewritten to carry an inline scene INDEX (the
+      // following IMPORT_FAR_PTR_DATA names the target scene). Other raises
+      // (reset/save/load) fall through to the generic encoder below.
+      const a = splitArgs(argStr);
+      if (ev(a[0]) === 2 /* EXCEPTION_CHANGE_SCENE */) {
+        pendingChangeScene = true;
+        continue;
+      }
+    }
+    if (mnemonic === "IMPORT_FAR_PTR_DATA") {
+      const sym = (splitArgs(argStr)[0] ?? "").replace(/:+$/, "");
+      if (pendingChangeScene) {
+        const idx = sceneSymbolToIndex?.[sym];
+        if (idx === undefined) {
+          throw new Error(
+            `VM_RAISE EXCEPTION_CHANGE_SCENE target "${sym}" is not a known scene`,
+          );
+        }
+        items.push({ kind: "changeScene", sceneIndex: idx });
+        pendingChangeScene = false;
+      } else {
+        // Far-ptr to non-scene data (e.g. a font in P3) — no GBA equivalent yet.
+        skipped.push(`IMPORT_FAR_PTR_DATA ${sym}`.trim());
+      }
+      continue;
+    }
 
     if (SKIP_MACROS.has(mnemonic)) {
       skipped.push(`${mnemonic} ${argStr.trim()}`.trim());
@@ -373,5 +412,7 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
 
   if (inRpn) throw new Error("Unterminated VM_RPN block (no .R_STOP)");
   if (pendingSwitch) throw new Error("Incomplete VM_SWITCH case table");
+  if (pendingChangeScene)
+    throw new Error("VM_RAISE EXCEPTION_CHANGE_SCENE not followed by IMPORT_FAR_PTR_DATA");
   return { items, skipped, entrySymbol: foundEntry };
 }
