@@ -63,6 +63,18 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
   0x5d: ["u8"], // SET_SPRITE_MODE mode (gbavm: no-op stub)
+  // text / overlay / input (P3) — operand order = macro SIGNATURE order.
+  // 0x40 LOAD_TEXT is variable-length (handled by the "loadText" item, not here).
+  0x41: ["u8", "u8"], // DISPLAY_TEXT_EX options, startTile
+  0x42: ["u8", "u8"], // OVERLAY_SETPOS x, y
+  0x44: ["u8", "u8"], // OVERLAY_WAIT isModal, waitFlags
+  0x45: ["u8", "u8", "u8"], // OVERLAY_MOVE_TO x, y, speed
+  0x46: ["u8", "u8", "u8", "u8"], // OVERLAY_SHOW x, y, color, options
+  0x47: ["u8", "u8", "u8", "u8", "u8", "u8"], // OVERLAY_CLEAR x, y, w, h, color, options
+  0x4b: ["u8"], // SET_FONT fontIndex
+  0x4e: ["u8", "u8", "u8", "u8", "u8"], // OVERLAY_SET_SCROLL x, y, w, h, color
+  0x52: ["u8"], // INPUT_WAIT mask
+  0x85: ["u8"], // SWITCH_TEXT_LAYER layer
   0x68: [], // SCENE_PUSH
   0x69: [], // SCENE_POP
   0x6a: [], // SCENE_POP_ALL
@@ -93,7 +105,16 @@ export type GbaItem =
       // can't be a relocation target). The engine reads the index in vm_raise.
       kind: "changeScene";
       sceneIndex: number;
-    };
+    }
+  | {
+      // VM_LOAD_TEXT (0x40): op + nargs(u8) + nargs i16 var indices. The text
+      // string bytes follow as a separate "bytes" item (the engine reads both
+      // inline, advancing PC past them — no relocations).
+      kind: "loadText";
+      nargs: number;
+      vars: number[];
+    }
+  | { kind: "bytes"; data: number[] }; // raw inline data (e.g. a NUL-terminated string)
 
 export interface GbaReloc {
   at: number; // byte offset of the 4-byte field to patch
@@ -125,6 +146,11 @@ function itemSize(item: GbaItem): number {
     case "changeScene":
       // 0x27 RAISE + code(u8) + size(u8) + 2 inline scene-index bytes.
       return 5;
+    case "loadText":
+      // 0x40 + nargs(u8) + nargs * i16 var indices.
+      return 2 + item.nargs * 2;
+    case "bytes":
+      return item.data.length;
     case "op": {
       const spec = GBA_OPCODE_SPECS[item.op];
       if (!spec) {
@@ -202,6 +228,18 @@ function encodeImage(items: GbaItem[]): {
       push8(2); // EXCEPTION_CHANGE_SCENE
       push8(2); // size = 2 inline bytes (the GB far-ptr is replaced by an index)
       push16(item.sceneIndex);
+      continue;
+    }
+    if (item.kind === "loadText") {
+      // 0x40 + nargs(u8) + nargs i16 LE var indices. The string follows as a
+      // "bytes" item; the engine reads both inline (no relocations).
+      push8(0x40);
+      push8(item.nargs);
+      for (const v of item.vars) push16(v);
+      continue;
+    }
+    if (item.kind === "bytes") {
+      for (const b of item.data) push8(b);
       continue;
     }
     const spec = GBA_OPCODE_SPECS[item.op];

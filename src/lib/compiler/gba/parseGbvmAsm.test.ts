@@ -1,5 +1,5 @@
 import { parseGbvmAsm } from "./parseGbvmAsm";
-import { emitGbaBytecode } from "./emitGbaBytecode";
+import { emitGbaBytecode, GbaItem } from "./emitGbaBytecode";
 
 // The exact scene-init assembly GB Studio emits for a one-actor scene whose on-init
 // script is [Activate Actor, Set Position]. Kept verbatim so the test tracks the
@@ -312,5 +312,90 @@ describe("parseGbvmAsm — P2 scene opcodes", () => {
   test("a non-change-scene VM_RAISE still encodes via the generic path", () => {
     const { items } = parseGbvmAsm("        VM_RAISE EXCEPTION_RESET, 0\n");
     expect(items).toEqual([{ kind: "op", op: 0x27, operands: [1, 0] }]);
+  });
+});
+
+// P3: dialogue/text — VM_LOAD_TEXT carries its string INLINE as a trailing .asciz,
+// so the bridge must parse + lay the string bytes into the image (byte contract).
+describe("parseGbvmAsm — P3 text", () => {
+  test("parses VM_LOAD_TEXT + inline .asciz into loadText + bytes items", () => {
+    const { items } = parseGbvmAsm(
+      '        VM_LOAD_TEXT 0\n        .asciz "Hi"\n        VM_DISPLAY_TEXT\n',
+    );
+    expect(items).toEqual([
+      { kind: "loadText", nargs: 0, vars: [] },
+      { kind: "bytes", data: [0x48, 0x69, 0x00] }, // "Hi\0"
+      { kind: "op", op: 0x41, operands: [0, 0xff] }, // DISPLAY_TEXT_EX default, continue
+    ]);
+  });
+
+  test("octal-unescapes control codes in the .asciz body", () => {
+    // \001 speed, \004 gotoxy-rel, \012 newline (all 3-digit octal in the source).
+    const { items } = parseGbvmAsm(
+      '        VM_LOAD_TEXT 0\n        .asciz "A\\001\\004B\\012C"\n',
+    );
+    const bytes = items.find((i) => i.kind === "bytes");
+    expect(bytes).toEqual({
+      kind: "bytes",
+      data: [0x41, 0x01, 0x04, 0x42, 0x0a, 0x43, 0x00],
+    });
+  });
+
+  test("bridges the overlay/font/text-layer opcodes (signature order)", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_OVERLAY_MOVE_TO 0, 18, .OVERLAY_SPEED_INSTANT\n" +
+        "        VM_OVERLAY_WAIT .UI_MODAL, .UI_WAIT_BTN_A\n" +
+        "        VM_SWITCH_TEXT_LAYER .TEXT_LAYER_WIN\n" +
+        "        VM_SET_FONT 0\n" +
+        "        VM_OVERLAY_HIDE\n",
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x45, operands: [0, 18, -3] },
+      { kind: "op", op: 0x44, operands: [1, 4] },
+      { kind: "op", op: 0x85, operands: [1] },
+      { kind: "op", op: 0x4b, operands: [0] },
+      { kind: "op", op: 0x42, operands: [0, 0x12] }, // HIDE -> SETPOS 0, MENU_CLOSED_Y
+    ]);
+  });
+
+  test("VM_CHOICE is rejected with a clear later-phase message", () => {
+    expect(() => parseGbvmAsm("        VM_CHOICE .ARG0, 2\n")).toThrow(
+      /later phase/,
+    );
+  });
+
+  test("a font IMPORT_FAR_PTR_DATA is recognized (not warned) given the registry", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        IMPORT_FAR_PTR_DATA _font_0\n",
+      undefined,
+      undefined,
+      { _font_0: 0 },
+    );
+    expect(items).toEqual([]);
+    expect(skipped).toEqual([]); // recognized as a font, no "deferred" note
+  });
+});
+
+describe("emitGbaBytecode — P3 text byte contract", () => {
+  test("encodes loadText + bytes inline with exact PC-length agreement", () => {
+    const items: GbaItem[] = [
+      { kind: "loadText", nargs: 0, vars: [] },
+      { kind: "bytes", data: [0x48, 0x69, 0x00] }, // "Hi\0"
+      { kind: "label", name: "after" },
+      { kind: "op", op: 0x18, operands: [] }, // IDLE — must land at offset 5
+    ];
+    const { bytes, relocations } = emitGbaBytecode(items);
+    // 0x40, nargs=0, then "Hi\0" = 5 bytes, then IDLE.
+    expect(bytes).toEqual([0x40, 0x00, 0x48, 0x69, 0x00, 0x18]);
+    expect(relocations).toEqual([]); // inline string adds no relocations
+  });
+
+  test("loadText with nargs emits the i16 var indices before the string", () => {
+    const { bytes } = emitGbaBytecode([
+      { kind: "loadText", nargs: 1, vars: [-1] }, // one var, .ARG0
+      { kind: "bytes", data: [0x25, 0x64, 0x00] }, // "%d\0"
+    ]);
+    // 0x40, nargs=1, var -1 (0xFFFF LE), then "%d\0"
+    expect(bytes).toEqual([0x40, 0x01, 0xff, 0xff, 0x25, 0x64, 0x00]);
   });
 });
