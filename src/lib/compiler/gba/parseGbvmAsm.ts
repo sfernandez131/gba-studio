@@ -159,6 +159,7 @@ const RPN_STOP = 0x00;
 export interface ParseResult {
   items: GbaItem[];
   skipped: string[]; // human-readable notes for dropped macros
+  entrySymbol?: string; // the proc's exported `_<name>::` entry label, if any
 }
 
 const stripComment = (line: string): string => {
@@ -262,6 +263,7 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
       }
     | null = null;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
+  let foundEntry: string | undefined; // first `_<name>::` label = the proc entry
 
   const DIRECTIVES = /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry)\b/;
 
@@ -321,6 +323,9 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
     const labelDef = mnemonic.match(/^([A-Za-z_][\w]*::?|\d+\$:)$/);
     if (labelDef && argStr === "") {
       const name = labelDef[1].replace(/:+$/, "");
+      // The first identifier-form label (`_<name>::`) is the proc's exported entry;
+      // numeric local labels (`1$`) are excluded by the leading-letter test.
+      if (foundEntry === undefined && /^[A-Za-z_]/.test(name)) foundEntry = name;
       items.push({ kind: "label", name });
       continue;
     }
@@ -368,5 +373,5 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
 
   if (inRpn) throw new Error("Unterminated VM_RPN block (no .R_STOP)");
   if (pendingSwitch) throw new Error("Incomplete VM_SWITCH case table");
-  return { items, skipped };
+  return { items, skipped, entrySymbol: foundEntry };
 }

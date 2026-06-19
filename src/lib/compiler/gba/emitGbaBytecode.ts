@@ -121,10 +121,14 @@ function itemSize(item: GbaItem): number {
 }
 
 /**
- * Encode an opcode stream into gbavm bytes + a relocation table.
- * Two passes: resolve label byte-offsets, then emit bytes and relocations.
+ * Two passes over one item stream: resolve label byte-offsets, then emit bytes
+ * and relocations. Also returns the resolved label table, which linkGbaImage uses
+ * to locate each proc's entry offset within a combined whole-project image.
  */
-export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
+function encodeImage(items: GbaItem[]): {
+  program: GbaProgram;
+  labelOffsets: Map<string, number>;
+} {
   const labelOffsets = new Map<string, number>();
   let offset = 0;
   for (const item of items) {
@@ -190,15 +194,29 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
         }
         const target = labelOffsets.get(operand.label);
         if (target === undefined) {
-          // A "_"-prefixed name is an external symbol — another script proc
-          // (VM_BEGINTHREAD), a native engine function (VM_INVOKE/VM_CALL_NATIVE),
-          // or far data (VM_GET_FAR) — not a label in this blob. Resolving those is
-          // P1's job (whole-project compile + link + symbol registry); say so plainly
-          // rather than emitting a bare "unknown label".
+          // A "_"-prefixed name is a symbol outside this proc. After whole-project
+          // linkGbaImage, cross-proc script symbols ARE in labelOffsets and resolve
+          // here as ordinary in-image relocations. The ones that remain unresolved
+          // are classified by their opcode: native engine functions
+          // (VM_INVOKE/VM_CALL_NATIVE) and far data (VM_GET_FAR) need an engine-side
+          // symbol registry that is a later phase; a leftover script symbol means
+          // the proc wasn't linked with the rest of the project.
           if (operand.label.startsWith("_")) {
+            if (item.op === 0x0d || item.op === 0x2d) {
+              throw new Error(
+                `Native-function symbol "${operand.label}" (VM_INVOKE/VM_CALL_NATIVE) can't be ` +
+                  `linked yet — native-fn resolution needs an engine-side symbol registry (a later phase).`,
+              );
+            }
+            if (item.op === 0x06) {
+              throw new Error(
+                `Far-data symbol "${operand.label}" (VM_GET_FAR) can't be linked yet — ` +
+                  `far-data resolution is a later phase.`,
+              );
+            }
             throw new Error(
-              `External symbol "${operand.label}" can't be resolved within a single bytecode blob — ` +
-                `cross-blob/native-symbol linking lands in P1 (whole-project compile + link).`,
+              `Unresolved script symbol "${operand.label}" — the whole project must be linked ` +
+                `together (use linkGbaImage), not emitted as a standalone blob.`,
             );
           }
           throw new Error(`Unknown label "${operand.label}"`);
@@ -217,7 +235,94 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
     });
   }
 
-  return { bytes, relocations };
+  return { program: { bytes, relocations }, labelOffsets };
+}
+
+/**
+ * Encode a single opcode stream into gbavm bytes + a relocation table.
+ * (Standalone: any cross-proc `_<sym>` reference is unresolved here — use
+ * linkGbaImage to link a whole project where such symbols resolve.)
+ */
+export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
+  return encodeImage(items).program;
+}
+
+/** A compiled GBVM proc: its exported entry symbol plus its opcode stream. */
+export interface GbaProc {
+  symbol: string; // the `_<name>` entry label this proc exports
+  items: GbaItem[];
+}
+
+export interface GbaLinkResult {
+  program: GbaProgram;
+  entryOffsets: Map<string, number>; // proc symbol -> byte offset in the image
+}
+
+// The relocation table stores `at`/`target` as unsigned 16-bit offsets (see
+// formatGbaProgramC + the engine's apply_relocations), so one combined image
+// cannot exceed this. Widening to 32-bit offsets is deliberately out of P1 scope.
+export const GBA_IMAGE_MAX_BYTES = 0x10000;
+
+// Prefix a proc's LOCAL labels (numeric `1$` etc. — anything not starting with
+// "_") so two procs reusing the same local label don't collide when merged into
+// one image. Global `_<sym>` link symbols are left untouched: they ARE the
+// cross-proc resolution targets. Returns a fresh item list (no mutation).
+function namespaceLocals(items: GbaItem[], prefix: string): GbaItem[] {
+  const ns = (name: string) => (name.startsWith("_") ? name : `${prefix}@${name}`);
+  return items.map((item) => {
+    if (item.kind === "label") return { ...item, name: ns(item.name) };
+    if (item.kind === "switch") {
+      return {
+        ...item,
+        cases: item.cases.map((c) => ({
+          ...c,
+          target: { label: ns(c.target.label) },
+        })),
+      };
+    }
+    if (item.kind === "op") {
+      return {
+        ...item,
+        operands: item.operands.map((o) =>
+          typeof o === "object" && o !== null && "label" in o
+            ? { label: ns(o.label) }
+            : o,
+        ),
+      };
+    }
+    return item;
+  });
+}
+
+/**
+ * Whole-project link: lay every compiled proc back-to-back into ONE image with a
+ * single merged label map, so a cross-proc `_<sym>` reference (VM_CALL_FAR,
+ * VM_BEGINTHREAD, ...) resolves to the `_<sym>::` entry another proc defines, as
+ * an ordinary in-image relocation. The existing reloc format and the engine's
+ * apply_relocations loader are reused verbatim — the bytecode just spans procs.
+ */
+export function linkGbaImage(procs: GbaProc[]): GbaLinkResult {
+  const merged: GbaItem[] = [];
+  for (const proc of procs) merged.push(...namespaceLocals(proc.items, proc.symbol));
+
+  const { program, labelOffsets } = encodeImage(merged);
+
+  if (program.bytes.length > GBA_IMAGE_MAX_BYTES) {
+    throw new Error(
+      `GBA image is ${program.bytes.length} bytes; the 16-bit relocation format ` +
+        `cannot address past ${GBA_IMAGE_MAX_BYTES} (P1 scope — widening is a later phase).`,
+    );
+  }
+
+  const entryOffsets = new Map<string, number>();
+  for (const proc of procs) {
+    const offset = labelOffsets.get(proc.symbol);
+    if (offset === undefined) {
+      throw new Error(`Linked proc "${proc.symbol}" has no entry label in its stream`);
+    }
+    entryOffsets.set(proc.symbol, offset);
+  }
+  return { program, entryOffsets };
 }
 
 /** Format an emitted program as C source for the gbavm build (used in M2). */

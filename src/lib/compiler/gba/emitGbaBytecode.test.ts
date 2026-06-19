@@ -1,4 +1,11 @@
-import { emitGbaBytecode, formatGbaProgramC, GbaItem } from "./emitGbaBytecode";
+import {
+  emitGbaBytecode,
+  formatGbaProgramC,
+  linkGbaImage,
+  GbaItem,
+  GbaProc,
+  GBA_IMAGE_MAX_BYTES,
+} from "./emitGbaBytecode";
 
 describe("emitGbaBytecode", () => {
   test("encodes SET_CONST operands little-endian (matches gbavm VM_STEP)", () => {
@@ -115,12 +122,85 @@ describe("emitGbaBytecode", () => {
     expect(relocations).toEqual([{ at: 3, target: 0 }]);
   });
 
-  test("rejects an external (cross-blob/native) ptr with a P1 diagnostic", () => {
+  test("standalone emit classifies unresolved _-symbols by opcode", () => {
+    // cross-proc script symbol (BEGINTHREAD) -> needs whole-project link
     expect(() =>
       emitGbaBytecode([
         { kind: "op", op: 0x0e, operands: [0, { label: "_other_script" }, -1, 0] },
       ]),
-    ).toThrow(/External symbol "_other_script".*lands in P1/s);
+    ).toThrow(/Unresolved script symbol "_other_script".*linked/s);
+    // native engine fn (CALL_NATIVE) -> later-phase registry
+    expect(() =>
+      emitGbaBytecode([{ kind: "op", op: 0x2d, operands: [0, { label: "_cpu_fast" }] }]),
+    ).toThrow(/Native-function symbol "_cpu_fast".*later phase/s);
+    // far data (GET_FAR) -> later phase
+    expect(() =>
+      emitGbaBytecode([
+        { kind: "op", op: 0x06, operands: [-1, 1, 0, { label: "_far_data" }] },
+      ]),
+    ).toThrow(/Far-data symbol "_far_data".*later phase/s);
+  });
+});
+
+describe("linkGbaImage", () => {
+  test("resolves a cross-proc VM_BEGINTHREAD into an in-image relocation", () => {
+    // Proc A spawns a thread at proc B's entry; B is a separate proc in the image.
+    const procA: GbaProc = {
+      symbol: "_a",
+      items: [
+        { kind: "label", name: "_a" },
+        { kind: "op", op: 0x0e, operands: [0, { label: "_b" }, -1, 0] }, // BEGINTHREAD -> _b
+        { kind: "stop" },
+      ],
+    };
+    const procB: GbaProc = {
+      symbol: "_b",
+      items: [
+        { kind: "label", name: "_b" },
+        { kind: "op", op: 0x18, operands: [] }, // IDLE
+        { kind: "stop" },
+      ],
+    };
+    const { program, entryOffsets } = linkGbaImage([procA, procB]);
+    // A is laid first: label _a@0, BEGINTHREAD op at 0 (bank u8 @1, ptr @2..5).
+    expect(program.bytes[0]).toBe(0x0e);
+    // _b's entry is right after A: BEGINTHREAD(1+1+4+2+1=...) — compute from offsets.
+    const bOffset = entryOffsets.get("_b");
+    expect(bOffset).toBeGreaterThan(0);
+    // exactly one relocation: the BEGINTHREAD proc pointer -> _b's offset.
+    expect(program.relocations).toEqual([{ at: 2, target: bOffset }]);
+    expect(entryOffsets.get("_a")).toBe(0);
+  });
+
+  test("namespaces per-proc local labels so they don't collide", () => {
+    // Both procs use local label 1$; merged, they must not trip Duplicate-label.
+    const mk = (sym: string): GbaProc => ({
+      symbol: sym,
+      items: [
+        { kind: "label", name: sym },
+        { kind: "op", op: 0x09, operands: [{ label: "1$" }] }, // JUMP 1$ (local)
+        { kind: "label", name: "1$" },
+        { kind: "stop" },
+      ],
+    });
+    const { program, entryOffsets } = linkGbaImage([mk("_p"), mk("_q")]);
+    expect(entryOffsets.get("_p")).toBe(0);
+    expect(entryOffsets.get("_q")).toBeGreaterThan(0);
+    // each JUMP relocates to ITS OWN proc's 1$ (two distinct in-image targets)
+    expect(program.relocations.length).toBe(2);
+    expect(program.relocations[0].target).not.toBe(program.relocations[1].target);
+  });
+
+  test("throws when the combined image exceeds the 16-bit reloc limit", () => {
+    // One proc padded past 64KB with RESERVE ops (3 bytes each: op + i8... actually
+    // RESERVE is op+i8 = 2 bytes; use IDLE (1 byte) x (limit+1) to overflow).
+    const items: GbaItem[] = [{ kind: "label", name: "_big" }];
+    for (let i = 0; i <= GBA_IMAGE_MAX_BYTES; i++) {
+      items.push({ kind: "op", op: 0x18, operands: [] }); // IDLE, 1 byte
+    }
+    expect(() => linkGbaImage([{ symbol: "_big", items }])).toThrow(
+      /image is \d+ bytes.*cannot address/s,
+    );
   });
 });
 

@@ -234,12 +234,20 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
-  test("emitting an unresolved external symbol reports the P1 dependency", () => {
+  test("a standalone emit of a cross-proc symbol asks for whole-project linking", () => {
     const { items } = parseGbvmAsm(
       "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
     );
+    // Emitted on its own, _my_thread is in no blob; linkGbaImage is the real path.
     expect(() => emitGbaBytecode(items)).toThrow(
-      /External symbol "_my_thread".*lands in P1/s,
+      /Unresolved script symbol "_my_thread".*linked/s,
     );
+  });
+
+  test("captures the proc entry symbol on ParseResult", () => {
+    const { entrySymbol } = parseGbvmAsm(
+      "_scene1_init::\n        VM_IDLE\n1$:\n        VM_STOP\n",
+    );
+    expect(entrySymbol).toBe("_scene1_init");
   });
 });
