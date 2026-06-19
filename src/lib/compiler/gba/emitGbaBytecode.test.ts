@@ -115,12 +115,23 @@ describe("emitGbaBytecode", () => {
     expect(relocations).toEqual([{ at: 3, target: 0 }]);
   });
 
-  test("rejects an external (cross-blob/native) ptr with a P1 diagnostic", () => {
+  test("captures an external (cross-proc/native) ptr as a symbolic relocation", () => {
+    // VM_BEGINTHREAD bank=0, proc->_other_script, handle=.ARG0(-1), nargs=0.
+    // _other_script isn't a label in this blob; the project linker (M1) resolves
+    // it, so the emitter records a symReloc at the 4-byte ptr field (op + bank u8
+    // => offset 2) and leaves a placeholder, exactly like a local relocation.
+    const { bytes, relocations, symRelocs } = emitGbaBytecode([
+      { kind: "op", op: 0x0e, operands: [0, { label: "_other_script" }, -1, 0] },
+    ]);
+    expect(relocations).toEqual([]);
+    expect(symRelocs).toEqual([{ at: 2, symbol: "_other_script", kind: "code" }]);
+    expect(bytes.slice(2, 6)).toEqual([0, 0, 0, 0]); // placeholder, patched at load
+  });
+
+  test("still throws on a non-external unknown label (a real codegen bug)", () => {
     expect(() =>
-      emitGbaBytecode([
-        { kind: "op", op: 0x0e, operands: [0, { label: "_other_script" }, -1, 0] },
-      ]),
-    ).toThrow(/External symbol "_other_script".*lands in P1/s);
+      emitGbaBytecode([{ kind: "op", op: 0x09, operands: [{ label: "missing" }] }]),
+    ).toThrow(/Unknown label "missing"/);
   });
 });
 

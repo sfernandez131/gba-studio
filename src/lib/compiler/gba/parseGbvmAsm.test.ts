@@ -61,12 +61,18 @@ describe("parseGbvmAsm", () => {
       { kind: "op", op: 0x14, operands: [-4, 1] }, // VM_SET_CONST
       { kind: "op", op: 0x35, operands: [-4] }, // VM_ACTOR_SET_POS
       { kind: "op", op: 0x18, operands: [] }, // VM_IDLE
+      // VM_SET_CONST_INT8 _fade_frames_per_step, 1 -> RPN raw-memory write
+      {
+        kind: "rpn",
+        bytes: [0xff, 0x01, 0xf8, 0x69, 0, 0, 0, 0, 0x00],
+        relocs: [{ at: 4, symbol: "_fade_frames_per_step" }],
+      },
       { kind: "op", op: 0x57, operands: [2] }, // VM_FADE_IN -> VM_FADE (no-op)
       { kind: "stop" }, // VM_STOP
     ]);
 
-    // The engine-symbol write is intentionally dropped, and reported.
-    expect(skipped).toEqual(["VM_SET_CONST_INT8 _fade_frames_per_step, 1"]);
+    // The engine-symbol write is now expanded to an RPN write (not dropped).
+    expect(skipped).toEqual([]);
   });
 
   test("the parsed stream round-trips through the emitter", () => {
@@ -234,12 +240,27 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
-  test("emitting an unresolved external symbol reports the P1 dependency", () => {
+  test("expands VM_SET_CONST_INT8 to an RPN raw-memory write with an engine-symbol reloc", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_SET_CONST_INT8 _fade_frames_per_step, 1\n",
+    );
+    // RPN: R_INT8 1 (0xff,0x01), R_REF_MEM_SET MEM_I8 (0xf8,0x69), addr(4b @4), STOP.
+    expect(items).toEqual([
+      {
+        kind: "rpn",
+        bytes: [0xff, 0x01, 0xf8, 0x69, 0, 0, 0, 0, 0x00],
+        relocs: [{ at: 4, symbol: "_fade_frames_per_step" }],
+      },
+    ]);
+  });
+
+  test("emitting an external symbol records it as a symbolic relocation (M1 linker resolves it)", () => {
     const { items } = parseGbvmAsm(
       "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
     );
-    expect(() => emitGbaBytecode(items)).toThrow(
-      /External symbol "_my_thread".*lands in P1/s,
-    );
+    const { symRelocs, relocations } = emitGbaBytecode(items);
+    // BEGINTHREAD: op + bank(u8) => the proc ptr field starts at byte offset 2.
+    expect(symRelocs).toEqual([{ at: 2, symbol: "_my_thread", kind: "code" }]);
+    expect(relocations).toEqual([]);
   });
 });
