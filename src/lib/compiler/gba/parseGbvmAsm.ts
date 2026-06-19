@@ -70,6 +70,17 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_INPUT_GET: 0x54,
   VM_FADE: 0x57, // gbavm no-op
   VM_SET_SPRITE_MODE: 0x5d, // gbavm no-op
+  // text / overlay / input (P3); VM_LOAD_TEXT (0x40) is special-cased (inline string)
+  VM_DISPLAY_TEXT_EX: 0x41,
+  VM_OVERLAY_SETPOS: 0x42,
+  VM_OVERLAY_WAIT: 0x44,
+  VM_OVERLAY_MOVE_TO: 0x45,
+  VM_OVERLAY_SHOW: 0x46,
+  VM_OVERLAY_CLEAR: 0x47,
+  VM_SET_FONT: 0x4b,
+  VM_OVERLAY_SET_SCROLL: 0x4e,
+  VM_INPUT_WAIT: 0x52,
+  VM_SWITCH_TEXT_LAYER: 0x85,
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
   VM_SCENE_POP_ALL: 0x6a,
@@ -112,6 +123,10 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
   VM_RET_FAR: (a, ev) => [{ kind: "op", op: 0x0b, operands: [a.length ? ev(a[0]) : 0] }],
   VM_RET_FAR_N: (a, ev) => [{ kind: "op", op: 0x0b, operands: [ev(a[0])] }],
+  // VM_DISPLAY_TEXT -> VM_DISPLAY_TEXT_EX .DISPLAY_DEFAULT(0), .TEXT_TILE_CONTINUE(0xFF).
+  VM_DISPLAY_TEXT: () => [{ kind: "op", op: 0x41, operands: [0, 0xff] }],
+  // VM_OVERLAY_HIDE -> VM_OVERLAY_SETPOS 0, .MENU_CLOSED_Y(0x12).
+  VM_OVERLAY_HIDE: () => [{ kind: "op", op: 0x42, operands: [0, 0x12] }],
 };
 
 // Macros we intentionally drop during bring-up (need machinery not yet ported).
@@ -135,6 +150,15 @@ const BASE_CONSTS: Record<string, number> = {
   ".GET_BYTE": 0, ".GET_WORD": 1,
   // VM_RAISE exception codes (vm.i) — note: no leading dot
   EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3, EXCEPTION_LOAD: 4,
+  // text / overlay UI constants (vm.i) — P3
+  ".DISPLAY_DEFAULT": 0, ".DISPLAY_PRESERVE_POS": 1, ".TEXT_TILE_CONTINUE": 0xff,
+  ".TEXT_LAYER_BKG": 0, ".TEXT_LAYER_WIN": 1, ".MENU_CLOSED_Y": 0x12,
+  ".UI_NONMODAL": 0, ".UI_MODAL": 1,
+  ".UI_WAIT_NONE": 0, ".UI_WAIT_WINDOW": 1, ".UI_WAIT_TEXT": 2,
+  ".UI_WAIT_BTN_A": 4, ".UI_WAIT_BTN_B": 8, ".UI_WAIT_BTN_ANY": 16,
+  ".OVERLAY_IN_SPEED": -1, ".OVERLAY_OUT_SPEED": -2, ".OVERLAY_SPEED_INSTANT": -3,
+  ".OVERLAY_TEXT_IN_SPEED": -1, ".OVERLAY_TEXT_OUT_SPEED": -2,
+  ".UI_COLOR_BLACK": 0, ".UI_COLOR_WHITE": 1, ".UI_DRAW_FRAME": 1,
   // directions
   ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
   // fade
@@ -210,6 +234,37 @@ function makeEvaluator(consts: Record<string, number>) {
 
 const encodeRpnRef = (op: number, idx: number): number[] => [op, idx & 0xff, (idx >> 8) & 0xff];
 
+// Decode a `.asciz "..."` operand into raw bytes + a NUL terminator. GB Studio
+// emits control codes as 3-digit OCTAL escapes (\001 speed, \002 font, \003/\004
+// gotoxy, \006 input, \012 newline, \015 scroll) and escapes \" and \\.
+function unescapeAsciz(quoted: string): number[] {
+  const m = quoted.trim().match(/^"([\s\S]*)"$/);
+  if (!m) throw new Error(`.asciz expected a quoted string, got "${quoted}"`);
+  const s = m[1];
+  const out: number[] = [];
+  for (let i = 0; i < s.length; ) {
+    if (s[i] === "\\") {
+      const n = s[i + 1];
+      if (n === "\\") { out.push(0x5c); i += 2; }
+      else if (n === '"') { out.push(0x22); i += 2; }
+      else if (n === "n") { out.push(0x0a); i += 2; }
+      else if (n === "t") { out.push(0x09); i += 2; }
+      else if (n >= "0" && n <= "7") {
+        let oct = "";
+        let j = i + 1;
+        while (j < s.length && oct.length < 3 && s[j] >= "0" && s[j] <= "7") oct += s[j++];
+        out.push(parseInt(oct, 8) & 0xff);
+        i = j;
+      } else { out.push((n ?? "").charCodeAt(0) & 0xff); i += 2; }
+    } else {
+      out.push(s.charCodeAt(i) & 0xff);
+      i++;
+    }
+  }
+  out.push(0x00); // NUL terminator
+  return out;
+}
+
 /**
  * Parse one RPN block body (the lines between `VM_RPN` and `.R_STOP`) into the raw
  * byte stream gbavm's vm_rpn() reads (terminated with 0x00). Stack/heap refs only;
@@ -243,6 +298,7 @@ export function parseGbvmAsm(
   asm: string,
   entrySymbol?: string,
   sceneSymbolToIndex?: Record<string, number>,
+  fontSymbolToIndex?: Record<string, number>,
 ): ParseResult {
   const consts: Record<string, number> = { ...BASE_CONSTS };
 
@@ -274,6 +330,8 @@ export function parseGbvmAsm(
       }
     | null = null;
   let pendingChangeScene = false; // VM_RAISE CHANGE_SCENE awaiting its IMPORT_FAR_PTR_DATA
+  // VM_LOAD_TEXT awaiting its optional `.dw` operand list (vars===null) then `.asciz`.
+  let pendingLoadText: { nargs: number; vars: number[] | null } | null = null;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
   let foundEntry: string | undefined; // first `_<name>::` label = the proc entry
 
@@ -331,6 +389,27 @@ export function parseGbvmAsm(
       continue;
     }
 
+    if (pendingLoadText) {
+      if (pendingLoadText.vars === null) {
+        // Optional `.dw alias,...` operand list (the NARGS variable addresses).
+        if (mnemonic !== ".dw") {
+          throw new Error(`VM_LOAD_TEXT expected a ".dw" operand list but got "${line}"`);
+        }
+        pendingLoadText.vars = splitArgs(argStr).map((a) => {
+          try { return ev(a); } catch { return 0; } // P3 lays them down, ignores values
+        });
+        continue;
+      }
+      // The inline `.asciz "..."` string follows.
+      if (mnemonic !== ".asciz") {
+        throw new Error(`VM_LOAD_TEXT expected a ".asciz" string but got "${line}"`);
+      }
+      items.push({ kind: "loadText", nargs: pendingLoadText.nargs, vars: pendingLoadText.vars });
+      items.push({ kind: "bytes", data: unescapeAsciz(argStr) });
+      pendingLoadText = null;
+      continue;
+    }
+
     // Label definition (jump/call target).
     const labelDef = mnemonic.match(/^([A-Za-z_][\w]*::?|\d+\$:)$/);
     if (labelDef && argStr === "") {
@@ -344,6 +423,15 @@ export function parseGbvmAsm(
 
     if (mnemonic === "VM_RPN") { inRpn = true; rpnBytes = []; continue; }
     if (mnemonic === "VM_STOP") { items.push({ kind: "stop" }); continue; }
+    if (mnemonic === "VM_LOAD_TEXT") {
+      // VM_LOAD_TEXT NARGS, then (if NARGS>0) a `.dw` list, then an inline `.asciz`.
+      const n = ev(splitArgs(argStr)[0] ?? "0");
+      pendingLoadText = { nargs: n, vars: n > 0 ? null : [] };
+      continue;
+    }
+    if (mnemonic === "VM_CHOICE" || mnemonic === "VM_MENU_ITEM") {
+      throw new Error(`${mnemonic}: text choices/menus are a later phase (P3 ships dialogue only)`);
+    }
     if (mnemonic === "VM_SWITCH") {
       // VM_SWITCH IDX, SIZE, N  followed by SIZE `.dw value, label` case lines.
       const a = splitArgs(argStr);
@@ -376,8 +464,11 @@ export function parseGbvmAsm(
         }
         items.push({ kind: "changeScene", sceneIndex: idx });
         pendingChangeScene = false;
+      } else if (fontSymbolToIndex && sym in fontSymbolToIndex) {
+        // Font far-ptr: font selection rides VM_SET_FONT / the \002 inline code by
+        // integer index (the gba_fonts[] registry), so there is nothing to emit.
       } else {
-        // Far-ptr to non-scene data (e.g. a font in P3) — no GBA equivalent yet.
+        // Far-ptr to other non-scene data (e.g. an avatar font) — not ported yet.
         skipped.push(`IMPORT_FAR_PTR_DATA ${sym}`.trim());
       }
       continue;
@@ -414,5 +505,6 @@ export function parseGbvmAsm(
   if (pendingSwitch) throw new Error("Incomplete VM_SWITCH case table");
   if (pendingChangeScene)
     throw new Error("VM_RAISE EXCEPTION_CHANGE_SCENE not followed by IMPORT_FAR_PTR_DATA");
+  if (pendingLoadText) throw new Error("VM_LOAD_TEXT not followed by its .asciz string");
   return { items, skipped, entrySymbol: foundEntry };
 }
