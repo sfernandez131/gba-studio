@@ -47,6 +47,25 @@ describe("linkGbaProgram", () => {
     expect(procs[0].symRelocs).toEqual([]);
   });
 
+  test("resolves an engine native function reference (VM_INVOKE _wait_frames)", () => {
+    const { procs, unresolved, source } = linkGbaProgram([
+      {
+        symbol: "_s",
+        items: [
+          // VM_INVOKE bank=0, fn->_wait_frames, nparams=0, idx=.ARG0(-1).
+          { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 0, -1] },
+          { kind: "stop" },
+        ],
+      },
+    ]);
+    expect(unresolved).toEqual([]); // _wait_frames is a known engine native
+    // VM_INVOKE: op + bank(u8) => fn ptr field at offset 2.
+    expect(procs[0].symRelocs).toEqual([
+      { at: 2, expr: "(const unsigned char *)&wait_frames" },
+    ]);
+    expect(source).toContain('#include "gba_natives.h"');
+  });
+
   test("allocates an engine RAM variable for a ram relocation (VM_SET_CONST_INT8)", () => {
     // RPN stream: R_INT8 1, R_REF_MEM_SET MEM_I8, &_fade_frames_per_step(4b), R_STOP.
     const { procs, engineVars, unresolved, source } = linkGbaProgram([
