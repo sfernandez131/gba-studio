@@ -1,15 +1,14 @@
 // GBA Studio - GBA build "eject" step.
 //
-// Counterpart to ejectBuild.ts for the GBA target. Instead of writing a GBDK
-// project tree, it turns the start scene's compiled GBVM assembly into gbavm
-// bytecode (parseGbvmAsm -> emitGbaBytecode -> formatGbaProgramC) and writes it
-// as the engine's src/game_script.c. makeGbaBuild then compiles the gbavm engine.
+// Counterpart to ejectBuild.ts for the GBA target. It (1) links EVERY compiled
+// GBVM proc into one bytecode image (P1: parseGbvmAsm -> linkGbaImage ->
+// src/game_image.c), then (2) emits EVERY scene's assets (background + actor
+// sprites) and a scene_table.h/.c registry mapping each scene to its bg, actors,
+// triggers, and the init/update/interact script ENTRY OFFSETS already inside
+// game_image (P2 scene runtime). makeGbaBuild then compiles the gbavm engine.
 //
-// Scope: the start scene's init + first-actor update scripts (two self-contained
-// bytecode blobs, no cross-script linking / engine-symbol model yet), plus the
-// start scene's background converted to a Butano regular_bg (Phase 1). The build
-// happens in the gbavm engine tree (gbaEngineRoot); an isolated/vendored build
-// dir is a later packaging concern.
+// The build happens in the gbavm engine tree (gbaEngineRoot); an isolated/
+// vendored build dir is a later packaging concern.
 
 import { writeFile, readFile, ensureDir, pathExists, remove } from "fs-extra";
 import Path from "path";
@@ -36,6 +35,36 @@ type EjectGbaOptions = {
   warnings: (msg: string) => void;
 };
 
+// One actor row in the generated scene table (runtime actor index order;
+// index 0 = player). `item` is a Butano sprite_item pointer expression or "nullptr".
+type ActorRow = {
+  item: string;
+  animStart: number[]; // 8 per-direction frame starts
+  animLen: number[];
+  updateOff: number; // byte offset into game_image, 0 = no script
+  interactOff: number;
+};
+
+type TriggerRow = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  interactOff: number;
+  leaveOff: number;
+};
+
+type SceneRow = {
+  index: number;
+  bgItem: string; // &bn::regular_bg_items::scene<s>_bg
+  width: number; // tiles
+  height: number;
+  initOff: number;
+  actors: ActorRow[];
+  triggers: TriggerRow[];
+  scroll: [number, number, number, number]; // x_min, x_max, y_min, y_max
+};
+
 const ejectGbaBuild = async ({
   projectData,
   projectRoot,
@@ -50,36 +79,40 @@ const ejectGbaBuild = async ({
     );
   }
 
-  // Resolve the start scene exactly as compileData does (settings.startSceneId,
-  // falling back to the first scene), then locate its compiled init script.
   const { settings, scenes } = projectData;
-  const startScene =
-    scenes.find((scene) => scene.id === settings.startSceneId) ?? scenes[0];
-  if (!startScene) {
+  if (scenes.length === 0) {
     throw new Error("GBA build: project has no scenes to build");
   }
+  const startSceneIndex = Math.max(
+    0,
+    scenes.findIndex((scene) => scene.id === settings.startSceneId),
+  );
+
   await ensureDir(Path.join(gbaEngineRoot, "src"));
+  await ensureDir(Path.join(gbaEngineRoot, "graphics"));
+
+  // A Switch Scene event references its target by SYMBOL (IMPORT_FAR_PTR_DATA
+  // _<sceneSymbol>); on flat GBA we resolve that to the scene INDEX so the bridge
+  // can emit an inline index instead of a (nonexistent) far pointer.
+  const sceneSymbolToIndex: Record<string, number> = {};
+  scenes.forEach((scene, i) => {
+    sceneSymbolToIndex[`_${scene.symbol}`] = i;
+  });
 
   // --- Whole-project link (P1) ----------------------------------------------
-  // Compile EVERY script proc in the project (scene init/hit, actor
-  // interact/update, trigger, and custom-script bodies — all keyed `<symbol>.s`
-  // in compiledData.files) and link them into ONE bytecode image, so cross-proc
-  // references (VM_CALL_FAR / VM_BEGINTHREAD -> `_<sym>`) resolve to the entry
-  // another proc exports. A proc that uses an opcode the bridge can't encode yet
-  // is skipped with a warning rather than aborting the whole build.
+  // Link every compiled proc into one image; entryOffsets maps each proc's
+  // `_<symbol>` entry label to its byte offset, which the scene table reuses.
   const procs: GbaProc[] = [];
   const linked = new Set<string>();
   for (const key of Object.keys(compiledData.files)) {
     if (!key.endsWith(".s")) continue;
     let parsed;
     try {
-      parsed = parseGbvmAsm(compiledData.files[key]);
+      parsed = parseGbvmAsm(compiledData.files[key], undefined, sceneSymbolToIndex);
     } catch (e) {
       warnings(`GBA: skipped "${key}" (${(e as Error).message})`);
       continue;
     }
-    // A linkable VM proc exports an entry label and has at least one instruction;
-    // non-proc .s (engine bootstrap, pure data tables) are ignored.
     if (!parsed.entrySymbol) continue;
     if (!parsed.items.some((i) => i.kind !== "label")) continue;
     if (linked.has(parsed.entrySymbol)) continue;
@@ -90,60 +123,27 @@ const ejectGbaBuild = async ({
     procs.push({ symbol: parsed.entrySymbol, items: parsed.items });
   }
 
-  // Boot entries: the start scene's init (run once) + the first actor's update
-  // (a persistent per-frame thread). Both are LINKED above when present; if the
-  // project lacks one, synthesize a do-nothing STOP proc so boot always resolves.
-  const stopProc = (symbol: string): GbaProc => ({
-    symbol,
-    items: [
-      { kind: "label", name: symbol },
-      { kind: "stop" },
-    ],
-  });
-  let initSymbol = `_${startScene.symbol}_init`;
-  if (!linked.has(initSymbol)) {
-    warnings(`GBA: start scene "${startScene.symbol}" has no linkable init script`);
-    initSymbol = "_gba_boot_init_stub";
-    procs.push(stopProc(initSymbol));
-  }
-  const updActor = startScene.actors.find((actor) =>
-    linked.has(`_${actor.symbol}_update`),
-  );
-  const updateSymbol = updActor
-    ? `_${updActor.symbol}_update`
-    : "_gba_boot_update_stub";
-  if (!updActor) procs.push(stopProc(updateSymbol));
-
   progress(`Linking ${procs.length} script procs into one GBA image...`);
   const { program, entryOffsets } = linkGbaImage(procs);
   await writeFile(
     Path.join(gbaEngineRoot, "src", "game_image.c"),
     formatGbaProgramC("game_image", program) + "\n",
   );
-  // Two boot entry offsets into the image, consumed by the engine's main.cpp.
-  const initOffset = entryOffsets.get(initSymbol) ?? 0;
-  const updateOffset = entryOffsets.get(updateSymbol) ?? 0;
-  await writeFile(
-    Path.join(gbaEngineRoot, "src", "game_entries.h"),
-    [
-      "// Generated by GBA Studio - boot entry byte-offsets into game_image[].",
-      "#ifndef GBA_GAME_ENTRIES_H",
-      "#define GBA_GAME_ENTRIES_H",
-      `static const unsigned int game_image_entry_init = ${initOffset};`,
-      `static const unsigned int game_image_entry_update = ${updateOffset};`,
-      "#endif",
-      "",
-    ].join("\n"),
-  );
-  // Remove the obsolete two-blob outputs so their symbols don't linger in the build.
+  // 0 is a valid byte offset (the first-linked proc sits there), so "no script"
+  // needs a sentinel the engine can test against (GBA_NO_OFFSET in scene_table.h).
+  const NO_OFFSET = 0xffffffff;
+  const offsetOf = (symbol: string): number =>
+    entryOffsets.has(symbol) ? (entryOffsets.get(symbol) as number) : NO_OFFSET;
+  // Obsolete two-blob + entries-header artifacts of P1; the scene table replaces them.
   await remove(Path.join(gbaEngineRoot, "src", "game_script.c"));
   await remove(Path.join(gbaEngineRoot, "src", "actor_update_script.c"));
+  await remove(Path.join(gbaEngineRoot, "src", "game_entries.h"));
+  await remove(Path.join(gbaEngineRoot, "src", "scene_sprites.h"));
 
   // --- Colour handling -------------------------------------------------------
-  // Mono projects remap to the 4 GB shades (tileDataIndexFn + the customColors
-  // palette). Colour/mixed projects read each image's true colours; Butano then
-  // quantizes >16-colour images into per-tile 4bpp palettes. Index 0 is reserved
-  // for the transparent backdrop (bg) / sprite transparency.
+  // Mono projects remap to the 4 GB shades; colour/mixed projects read each
+  // image's true colours (Butano quantizes >16-colour images into per-tile 4bpp
+  // palettes). Index 0 is reserved for the transparent backdrop / sprite key.
   const isColor = (settings.colorMode ?? "mono") !== "mono";
   const readTrueColor = async (
     file: string,
@@ -157,9 +157,6 @@ const ejectGbaBuild = async ({
     const palette: Rgb[] = [[0, 0, 0]]; // 0 reserved (transparent / backdrop)
     const map = new Map<number, number>();
     let clamped = false;
-    // Sprites key transparency on alpha and - for opaque/colour-keyed PNGs - on
-    // the top-left pixel's colour, since GB Studio sprite art uses a transparent
-    // background colour rather than an alpha channel.
     const keyColor =
       transparentFromAlpha && png.data[3] >= 128
         ? (png.data[0] << 16) | (png.data[1] << 8) | png.data[2]
@@ -195,160 +192,286 @@ const ejectGbaBuild = async ({
     return { img: { width: png.width, height: png.height, data }, palette };
   };
 
-  // --- Background -> graphics/scene_bg.bmp (Butano regular_bg via grit) --------
-  // gbavm always links bn::regular_bg_items::scene_bg, so always emit it; a
-  // project with no start-scene background gets a solid backdrop.
-  await ensureDir(Path.join(gbaEngineRoot, "graphics"));
-  const background = projectData.backgrounds.find(
-    (bg) => bg.id === startScene.backgroundId,
-  );
-  let bmp: Buffer;
-  if (!background) {
-    bmp = indexedImageToBmp(
-      { width: 8, height: 8, data: new Uint8Array(64) },
-      [hexToRgb(settings.customColorsBlack || "202850")],
-      { align: 256 },
-    );
-  } else if (isColor) {
-    progress(`Converting background ${background.filename} (colour)...`);
-    const { img, palette } = await readTrueColor(
-      assetFilename(projectRoot, "backgrounds", background),
-      false,
-    );
-    bmp = indexedImageToBmp(img, palette, { align: 256 });
-  } else {
-    progress(`Converting background ${background.filename}...`);
-    // GBA bg colour 0 is transparent, so map the 4 GB shades to indices 1..4.
-    const palette = [
-      hexToRgb(settings.customColorsBlack || "202850"),
-      hexToRgb(settings.customColorsWhite || "E8F8E0"),
-      hexToRgb(settings.customColorsLight || "B0F088"),
-      hexToRgb(settings.customColorsDark || "509878"),
-      hexToRgb(settings.customColorsBlack || "202850"),
-    ];
-    const src = await readFileToIndexedImage(
-      assetFilename(projectRoot, "backgrounds", background),
-      tileDataIndexFn,
-    );
-    const data = new Uint8Array(src.data.length);
-    for (let i = 0; i < data.length; i++) data[i] = (src.data[i] & 0x03) + 1;
-    bmp = indexedImageToBmp(
-      { width: src.width, height: src.height, data },
-      palette,
-      { align: 256 },
-    );
-  }
-  await writeFile(Path.join(gbaEngineRoot, "graphics", "scene_bg.bmp"), bmp);
-  await writeFile(
-    Path.join(gbaEngineRoot, "graphics", "scene_bg.json"),
-    JSON.stringify({ type: "regular_bg" }) + "\n",
-  );
-
-  // --- Actor sprites -> graphics/scene_sprite_<idx>.bmp + src/scene_sprites.h --
-  // Each scene actor (runtime index = i + 1; the player is 0) becomes a Butano
-  // sprite_item; the generated header maps actor index -> sprite + the 8
-  // per-direction frame ranges so the engine can pick a frame by facing.
-  // Sprite palette keeps index 0 transparent (GBA sprite requirement).
-  const spritePalette = [
+  // Mono sprite palette (index 0 transparent). Colour sprites read their own.
+  const monoSpritePalette = [
     hexToRgb(settings.customColorsWhite || "E8F8E0"), // 0: transparent
     hexToRgb(settings.customColorsLight || "B0F088"), // 1
     hexToRgb(settings.customColorsDark || "509878"), // 2
     hexToRgb(settings.customColorsBlack || "202850"), // 3
   ];
   const spriteMode = settings.spriteMode || "8x16";
-  const spriteIncludes: string[] = [];
-  const rowByIndex = new Map<number, string>();
-  for (let i = 0; i < startScene.actors.length; i++) {
-    const actor = startScene.actors[i];
-    const sprite = projectData.sprites.find((s) => s.id === actor.spriteSheetId);
-    if (!sprite || !sprite.states || sprite.states.length === 0) continue;
-    let img: { width: number; height: number; data: Uint8Array };
-    let palette = spritePalette;
-    try {
-      if (isColor) {
-        ({ img, palette } = await readTrueColor(
-          assetFilename(projectRoot, "sprites", sprite),
-          true,
-        ));
-      } else {
-        img = await readFileToIndexedImage(
-          assetFilename(projectRoot, "sprites", sprite),
-          tileDataIndexFn,
-        );
-      }
-    } catch (e) {
-      warnings(`GBA: could not read sprite "${sprite.filename}"`);
-      continue;
+  const sceneSpriteIncludes: string[] = []; // per-scene grit sprite headers for the .c
+
+  // --- Per-scene background -> graphics/scene<s>_bg.bmp ----------------------
+  const emitSceneBg = async (
+    scene: ProjectResources["scenes"][number],
+    s: number,
+  ): Promise<string> => {
+    const name = `scene${s}_bg`;
+    const background = projectData.backgrounds.find(
+      (bg) => bg.id === scene.backgroundId,
+    );
+    // A scene wider/taller than one screen needs a 512x512 regular_bg.
+    const align = (scene.width || 0) * 8 > 256 || (scene.height || 0) * 8 > 256 ? 512 : 256;
+    let bmp: Buffer;
+    if (!background) {
+      bmp = indexedImageToBmp(
+        { width: 8, height: 8, data: new Uint8Array(64) },
+        [hexToRgb(settings.customColorsBlack || "202850")],
+        { align },
+      );
+    } else if (isColor) {
+      progress(`Converting background ${background.filename} (colour)...`);
+      const { img, palette } = await readTrueColor(
+        assetFilename(projectRoot, "backgrounds", background),
+        false,
+      );
+      bmp = indexedImageToBmp(img, palette, { align });
+    } else {
+      progress(`Converting background ${background.filename}...`);
+      // GBA bg colour 0 is transparent, so map the 4 GB shades to indices 1..4.
+      const palette = [
+        hexToRgb(settings.customColorsBlack || "202850"),
+        hexToRgb(settings.customColorsWhite || "E8F8E0"),
+        hexToRgb(settings.customColorsLight || "B0F088"),
+        hexToRgb(settings.customColorsDark || "509878"),
+        hexToRgb(settings.customColorsBlack || "202850"),
+      ];
+      const src = await readFileToIndexedImage(
+        assetFilename(projectRoot, "backgrounds", background),
+        tileDataIndexFn,
+      );
+      const data = new Uint8Array(src.data.length);
+      for (let i = 0; i < data.length; i++) data[i] = (src.data[i] & 0x03) + 1;
+      bmp = indexedImageToBmp({ width: src.width, height: src.height, data }, palette, {
+        align,
+      });
     }
-    const sheet = buildSpriteSheet(
-      sprite as unknown as SpriteSheetInput,
-      img,
-      spriteMode,
-    );
-    const idx = i + 1;
-    const name = `scene_sprite_${idx}`;
-    await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
-      indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
-    );
+    await writeFile(Path.join(gbaEngineRoot, "graphics", `${name}.bmp`), bmp);
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${name}.json`),
-      JSON.stringify({ type: "sprite", height: sheet.frameHeight }) + "\n",
+      JSON.stringify({ type: "regular_bg" }) + "\n",
     );
-    spriteIncludes.push(`#include "bn_sprite_items_${name}.h"`);
-    const starts = sheet.animRanges.map((r) => r.start).join(", ");
-    const lens = sheet.animRanges.map((r) => r.len).join(", ");
-    rowByIndex.set(
-      idx,
-      `    { &bn::sprite_items::${name}, { ${starts} }, { ${lens} } },`,
-    );
-    progress(
-      `Converting sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
-    );
+    return name;
+  };
+
+  // --- Per-scene actor sprites -> graphics/scene<s>_sprite_<idx>.bmp ---------
+  // Returns one ActorRow per runtime actor index (0 = player). Sprite binding +
+  // anim ranges go in the table; activation + position come from the init script.
+  const emitSceneActors = async (
+    scene: ProjectResources["scenes"][number],
+    s: number,
+  ): Promise<ActorRow[]> => {
+    const rowByIndex = new Map<number, ActorRow>();
+    const includes: string[] = [];
+    for (let i = 0; i < scene.actors.length; i++) {
+      const actor = scene.actors[i];
+      const runtimeIndex = i + 1; // 0 reserved for the player
+      const updateOff = offsetOf(`_${actor.symbol}_update`);
+      const interactOff = offsetOf(`_${actor.symbol}_interact`);
+      const sprite = projectData.sprites.find((sp) => sp.id === actor.spriteSheetId);
+      if (!sprite || !sprite.states || sprite.states.length === 0) {
+        // Scriptable but spriteless actor: keep its script offsets, no sprite.
+        if (updateOff !== NO_OFFSET || interactOff !== NO_OFFSET) {
+          rowByIndex.set(runtimeIndex, {
+            item: "nullptr",
+            animStart: [0, 0, 0, 0, 0, 0, 0, 0],
+            animLen: [0, 0, 0, 0, 0, 0, 0, 0],
+            updateOff,
+            interactOff,
+          });
+        }
+        continue;
+      }
+      let img: { width: number; height: number; data: Uint8Array };
+      let palette = monoSpritePalette;
+      try {
+        if (isColor) {
+          ({ img, palette } = await readTrueColor(
+            assetFilename(projectRoot, "sprites", sprite),
+            true,
+          ));
+        } else {
+          img = await readFileToIndexedImage(
+            assetFilename(projectRoot, "sprites", sprite),
+            tileDataIndexFn,
+          );
+        }
+      } catch (e) {
+        warnings(`GBA: could not read sprite "${sprite.filename}"`);
+        continue;
+      }
+      const sheet = buildSpriteSheet(
+        sprite as unknown as SpriteSheetInput,
+        img,
+        spriteMode,
+      );
+      const name = `scene${s}_sprite_${runtimeIndex}`;
+      await writeFile(
+        Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+        indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
+      );
+      await writeFile(
+        Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+        JSON.stringify({ type: "sprite", height: sheet.frameHeight }) + "\n",
+      );
+      includes.push(`#include "bn_sprite_items_${name}.h"`);
+      rowByIndex.set(runtimeIndex, {
+        item: `&bn::sprite_items::${name}`,
+        animStart: sheet.animRanges.map((r) => r.start),
+        animLen: sheet.animRanges.map((r) => r.len),
+        updateOff,
+        interactOff,
+      });
+      progress(
+        `Converting sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
+      );
+    }
+    // Sprite-item includes are accumulated per scene; collect them for the .c.
+    sceneSpriteIncludes.push(...includes);
+    // Fill a dense 0..maxIndex array (index 0 = player; gaps get null rows so
+    // every runtime actor index the bytecode uses is addressable).
+    const maxIndex = Math.max(0, ...rowByIndex.keys());
+    const rows: ActorRow[] = [];
+    for (let idx = 0; idx <= maxIndex; idx++) {
+      rows.push(
+        rowByIndex.get(idx) ?? {
+          item: "nullptr",
+          animStart: [0, 0, 0, 0, 0, 0, 0, 0],
+          animLen: [0, 0, 0, 0, 0, 0, 0, 0],
+          updateOff: NO_OFFSET,
+          interactOff: NO_OFFSET,
+        },
+      );
+    }
+    return rows;
+  };
+
+  const sceneRows: SceneRow[] = [];
+  for (let s = 0; s < scenes.length; s++) {
+    const scene = scenes[s];
+    const bgName = await emitSceneBg(scene, s);
+    const actors = await emitSceneActors(scene, s);
+    const triggers: TriggerRow[] = (scene.triggers ?? []).map((t) => ({
+      left: t.x,
+      top: t.y,
+      right: t.x + Math.max(1, t.width) - 1,
+      bottom: t.y + Math.max(1, t.height) - 1,
+      interactOff: offsetOf(`_${t.symbol}_interact`),
+      leaveOff: NO_OFFSET,
+    }));
+    // Camera origin clamp range (px) for backgrounds larger than the screen.
+    const sxMax = Math.max(0, (scene.width || 0) * 8 - 240);
+    const syMax = Math.max(0, (scene.height || 0) * 8 - 160);
+    sceneRows.push({
+      index: s,
+      bgItem: `&bn::regular_bg_items::${bgName}`,
+      width: scene.width || 0,
+      height: scene.height || 0,
+      initOff: offsetOf(`_${scene.symbol}_init`),
+      actors,
+      triggers,
+      scroll: [0, sxMax, 0, syMax],
+    });
   }
-  // Build the actor->sprite table (index 0 = player; entries without a sprite
-  // get a null row so every actor index is addressable).
-  const maxIndex = Math.max(0, ...rowByIndex.keys());
-  const rows: string[] = [];
-  for (let idx = 0; idx <= maxIndex; idx++) {
-    rows.push(
-      rowByIndex.get(idx) ??
-        `    { nullptr, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },`,
-    );
-  }
-  const sceneSpritesHeader = [
-    "// Generated by GBA Studio - actor index -> Butano sprite + per-direction",
-    "// frame ranges (engine order: Down, Right, Up, Left, then the moving set).",
-    "#ifndef GBA_SCENE_SPRITES_H",
-    "#define GBA_SCENE_SPRITES_H",
-    '#include "bn_sprite_item.h"',
-    ...spriteIncludes,
-    "struct GbaActorSprite {",
-    "    const bn::sprite_item* item;",
-    "    unsigned char anim_start[8];",
-    "    unsigned char anim_len[8];",
-    "};",
-    "inline const GbaActorSprite* gba_actor_sprite(int index) {",
-    "    static const GbaActorSprite table[] = {",
-    ...rows,
-    "    };",
-    `    const int count = ${maxIndex + 1};`,
-    "    return (index >= 0 && index < count) ? &table[index] : nullptr;",
-    "}",
-    "#endif",
-  ].join("\n");
-  await writeFile(
-    Path.join(gbaEngineRoot, "src", "scene_sprites.h"),
-    sceneSpritesHeader + "\n",
-  );
+
+  await writeSceneTable(gbaEngineRoot, sceneRows, sceneSpriteIncludes, startSceneIndex);
 
   // The built .gba is collected here by makeGbaBuild (mirrors build/rom for GBDK).
   await ensureDir(Path.join(outputRoot, "build", "gba"));
 
   progress(
     `GBA image: ${program.bytes.length}b / ${program.relocations.length} relocs / ` +
-      `${procs.length} procs; background ${background ? background.filename : "(none)"}`,
+      `${procs.length} procs; ${sceneRows.length} scene(s), start scene ${startSceneIndex}`,
   );
+};
+
+// --- scene_table.h / scene_table.c codegen ----------------------------------
+const writeSceneTable = async (
+  root: string,
+  scenes: SceneRow[],
+  spriteIncludes: string[],
+  startScene: number,
+) => {
+  const header = [
+    "// Generated by GBA Studio - scene registry (P2 scene runtime).",
+    "#ifndef GBA_SCENE_TABLE_H",
+    "#define GBA_SCENE_TABLE_H",
+    '#include "bn_sprite_item.h"',
+    '#include "bn_regular_bg_item.h"',
+    "#define GBA_NO_OFFSET 0xFFFFFFFFu  // a script-offset field with no script",
+    "struct GbaSceneActor {",
+    "    const bn::sprite_item* item;",
+    "    unsigned char anim_start[8];",
+    "    unsigned char anim_len[8];",
+    "    unsigned int update_off;   // byte offset into game_image, 0 = none",
+    "    unsigned int interact_off;",
+    "};",
+    "struct GbaSceneTrigger {",
+    "    unsigned short left, top, right, bottom;",
+    "    unsigned int interact_off;",
+    "    unsigned int leave_off;",
+    "};",
+    "struct GbaScene {",
+    "    const bn::regular_bg_item* bg;",
+    "    unsigned short width, height;   // tiles",
+    "    unsigned int init_off;",
+    "    unsigned char n_actors;",
+    "    const GbaSceneActor* actors;",
+    "    unsigned char n_triggers;",
+    "    const GbaSceneTrigger* triggers;",
+    "    short scroll_x_min, scroll_x_max, scroll_y_min, scroll_y_max;",
+    "};",
+    "extern const GbaScene gba_scenes[];",
+    "extern const unsigned int gba_scene_count;",
+    "extern const unsigned int gba_start_scene;",
+    "#endif",
+    "",
+  ].join("\n");
+  await writeFile(Path.join(root, "src", "scene_table.h"), header);
+
+  const arr = (xs: number[]) => `{ ${xs.join(", ")} }`;
+  const lines: string[] = [
+    "// Generated by GBA Studio - scene registry data.",
+    '#include "scene_table.h"',
+    ...scenes.map((sc) => `#include "bn_regular_bg_items_scene${sc.index}_bg.h"`),
+    ...spriteIncludes,
+    "",
+  ];
+  // Per-scene actor + trigger arrays.
+  for (const sc of scenes) {
+    lines.push(`static const GbaSceneActor scene${sc.index}_actors[] = {`);
+    for (const a of sc.actors) {
+      lines.push(
+        `    { ${a.item}, ${arr(a.animStart)}, ${arr(a.animLen)}, ${a.updateOff}, ${a.interactOff} },`,
+      );
+    }
+    lines.push("};");
+    if (sc.triggers.length > 0) {
+      lines.push(`static const GbaSceneTrigger scene${sc.index}_triggers[] = {`);
+      for (const t of sc.triggers) {
+        lines.push(
+          `    { ${t.left}, ${t.top}, ${t.right}, ${t.bottom}, ${t.interactOff}, ${t.leaveOff} },`,
+        );
+      }
+      lines.push("};");
+    }
+  }
+  lines.push("const GbaScene gba_scenes[] = {");
+  for (const sc of scenes) {
+    const trg = sc.triggers.length > 0 ? `scene${sc.index}_triggers` : "nullptr";
+    lines.push(
+      `    { ${sc.bgItem}, ${sc.width}, ${sc.height}, ${sc.initOff}, ` +
+        `${sc.actors.length}, scene${sc.index}_actors, ${sc.triggers.length}, ${trg}, ` +
+        `${sc.scroll[0]}, ${sc.scroll[1]}, ${sc.scroll[2]}, ${sc.scroll[3]} },`,
+    );
+  }
+  lines.push("};");
+  lines.push(`const unsigned int gba_scene_count = ${scenes.length};`);
+  lines.push(`const unsigned int gba_start_scene = ${startScene};`);
+  lines.push("");
+  // .cpp (not .c): the data references bn:: sprite/bg item symbols (C++).
+  await writeFile(Path.join(root, "src", "scene_table.cpp"), lines.join("\n"));
 };
 
 export default ejectGbaBuild;

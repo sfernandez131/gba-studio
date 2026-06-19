@@ -251,3 +251,66 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(entrySymbol).toBe("_scene1_init");
   });
 });
+
+// P2: scene-runtime opcodes — actor direction, the scene stack, and the
+// change-scene raise (rewritten from the GB far-pointer to an inline scene index).
+describe("parseGbvmAsm — P2 scene opcodes", () => {
+  test("bridges VM_ACTOR_SET_DIR to op 0x32 [actor, dir]", () => {
+    const { items } = parseGbvmAsm("        VM_ACTOR_SET_DIR .ARG0, .DIR_RIGHT\n");
+    expect(items).toEqual([{ kind: "op", op: 0x32, operands: [-1, 1] }]);
+  });
+
+  test("bridges the zero-operand scene-stack opcodes", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_SCENE_PUSH\n        VM_SCENE_POP\n        VM_SCENE_POP_ALL\n        VM_SCENE_STACK_RESET\n",
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x68, operands: [] },
+      { kind: "op", op: 0x69, operands: [] },
+      { kind: "op", op: 0x6a, operands: [] },
+      { kind: "op", op: 0x6b, operands: [] },
+    ]);
+  });
+
+  test("rewrites the change-scene raise+far-ptr pair into an inline scene index", () => {
+    // The exact sequence sceneSwitchUsingScriptValues emits (scriptBuilder.ts).
+    const asm = `
+        VM_ACTOR_SET_DIR .ARG0, .DIR_DOWN
+        VM_SET_CONST_INT8 _camera_settings, 1
+        VM_RAISE EXCEPTION_CHANGE_SCENE, 3
+        IMPORT_FAR_PTR_DATA _scene_2
+`;
+    const { items, skipped } = parseGbvmAsm(asm, undefined, { _scene_2: 1 });
+    expect(items).toEqual([
+      { kind: "op", op: 0x32, operands: [-1, 0] }, // SET_DIR .ARG0, DOWN
+      { kind: "changeScene", sceneIndex: 1 },
+    ]);
+    // the camera_settings engine write is dropped (SKIP_MACROS), reported.
+    expect(skipped.some((s) => s.startsWith("VM_SET_CONST_INT8"))).toBe(true);
+  });
+
+  test("encodes a changeScene item as RAISE(2) + size 2 + LE scene index", () => {
+    const { bytes, relocations } = emitGbaBytecode([
+      { kind: "changeScene", sceneIndex: 1 },
+    ]);
+    expect(bytes).toEqual([0x27, 0x02, 0x02, 0x01, 0x00]);
+    expect(relocations).toEqual([]); // index is inline, never a reloc target
+  });
+
+  test("drops a non-scene IMPORT_FAR_PTR_DATA (e.g. a font) with a note", () => {
+    const { items, skipped } = parseGbvmAsm("        IMPORT_FAR_PTR_DATA _font_0\n");
+    expect(items).toEqual([]);
+    expect(skipped).toContain("IMPORT_FAR_PTR_DATA _font_0");
+  });
+
+  test("throws if a change-scene raise has no following far-ptr", () => {
+    expect(() =>
+      parseGbvmAsm("        VM_RAISE EXCEPTION_CHANGE_SCENE, 3\n", undefined, {}),
+    ).toThrow(/EXCEPTION_CHANGE_SCENE not followed by IMPORT_FAR_PTR_DATA/);
+  });
+
+  test("a non-change-scene VM_RAISE still encodes via the generic path", () => {
+    const { items } = parseGbvmAsm("        VM_RAISE EXCEPTION_RESET, 0\n");
+    expect(items).toEqual([{ kind: "op", op: 0x27, operands: [1, 0] }]);
+  });
+});
