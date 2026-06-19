@@ -128,3 +128,118 @@ _actor_update::
     expect(relocations.length).toBe(2);
   });
 });
+
+// P0: cheap opcodes bridged to engine handlers the gbavm VM_STEP now implements.
+describe("parseGbvmAsm — P0 opcodes", () => {
+  test("bridges VM_LOOP to op 0x07 with a label operand", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_LOOP .ARG0, 1$, 2\n1$:\n        VM_STOP\n",
+    );
+    expect(items.find((i) => i.kind === "op" && i.op === 0x07)).toEqual({
+      kind: "op",
+      op: 0x07,
+      operands: [-1, { label: "1$" }, 2],
+    });
+  });
+
+  test("bridges VM_TEST_TERMINATE to op 0x2a", () => {
+    const { items } = parseGbvmAsm("        VM_TEST_TERMINATE 1\n");
+    expect(items).toEqual([{ kind: "op", op: 0x2a, operands: [1] }]);
+  });
+
+  test("bridges VM_ACTOR_GET_ANGLE to op 0x86", () => {
+    const { items } = parseGbvmAsm("        VM_ACTOR_GET_ANGLE .ARG1, .ARG0\n");
+    expect(items).toEqual([{ kind: "op", op: 0x86, operands: [-2, -1] }]);
+  });
+
+  test("bridges VM_SIN_SCALE / VM_COS_SCALE to ops 0x89 / 0x8a", () => {
+    const sin = parseGbvmAsm("        VM_SIN_SCALE .ARG0, .ARG1, 5\n").items;
+    expect(sin).toEqual([{ kind: "op", op: 0x89, operands: [-1, -2, 5] }]);
+    const cos = parseGbvmAsm("        VM_COS_SCALE .ARG0, .ARG1, 5\n").items;
+    expect(cos).toEqual([{ kind: "op", op: 0x8a, operands: [-1, -2, 5] }]);
+  });
+
+  test("drops VM_RANDOMIZE (no GBA equivalent) and reports it skipped", () => {
+    const { items, skipped } = parseGbvmAsm("        VM_RANDOMIZE\n");
+    expect(items).toEqual([]);
+    expect(skipped).toContain("VM_RANDOMIZE");
+  });
+
+  // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
+  // lines (GB Studio's _switch emits one `_dw` per case). The parser collects
+  // them into a single switch item with a relocatable jump table.
+  test("parses VM_SWITCH + its .dw case table into one switch item", () => {
+    const asm = `
+        VM_SWITCH .ARG0, 3, 0
+        .dw 1, 1$
+        .dw 2, 2$
+        .dw 3, 3$
+1$:
+        VM_IDLE
+2$:
+        VM_IDLE
+3$:
+        VM_STOP
+`;
+    const { items } = parseGbvmAsm(asm);
+    expect(items.find((i) => i.kind === "switch")).toEqual({
+      kind: "switch",
+      operands: [-1, 3, 0],
+      cases: [
+        { value: 1, target: { label: "1$" } },
+        { value: 2, target: { label: "2$" } },
+        { value: 3, target: { label: "3$" } },
+      ],
+    });
+    // 5-byte header (op + i16 idx + u8 size + u8 n) then 3 relocated case entries.
+    const { bytes, relocations } = emitGbaBytecode(items);
+    expect(bytes.slice(0, 5)).toEqual([0x08, 0xff, 0xff, 0x03, 0x00]);
+    expect(relocations.length).toBe(3);
+  });
+
+  test("throws on an incomplete VM_SWITCH case table", () => {
+    // Declares 2 cases but only one .dw follows before end-of-input.
+    expect(() =>
+      parseGbvmAsm("        VM_SWITCH .ARG0, 2, 0\n        .dw 1, 1$\n"),
+    ).toThrow(/Incomplete VM_SWITCH case table/);
+  });
+
+  // The remaining P0 control-flow opcodes reference symbols OUTSIDE the blob:
+  // VM_BEGINTHREAD -> another script proc, VM_INVOKE/VM_CALL_NATIVE -> a native
+  // engine fn, VM_GET_FAR -> far data. The encoding is bridged (P0); resolving the
+  // target is P1. The `___bank_*` bank symbol folds to 0 (GBA is flat, no banking).
+  test("bridges VM_BEGINTHREAD encoding (bank symbol folds to 0; proc is a ptr label)", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
+    );
+    expect(items).toEqual([
+      {
+        kind: "op",
+        op: 0x0e,
+        operands: [0, { label: "_my_thread" }, -1, 0],
+      },
+    ]);
+  });
+
+  test("bridges VM_INVOKE / VM_CALL_NATIVE / VM_GET_FAR encodings", () => {
+    expect(parseGbvmAsm("        VM_INVOKE ___bank_wait, _wait_frames, 1, .ARG0\n").items).toEqual([
+      { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 1, -1] },
+    ]);
+    expect(parseGbvmAsm("        VM_CALL_NATIVE ___bank_fn, _native_fn\n").items).toEqual([
+      { kind: "op", op: 0x2d, operands: [0, { label: "_native_fn" }] },
+    ]);
+    // VM_GET_FAR IDX, SIZE, BANK, ADDR
+    expect(parseGbvmAsm("        VM_GET_FAR .ARG0, .GET_WORD, ___bank_data, _far_data\n").items).toEqual([
+      { kind: "op", op: 0x06, operands: [-1, 1, 0, { label: "_far_data" }] },
+    ]);
+  });
+
+  test("emitting an unresolved external symbol reports the P1 dependency", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",
+    );
+    expect(() => emitGbaBytecode(items)).toThrow(
+      /External symbol "_my_thread".*lands in P1/s,
+    );
+  });
+});

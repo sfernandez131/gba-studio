@@ -23,10 +23,14 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x02: ["u8"], // POP n
   0x04: ["ptr"], // CALL addr
   0x05: ["u8"], // RET n
+  0x06: ["i16", "u8", "u8", "ptr"], // GET_FAR idx, size, bank, addr (addr = far DATA symbol; resolved in P1)
   0x07: ["i16", "ptr", "u8"], // LOOP idx, label, n
+  0x08: ["i16", "u8", "u8"], // SWITCH idx, size, n (+ a 6-byte-per-case jump table)
   0x09: ["ptr"], // JUMP label
   0x0a: ["u8", "ptr"], // CALL_FAR bank, addr
   0x0b: ["u8"], // RET_FAR n
+  0x0d: ["u8", "ptr", "u8", "i16"], // INVOKE bank, fn, nparams, idx (fn = native engine symbol; resolved in P1)
+  0x0e: ["u8", "ptr", "i16", "u8"], // BEGINTHREAD bank, proc, handle, nargs (proc = cross-blob script symbol; resolved in P1)
   0x0f: ["u8", "i16", "i16", "ptr", "u8"], // IF cond, idxA, idxB, label, n
   0x10: ["i16"], // PUSH_VALUE_IND idx
   0x11: ["i16"], // PUSH_VALUE idx
@@ -46,6 +50,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x27: ["u8", "u8"], // RAISE code, size
   0x28: ["i16", "i16"], // SET_INDIRECT idxA, idxB
   0x29: ["i16", "i16"], // GET_INDIRECT idxA, idxB
+  0x2a: ["u8"], // TEST_TERMINATE flags
   0x2b: ["i16"], // POLL_LOADED idx
   0x2c: ["i16"], // PUSH_REFERENCE idx
   0x2d: ["u8", "ptr"], // CALL_NATIVE bank, ptr
@@ -57,6 +62,9 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
   0x5d: ["u8"], // SET_SPRITE_MODE mode (gbavm: no-op stub)
+  0x86: ["i16", "i16"], // ACTOR_GET_ANGLE idx, dest
+  0x89: ["i16", "i16", "u8"], // SIN_SCALE idx, idxAngle, scale
+  0x8a: ["i16", "i16", "u8"], // COS_SCALE idx, idxAngle, scale
   0x76: ["i16", "i16", "i16"], // MEMSET idx, value, count
   0x77: ["i16", "i16", "i16"], // MEMCPY idxA, idxB, count
 };
@@ -67,7 +75,13 @@ export type GbaItem =
   | { kind: "label"; name: string }
   | { kind: "op"; op: number; operands: (number | { label: string })[] }
   | { kind: "stop" }
-  | { kind: "rpn"; bytes: number[] }; // raw RPN stream incl. terminator (pre-encoded for now)
+  | { kind: "rpn"; bytes: number[] } // raw RPN stream incl. terminator (pre-encoded for now)
+  | {
+      // VM_SWITCH: a fixed header + a 6-byte-per-case relocatable jump table.
+      kind: "switch";
+      operands: [number, number, number]; // idx, size, n
+      cases: { value: number; target: { label: string } }[];
+    };
 
 export interface GbaReloc {
   at: number; // byte offset of the 4-byte field to patch
@@ -93,6 +107,9 @@ function itemSize(item: GbaItem): number {
       return 1;
     case "rpn":
       return 1 + item.bytes.length; // 0x15 opcode + stream
+    case "switch":
+      // 5-byte header (op + i16 idx + u8 size + u8 n) + 6 bytes per case entry.
+      return opByteSize(GBA_OPCODE_SPECS[0x08]) + item.cases.length * 6;
     case "op": {
       const spec = GBA_OPCODE_SPECS[item.op];
       if (!spec) {
@@ -142,6 +159,24 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
       for (const b of item.bytes) push8(b);
       continue;
     }
+    if (item.kind === "switch") {
+      // Header: op + idx(i16) + size(u8) + n(u8). Then one 6-byte entry per case:
+      // value(i16 LE) + a 4-byte code pointer (relocated like a "ptr" operand).
+      push8(0x08);
+      push16(item.operands[0]);
+      push8(item.operands[1]);
+      push8(item.operands[2]);
+      for (const c of item.cases) {
+        push16(c.value);
+        const target = labelOffsets.get(c.target.label);
+        if (target === undefined) {
+          throw new Error(`Unknown switch label "${c.target.label}"`);
+        }
+        relocations.push({ at: bytes.length, target });
+        push32placeholder();
+      }
+      continue;
+    }
     const spec = GBA_OPCODE_SPECS[item.op];
     if (!spec) throw new Error(`No GBA encoding for opcode 0x${item.op.toString(16)}`);
     push8(item.op);
@@ -155,6 +190,17 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
         }
         const target = labelOffsets.get(operand.label);
         if (target === undefined) {
+          // A "_"-prefixed name is an external symbol — another script proc
+          // (VM_BEGINTHREAD), a native engine function (VM_INVOKE/VM_CALL_NATIVE),
+          // or far data (VM_GET_FAR) — not a label in this blob. Resolving those is
+          // P1's job (whole-project compile + link + symbol registry); say so plainly
+          // rather than emitting a bare "unknown label".
+          if (operand.label.startsWith("_")) {
+            throw new Error(
+              `External symbol "${operand.label}" can't be resolved within a single bytecode blob — ` +
+                `cross-blob/native-symbol linking lands in P1 (whole-project compile + link).`,
+            );
+          }
           throw new Error(`Unknown label "${operand.label}"`);
         }
         relocations.push({ at: bytes.length, target });
