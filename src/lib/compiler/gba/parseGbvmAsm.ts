@@ -74,6 +74,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_COS_SCALE: 0x8a,
   VM_MEMSET: 0x76,
   VM_MEMCPY: 0x77,
+  // scene stack (no operands): push current scene, pop back to it, pop to the base.
+  VM_SCENE_PUSH: 0x68,
+  VM_SCENE_POP: 0x69,
+  VM_SCENE_POP_ALL: 0x6a,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -146,6 +150,9 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
+  // VM_ACTOR_SET_DIR sets an actor's explicit facing; gbavm infers facing from
+  // movement, so drop it for now (cosmetic on scene entry).
+  "VM_ACTOR_SET_DIR",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -159,6 +166,13 @@ const BASE_CONSTS: Record<string, number> = {
   ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
   // fade
   ".FADE_OUT": 0x00, ".FADE_IN": 0x02, ".FADE_MODAL": 0x01, ".FADE_NONMODAL": 0x00,
+  // VM_RAISE exception codes (vm_exceptions.h)
+  EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
+  EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
+  // camera lock flags (written to _camera_settings)
+  ".CAMERA_LOCK": 0x03, ".CAMERA_LOCK_X": 0x01, ".CAMERA_LOCK_Y": 0x02,
+  ".CAMERA_UNLOCK": 0x00, ".CAMERA_LOCK_X_MIN": 0x04, ".CAMERA_LOCK_X_MAX": 0x08,
+  ".CAMERA_LOCK_Y_MIN": 0x10, ".CAMERA_LOCK_Y_MAX": 0x20,
   // if / rpn conditions
   ".EQ": 1, ".LT": 2, ".LTE": 3, ".GT": 4, ".GTE": 5, ".NE": 6,
   // rpn operators
@@ -336,7 +350,16 @@ function parseRpnLine(
  * `entrySymbol`, when given, restricts parsing to that routine's body (handy when a
  * file defines several `_name::` routines); otherwise the whole file is parsed.
  */
-export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
+export function parseGbvmAsm(
+  asm: string,
+  opts: {
+    entrySymbol?: string;
+    // Resolve a scene far-ptr symbol (e.g. "_scene_main") to its gba_scenes[] index;
+    // used to bridge VM_RAISE EXCEPTION_CHANGE_SCENE + IMPORT_FAR_PTR_DATA.
+    sceneIndex?: (symbol: string) => number | undefined;
+  } = {},
+): ParseResult {
+  const { entrySymbol, sceneIndex } = opts;
   const consts: Record<string, number> = { ...BASE_CONSTS };
 
   // First pass: collect local `.X = n` / `SYM = n` constant defines so forward
@@ -367,6 +390,9 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
         cases: { value: number; target: { label: string } }[];
       }
     | null = null;
+  // VM_RAISE EXCEPTION_CHANGE_SCENE is followed by an IMPORT_FAR_PTR_DATA scene
+  // pointer; this flag bridges that pair into a 2-byte scene index.
+  let pendingSceneChange = false;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
 
   const DIRECTIVES = /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry)\b/;
@@ -450,6 +476,38 @@ export function parseGbvmAsm(asm: string, entrySymbol?: string): ParseResult {
       if (size === 0) {
         items.push({ kind: "switch", operands: pendingSwitch.operands, cases: [] });
         pendingSwitch = null;
+      }
+      continue;
+    }
+
+    if (mnemonic === "VM_RAISE") {
+      const a = splitArgs(argStr);
+      const code = ev(a[0]);
+      if (code === 2 /* EXCEPTION_CHANGE_SCENE */) {
+        // Emit the raise with a 2-byte scene-index payload (replacing GB's 3-byte
+        // scene far-ptr, which the following IMPORT_FAR_PTR_DATA becomes).
+        items.push({ kind: "op", op: 0x27, operands: [code, 2] });
+        pendingSceneChange = true;
+      } else {
+        // reset/save/load/terminate aren't bridged yet; drop the raise (its inline
+        // data, if any, is dropped by the IMPORT_FAR_PTR_DATA handler below).
+        skipped.push(`VM_RAISE ${argStr.trim()}`.trim());
+      }
+      continue;
+    }
+    if (mnemonic === "IMPORT_FAR_PTR_DATA") {
+      const sym = (splitArgs(argStr)[0] ?? "").replace(/:+$/, "");
+      if (pendingSceneChange) {
+        const idx = sceneIndex?.(sym);
+        if (idx === undefined) {
+          throw new Error(
+            `GBA: scene change targets unknown scene "${sym}" (no gba_scenes entry)`,
+          );
+        }
+        items.push({ kind: "raw", bytes: [idx & 0xff, (idx >> 8) & 0xff] });
+        pendingSceneChange = false;
+      } else {
+        skipped.push(`IMPORT_FAR_PTR_DATA ${sym}`); // unbridged far data
       }
       continue;
     }
