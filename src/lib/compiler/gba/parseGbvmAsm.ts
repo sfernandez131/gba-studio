@@ -74,6 +74,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_COS_SCALE: 0x8a,
   VM_MEMSET: 0x76,
   VM_MEMCPY: 0x77,
+  // scene stack (no operands): push current scene, pop back to it, pop to the base.
+  VM_SCENE_PUSH: 0x68,
+  VM_SCENE_POP: 0x69,
+  VM_SCENE_POP_ALL: 0x6a,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to

@@ -254,6 +254,17 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("bridges the operand-less scene-stack opcodes (push/pop/pop_all)", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_SCENE_PUSH\n        VM_SCENE_POP\n        VM_SCENE_POP_ALL\n",
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x68, operands: [] },
+      { kind: "op", op: 0x69, operands: [] },
+      { kind: "op", op: 0x6a, operands: [] },
+    ]);
+  });
+
   test("bridges VM_RAISE EXCEPTION_CHANGE_SCENE + IMPORT_FAR_PTR_DATA to a scene index", () => {
     const { items, skipped } = parseGbvmAsm(
       "        VM_RAISE EXCEPTION_CHANGE_SCENE, 3\n" +
