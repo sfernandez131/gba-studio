@@ -254,6 +254,19 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("bridges VM_RAISE EXCEPTION_CHANGE_SCENE + IMPORT_FAR_PTR_DATA to a scene index", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_RAISE EXCEPTION_CHANGE_SCENE, 3\n" +
+        "            IMPORT_FAR_PTR_DATA _scene_second\n",
+      { sceneIndex: (sym) => (sym === "_scene_second" ? 1 : undefined) },
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x27, operands: [2, 2] }, // VM_RAISE code=2 (CHANGE_SCENE), size=2
+      { kind: "raw", bytes: [1, 0] }, // scene index 1 (little-endian), patched in place
+    ]);
+    expect(skipped).toEqual([]);
+  });
+
   test("emitting an external symbol records it as a symbolic relocation (M1 linker resolves it)", () => {
     const { items } = parseGbvmAsm(
       "        VM_BEGINTHREAD ___bank_my_thread, _my_thread, .ARG0, 0\n",

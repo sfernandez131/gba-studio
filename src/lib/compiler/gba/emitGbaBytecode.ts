@@ -88,6 +88,12 @@ export type GbaItem =
       kind: "switch";
       operands: [number, number, number]; // idx, size, n
       cases: { value: number; target: { label: string } }[];
+    }
+  | {
+      // Raw inline bytes emitted verbatim - e.g. the scene-index data that follows
+      // a VM_RAISE EXCEPTION_CHANGE_SCENE (the engine reads it as the raise's args).
+      kind: "raw";
+      bytes: number[];
     };
 
 export interface GbaReloc {
@@ -129,6 +135,8 @@ function itemSize(item: GbaItem): number {
       return 1;
     case "rpn":
       return 1 + item.bytes.length; // 0x15 opcode + stream
+    case "raw":
+      return item.bytes.length; // emitted verbatim
     case "switch":
       // 5-byte header (op + i16 idx + u8 size + u8 n) + 6 bytes per case entry.
       return opByteSize(GBA_OPCODE_SPECS[0x08]) + item.cases.length * 6;
@@ -175,6 +183,10 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
     if (item.kind === "label") continue;
     if (item.kind === "stop") {
       push8(GBA_OP_STOP);
+      continue;
+    }
+    if (item.kind === "raw") {
+      for (const b of item.bytes) push8(b);
       continue;
     }
     if (item.kind === "rpn") {

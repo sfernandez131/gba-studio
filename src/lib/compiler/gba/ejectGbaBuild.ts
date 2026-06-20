@@ -73,6 +73,13 @@ const ejectGbaBuild = async ({
   const scriptForSymbol = (symbol: string): string | undefined =>
     compiledData.files[`${cNameOf(symbol)}.s`];
 
+  // A scene change targets a scene by its far-ptr symbol ("_<scene.symbol>"); map
+  // those to gba_scenes[] indices (the table below is built in this same order).
+  const sceneIndex = (sym: string): number | undefined => {
+    const i = scenes.findIndex((sc) => `_${sc.symbol}` === sym);
+    return i >= 0 ? i : undefined;
+  };
+
   // One scene-table entry per scene: its init script (run on load) + each actor's
   // update script (a persistent per-frame thread + the runtime actor index it
   // drives; the player is 0, placed actors are 1..). Seed the proc-collection
@@ -109,7 +116,7 @@ const ejectGbaBuild = async ({
     if (collected.has(symbol)) continue;
     const asmText = scriptForSymbol(symbol);
     if (asmText === undefined) continue;
-    const { items, skipped } = parseGbvmAsm(asmText);
+    const { items, skipped } = parseGbvmAsm(asmText, { sceneIndex });
     for (const note of skipped) {
       warnings(`GBA: deferred unsupported instruction "${note}"`);
     }
