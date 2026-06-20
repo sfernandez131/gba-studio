@@ -1,7 +1,7 @@
 import {
   linkGbaProgram,
   cNameOf,
-  formatGbaEntriesC,
+  formatGbaScenesC,
   GbaProc,
 } from "./linkGbaProgram";
 
@@ -45,6 +45,25 @@ describe("linkGbaProgram", () => {
     ]);
     expect(unresolved).toEqual([{ fromProc: "_s", symbol: "_native_fn", at: 2 }]);
     expect(procs[0].symRelocs).toEqual([]);
+  });
+
+  test("resolves an engine native function reference (VM_INVOKE _wait_frames)", () => {
+    const { procs, unresolved, source } = linkGbaProgram([
+      {
+        symbol: "_s",
+        items: [
+          // VM_INVOKE bank=0, fn->_wait_frames, nparams=0, idx=.ARG0(-1).
+          { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 0, -1] },
+          { kind: "stop" },
+        ],
+      },
+    ]);
+    expect(unresolved).toEqual([]); // _wait_frames is a known engine native
+    // VM_INVOKE: op + bank(u8) => fn ptr field at offset 2.
+    expect(procs[0].symRelocs).toEqual([
+      { at: 2, expr: "(const unsigned char *)&wait_frames" },
+    ]);
+    expect(source).toContain('#include "gba_natives.h"');
   });
 
   test("allocates an engine RAM variable for a ram relocation (VM_SET_CONST_INT8)", () => {
@@ -113,25 +132,43 @@ describe("linkGbaProgram", () => {
     expect(cNameOf("_scene_main_init")).toBe("scene_main_init");
   });
 
-  test("formatGbaEntriesC emits scene init + actor updates with runtime indices", () => {
-    const c = formatGbaEntriesC("scene_main_init", [
-      { cName: "actor_player_update", index: 1 },
-    ]);
+  test("formatGbaScenesC emits a scene table with init + actor updates + indices", () => {
+    const c = formatGbaScenesC(
+      [
+        {
+          initCName: "scene_main_init",
+          actorUpdates: [{ cName: "actor_player_update", index: 1 }],
+        },
+      ],
+      0,
+    );
     expect(c).toContain("extern unsigned char scene_main_init[];");
     expect(c).toContain("extern unsigned char actor_player_update[];");
-    expect(c).toContain("unsigned char * const gba_scene_init = scene_main_init;");
     expect(c).toContain(
-      "unsigned char * const gba_actor_updates[] = { actor_player_update };",
+      "static unsigned char * const scene0_updates[] = { actor_player_update };",
     );
-    expect(c).toContain("const unsigned char gba_actor_update_actors[] = { 1 };");
-    expect(c).toContain("const unsigned int gba_actor_updates_count = 1;");
+    expect(c).toContain(
+      "static const unsigned char scene0_update_actors[] = { 1 };",
+    );
+    expect(c).toContain(
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 1 },",
+    );
+    expect(c).toContain("const unsigned int gba_scenes_count = 1;");
+    expect(c).toContain("const unsigned int gba_start_scene = 0;");
   });
 
-  test("formatGbaEntriesC guards the zero-actor-update case (no zero-size array)", () => {
-    const c = formatGbaEntriesC("scene_main_init", []);
-    expect(c).toContain("unsigned char * const gba_actor_updates[] = { 0 };");
-    expect(c).toContain("const unsigned char gba_actor_update_actors[] = { 0 };");
-    expect(c).toContain("const unsigned int gba_actor_updates_count = 0;");
+  test("formatGbaScenesC guards the zero-actor-update case (no zero-size array)", () => {
+    const c = formatGbaScenesC(
+      [{ initCName: "scene_main_init", actorUpdates: [] }],
+      0,
+    );
+    expect(c).toContain("static unsigned char * const scene0_updates[] = { 0 };");
+    expect(c).toContain(
+      "static const unsigned char scene0_update_actors[] = { 0 };",
+    );
+    expect(c).toContain(
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 0 },",
+    );
   });
 
   test("rejects a duplicate proc symbol in the link set", () => {

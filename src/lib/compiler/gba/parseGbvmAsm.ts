@@ -272,10 +272,11 @@ function makeEvaluator(consts: Record<string, number>) {
     // Substitute identifiers (.NAME or NAME) with their constant values.
     s = s.replace(/\.?[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
       if (tok in consts) return `(${consts[tok]})`;
-      // `___bank_<symbol>` is a GB bank-number linker symbol. The GBA is flat
-      // (no banking) and every engine handler ignores the bank operand, so any
-      // bank symbol folds to 0.
-      if (tok.startsWith("___bank_")) return "(0)";
+      // Bank-number linker symbols: the long `___bank_<symbol>` form and the short
+      // `b_<symbol>` form (e.g. VM_INVOKE's bank operand, `b_wait_frames`). The GBA
+      // is flat (no banking) and every engine handler ignores the bank operand, so
+      // any bank symbol folds to 0.
+      if (tok.startsWith("___bank_") || tok.startsWith("b_")) return "(0)";
       throw new Error(`Unknown symbol "${tok}" in expression "${raw}"`);
     });
     if (!/^[-+*/%|&^<>()~\s0-9xX]+$/.test(s)) {
