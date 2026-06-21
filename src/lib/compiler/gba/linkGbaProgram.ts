@@ -206,6 +206,7 @@ export interface GbaSceneEntry {
   heightPx: number;
   // Placed actors' initial state (engine places them on load before scripts run).
   actorsInit: { index: number; dir: number; x: number; y: number }[];
+  playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
 }
 
 /**
@@ -255,7 +256,7 @@ export function formatGbaScenesC(
     out.push(
       `    { ${s.initCName}, scene${i}_updates, scene${i}_update_actors, ` +
         `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx}, ` +
-        `scene${i}_actors_init, ${s.actorsInit.length} },`,
+        `scene${i}_actors_init, ${s.actorsInit.length}, ${s.playerMove} },`,
     );
   });
   out.push("};");

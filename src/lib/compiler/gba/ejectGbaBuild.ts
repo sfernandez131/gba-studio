@@ -122,12 +122,26 @@ const ejectGbaBuild = async ({
         y: Math.round(actor.y * unit),
       };
     });
+    // Player (actor 0): if the scene has a player sprite, place it at the project
+    // start position (player position persistence across scenes is a follow-up).
+    if (scene.playerSpriteSheetId) {
+      actorsInit.unshift({
+        index: 0,
+        dir: dirCode[settings.startDirection] ?? 0,
+        x: Math.round(settings.startX * 256),
+        y: Math.round(settings.startY * 256),
+      });
+    }
+    // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and
+    // platformer physics are later milestones).
+    const playerMove = scene.type === "TOPDOWN" ? 1 : 0;
     sceneEntries.push({
       initCName: cNameOf(initSymbol),
       actorUpdates,
       widthPx,
       heightPx,
       actorsInit,
+      playerMove,
     });
     queue.push(initSymbol);
   }
@@ -320,15 +334,12 @@ const ejectGbaBuild = async ({
       `        case ${s}: return bn::regular_bg_items::${bgName}.create_bg(0, 0);`,
     );
 
-    // Actor sprites -> graphics/scene<s>_sprite_<idx>.bmp (runtime index i + 1;
-    // the player is 0).
+    // Sprites -> graphics/scene<s>_sprite_<idx>.bmp. Index 0 is the player (the
+    // scene's playerSpriteSheetId); placed actors are their runtime index i + 1.
     const rowByIndex = new Map<number, string>();
-    for (let i = 0; i < scene.actors.length; i++) {
-      const actor = scene.actors[i];
-      const sprite = projectData.sprites.find(
-        (sp) => sp.id === actor.spriteSheetId,
-      );
-      if (!sprite || !sprite.states || sprite.states.length === 0) continue;
+    const emitSprite = async (spriteSheetId: string, idx: number) => {
+      const sprite = projectData.sprites.find((sp) => sp.id === spriteSheetId);
+      if (!sprite || !sprite.states || sprite.states.length === 0) return;
       let img: { width: number; height: number; data: Uint8Array };
       let palette = spritePalette;
       try {
@@ -345,14 +356,13 @@ const ejectGbaBuild = async ({
         }
       } catch (e) {
         warnings(`GBA: could not read sprite "${sprite.filename}"`);
-        continue;
+        return;
       }
       const sheet = buildSpriteSheet(
         sprite as unknown as SpriteSheetInput,
         img,
         spriteMode,
       );
-      const idx = i + 1;
       const name = `scene${s}_sprite_${idx}`;
       await writeFile(
         Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
@@ -372,6 +382,12 @@ const ejectGbaBuild = async ({
       progress(
         `Converting sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
       );
+    };
+    if (scene.playerSpriteSheetId) {
+      await emitSprite(scene.playerSpriteSheetId, 0);
+    }
+    for (let i = 0; i < scene.actors.length; i++) {
+      await emitSprite(scene.actors[i].spriteSheetId, i + 1);
     }
     // Per-scene actor->sprite table (index 0 = player; missing sprites get a null
     // row so every actor index is addressable).
