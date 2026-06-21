@@ -207,6 +207,7 @@ export interface GbaSceneEntry {
   // Placed actors' initial state (engine places them on load before scripts run).
   actorsInit: { index: number; dir: number; x: number; y: number }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
+  collisions: number[]; // one byte per tile (row-major); empty = no collision grid
 }
 
 /**
@@ -249,14 +250,26 @@ export function formatGbaScenesC(
           .join(", ")
       : "{ 0, 0, 0, 0 }";
     out.push(`static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`);
+    // Collision grid (one byte/tile). Emit the array only when some tile is solid;
+    // otherwise the scene gets a null grid and only its bounds block movement.
+    if (s.collisions.some((v) => v & 0x0f)) {
+      out.push(
+        `static const unsigned char scene${i}_collisions[] = { ${s.collisions
+          .map((v) => v & 0xff)
+          .join(", ")} };`,
+      );
+    }
   });
   out.push("");
   out.push("const GbaScene gba_scenes[] = {");
   scenes.forEach((s, i) => {
+    const collPtr = s.collisions.some((v) => v & 0x0f)
+      ? `scene${i}_collisions`
+      : "0";
     out.push(
       `    { ${s.initCName}, scene${i}_updates, scene${i}_update_actors, ` +
         `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx}, ` +
-        `scene${i}_actors_init, ${s.actorsInit.length}, ${s.playerMove} },`,
+        `scene${i}_actors_init, ${s.actorsInit.length}, ${s.playerMove}, ${collPtr} },`,
     );
   });
   out.push("};");
