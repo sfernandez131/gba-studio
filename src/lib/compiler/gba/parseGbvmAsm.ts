@@ -89,6 +89,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
   VM_SCENE_POP_ALL: 0x6a,
+  // dialogue: render the text + wait for A (M4; gbavm-internal opcode, no operands).
+  VM_DISPLAY_TEXT: 0x90,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -161,13 +163,11 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
-  // M4a: dialogue / text overlay opcodes. The full text engine (font tiles, the text
-  // token interpreter, typewriter rendering, the overlay window) is a later M4 step;
-  // for now these are dropped so projects that contain dialogue still build and run
-  // (the dialogue is simply skipped). VM_LOAD_TEXT's inline `.asciz` string is also
-  // skipped via DIRECTIVES.
+  // M4: dialogue / text overlay opcodes still to be ported. VM_DISPLAY_TEXT is now
+  // bridged (op 0x90 -> Butano text render); the rest are dropped so projects with
+  // dialogue still build/run (the typewriter, control codes, the overlay window come
+  // later). VM_LOAD_TEXT's inline `.asciz` string is skipped via DIRECTIVES.
   "VM_LOAD_TEXT",
-  "VM_DISPLAY_TEXT",
   "VM_DISPLAY_TEXT_EX",
   "VM_OVERLAY_SHOW",
   "VM_OVERLAY_HIDE",

@@ -80,6 +80,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x68: [], // SCENE_PUSH  (save current scene on the stack)
   0x69: [], // SCENE_POP   (return to the pushed scene)
   0x6a: [], // SCENE_POP_ALL (return to the base scene)
+  0x90: [], // DISPLAY_TEXT (dialogue: render text + wait for A)
 };
 
 export const GBA_OP_STOP = 0x00;

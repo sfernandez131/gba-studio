@@ -171,7 +171,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toContain("VM_RANDOMIZE");
   });
 
-  test("M4a: drops dialogue/text-overlay opcodes and their inline .asciz text", () => {
+  test("M4: bridges VM_DISPLAY_TEXT (op 0x90); drops the rest + the inline .asciz", () => {
     const { items, skipped } = parseGbvmAsm(
       [
         "        VM_OVERLAY_MOVE_TO 0, 14, 1",
@@ -183,11 +183,12 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "",
       ].join("\n"),
     );
-    // The whole dialogue sequence (and its inline string) is dropped, not thrown.
-    expect(items).toEqual([]);
+    // VM_DISPLAY_TEXT now renders (op 0x90); the rest of the dialogue (and the inline
+    // string) is dropped, not thrown.
+    expect(items).toEqual([{ kind: "op", op: 0x90, operands: [] }]);
     expect(skipped).toContain("VM_LOAD_TEXT 0");
-    expect(skipped).toContain("VM_DISPLAY_TEXT");
     expect(skipped).toContain("VM_OVERLAY_HIDE");
+    expect(skipped).not.toContain("VM_DISPLAY_TEXT");
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
