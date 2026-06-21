@@ -204,6 +204,8 @@ export interface GbaSceneEntry {
   actorUpdates: { cName: string; index: number }[];
   widthPx: number; // scene logical size (for the engine's camera clamp)
   heightPx: number;
+  // Placed actors' initial state (engine places them on load before scripts run).
+  actorsInit: { index: number; dir: number; x: number; y: number }[];
 }
 
 /**
@@ -238,13 +240,22 @@ export function formatGbaScenesC(
     out.push(
       `static const unsigned char scene${i}_update_actors[] = { ${indices} };`,
     );
+    // Placed actors' initial state: { index, dir, x, y }. A single zero row when
+    // empty (C forbids zero-size arrays; the engine iterates by the count).
+    const inits = s.actorsInit.length
+      ? s.actorsInit
+          .map((a) => `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y} }`)
+          .join(", ")
+      : "{ 0, 0, 0, 0 }";
+    out.push(`static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`);
   });
   out.push("");
   out.push("const GbaScene gba_scenes[] = {");
   scenes.forEach((s, i) => {
     out.push(
       `    { ${s.initCName}, scene${i}_updates, scene${i}_update_actors, ` +
-        `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx} },`,
+        `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx}, ` +
+        `scene${i}_actors_init, ${s.actorsInit.length} },`,
     );
   });
   out.push("};");

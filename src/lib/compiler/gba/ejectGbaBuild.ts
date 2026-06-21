@@ -110,11 +110,24 @@ const ejectGbaBuild = async ({
     );
     const widthPx = Math.min(512, (sceneBg ? sceneBg.width : 30) * 8);
     const heightPx = Math.min(512, (sceneBg ? sceneBg.height : 20) * 8);
+    // Placed actors' initial state (runtime index i+1; player = 0). Position in
+    // subpixels (256 per 8px tile, 32 per pixel); direction -> engine dir code.
+    const dirCode = { down: 0, right: 1, up: 2, left: 3 } as const;
+    const actorsInit = scene.actors.map((actor, i) => {
+      const unit = actor.coordinateType === "pixels" ? 32 : 256;
+      return {
+        index: i + 1,
+        dir: dirCode[actor.direction] ?? 0,
+        x: Math.round(actor.x * unit),
+        y: Math.round(actor.y * unit),
+      };
+    });
     sceneEntries.push({
       initCName: cNameOf(initSymbol),
       actorUpdates,
       widthPx,
       heightPx,
+      actorsInit,
     });
     queue.push(initSymbol);
   }
