@@ -171,6 +171,25 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toContain("VM_RANDOMIZE");
   });
 
+  test("M4a: drops dialogue/text-overlay opcodes and their inline .asciz text", () => {
+    const { items, skipped } = parseGbvmAsm(
+      [
+        "        VM_OVERLAY_MOVE_TO 0, 14, 1",
+        "        VM_LOAD_TEXT 0",
+        '        .asciz "Hello, GBA Studio!"',
+        "        VM_DISPLAY_TEXT",
+        "        VM_OVERLAY_WAIT 1, 1, 0",
+        "        VM_OVERLAY_HIDE",
+        "",
+      ].join("\n"),
+    );
+    // The whole dialogue sequence (and its inline string) is dropped, not thrown.
+    expect(items).toEqual([]);
+    expect(skipped).toContain("VM_LOAD_TEXT 0");
+    expect(skipped).toContain("VM_DISPLAY_TEXT");
+    expect(skipped).toContain("VM_OVERLAY_HIDE");
+  });
+
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
   // lines (GB Studio's _switch emits one `_dw` per case). The parser collects
   // them into a single switch item with a relocatable jump table.

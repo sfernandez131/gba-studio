@@ -161,6 +161,27 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
+  // M4a: dialogue / text overlay opcodes. The full text engine (font tiles, the text
+  // token interpreter, typewriter rendering, the overlay window) is a later M4 step;
+  // for now these are dropped so projects that contain dialogue still build and run
+  // (the dialogue is simply skipped). VM_LOAD_TEXT's inline `.asciz` string is also
+  // skipped via DIRECTIVES.
+  "VM_LOAD_TEXT",
+  "VM_DISPLAY_TEXT",
+  "VM_DISPLAY_TEXT_EX",
+  "VM_OVERLAY_SHOW",
+  "VM_OVERLAY_HIDE",
+  "VM_OVERLAY_MOVE_TO",
+  "VM_OVERLAY_CLEAR",
+  "VM_OVERLAY_WAIT",
+  "VM_OVERLAY_SCROLL",
+  "VM_OVERLAY_SET_SCROLL",
+  "VM_OVERLAY_SET_SUBMAP_EX",
+  "VM_OVERLAY_SET_MAP_TILES",
+  "VM_SET_TEXT_SOUND",
+  "VM_SET_FONT",
+  "VM_SWITCH_TEXT_LAYER",
+  "VM_PRINTER_DETECT",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -408,7 +429,8 @@ export function parseGbvmAsm(
   let pendingSceneChange = false;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
 
-  const DIRECTIVES = /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry)\b/;
+  const DIRECTIVES =
+    /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
 
   for (const rawLine of asm.split(/\r?\n/)) {
     const line = stripComment(rawLine);
