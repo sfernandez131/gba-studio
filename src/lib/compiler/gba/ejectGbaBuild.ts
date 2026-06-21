@@ -103,7 +103,19 @@ const ejectGbaBuild = async ({
         queue.push(symbol);
       }
     });
-    sceneEntries.push({ initCName: cNameOf(initSymbol), actorUpdates });
+    // Scene logical size (px) = its background's dimensions, for the camera clamp.
+    // Capped at 512 (the largest Butano regular_bg map); default to one screen.
+    const sceneBg = projectData.backgrounds.find(
+      (b) => b.id === scene.backgroundId,
+    );
+    const widthPx = Math.min(512, (sceneBg ? sceneBg.width : 30) * 8);
+    const heightPx = Math.min(512, (sceneBg ? sceneBg.height : 20) * 8);
+    sceneEntries.push({
+      initCName: cNameOf(initSymbol),
+      actorUpdates,
+      widthPx,
+      heightPx,
+    });
     queue.push(initSymbol);
   }
 

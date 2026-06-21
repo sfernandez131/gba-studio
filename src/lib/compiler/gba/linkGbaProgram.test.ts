@@ -138,6 +138,8 @@ describe("linkGbaProgram", () => {
         {
           initCName: "scene_main_init",
           actorUpdates: [{ cName: "actor_player_update", index: 1 }],
+          widthPx: 240,
+          heightPx: 160,
         },
       ],
       0,
@@ -151,7 +153,7 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 1 };",
     );
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 1 },",
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 1, 240, 160 },",
     );
     expect(c).toContain("const unsigned int gba_scenes_count = 1;");
     expect(c).toContain("const unsigned int gba_start_scene = 0;");
@@ -159,7 +161,14 @@ describe("linkGbaProgram", () => {
 
   test("formatGbaScenesC guards the zero-actor-update case (no zero-size array)", () => {
     const c = formatGbaScenesC(
-      [{ initCName: "scene_main_init", actorUpdates: [] }],
+      [
+        {
+          initCName: "scene_main_init",
+          actorUpdates: [],
+          widthPx: 240,
+          heightPx: 160,
+        },
+      ],
       0,
     );
     expect(c).toContain("static unsigned char * const scene0_updates[] = { 0 };");
@@ -167,7 +176,7 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 0 };",
     );
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 0 },",
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160 },",
     );
   });
 

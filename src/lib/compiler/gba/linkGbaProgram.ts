@@ -202,6 +202,8 @@ export function formatLinkedC(
 export interface GbaSceneEntry {
   initCName: string;
   actorUpdates: { cName: string; index: number }[];
+  widthPx: number; // scene logical size (for the engine's camera clamp)
+  heightPx: number;
 }
 
 /**
@@ -242,7 +244,7 @@ export function formatGbaScenesC(
   scenes.forEach((s, i) => {
     out.push(
       `    { ${s.initCName}, scene${i}_updates, scene${i}_update_actors, ` +
-        `${s.actorUpdates.length} },`,
+        `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx} },`,
     );
   });
   out.push("};");
