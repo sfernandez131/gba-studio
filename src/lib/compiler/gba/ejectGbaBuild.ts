@@ -135,6 +135,20 @@ const ejectGbaBuild = async ({
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and
     // platformer physics are later milestones).
     const playerMove = scene.type === "TOPDOWN" ? 1 : 0;
+    // Collision grid sized to the engine's tile dims (widthPx/8 x heightPx/8),
+    // copied from the scene's per-tile collision bytes. Empty when nothing is solid.
+    const sceneColl: number[] = scene.collisions ?? [];
+    let collisions: number[] = [];
+    if (sceneColl.some((v) => v & 0x0f)) {
+      const collTw = Math.floor(widthPx / 8);
+      const collTh = Math.floor(heightPx / 8);
+      const srcW = scene.width || collTw;
+      for (let y = 0; y < collTh; y++) {
+        for (let x = 0; x < collTw; x++) {
+          collisions.push((sceneColl[y * srcW + x] ?? 0) & 0xff);
+        }
+      }
+    }
     sceneEntries.push({
       initCName: cNameOf(initSymbol),
       actorUpdates,
@@ -142,6 +156,7 @@ const ejectGbaBuild = async ({
       heightPx,
       actorsInit,
       playerMove,
+      collisions,
     });
     queue.push(initSymbol);
   }
