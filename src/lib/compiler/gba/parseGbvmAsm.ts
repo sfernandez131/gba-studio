@@ -65,6 +65,17 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_ACTOR_DEACTIVATE: 0x33,
   VM_ACTOR_SET_POS: 0x35,
   VM_ACTOR_GET_POS: 0x3a,
+  // actor movement (M3b). gbavm-internal opcode numbers (the bridge translates GBVM
+  // macro names, so these need not match GBVM's byte values).
+  VM_ACTOR_MOVE_TO_INIT: 0x32,
+  VM_ACTOR_SET_DIR: 0x34,
+  VM_ACTOR_MOVE_TO_X: 0x36,
+  VM_ACTOR_MOVE_TO_Y: 0x37,
+  VM_ACTOR_MOVE_TO_XY: 0x38,
+  VM_ACTOR_MOVE_TO_SET_DIR_X: 0x39,
+  VM_ACTOR_MOVE_TO_SET_DIR_Y: 0x3b,
+  VM_ACTOR_SET_ANIM_MOVING: 0x3c,
+  VM_ACTOR_MOVE_CANCEL: 0x3d,
   VM_SET_SPRITE_VISIBLE: 0x51,
   VM_INPUT_GET: 0x54,
   VM_FADE: 0x57, // gbavm no-op
@@ -150,9 +161,6 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
-  // VM_ACTOR_SET_DIR sets an actor's explicit facing; gbavm infers facing from
-  // movement, so drop it for now (cosmetic on scene entry).
-  "VM_ACTOR_SET_DIR",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -164,6 +172,11 @@ const BASE_CONSTS: Record<string, number> = {
   ".GET_BYTE": 0, ".GET_WORD": 1,
   // directions
   ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
+  // actor move-to attribute flags (gbavm ignores collision/axis bits - it uses the
+  // emitted op sequence - but the operand must still evaluate to a byte).
+  ".ACTOR_ATTR_CHECK_COLL": 0x01, ".ACTOR_ATTR_H_FIRST": 0x02, ".ACTOR_ATTR_DIAGONAL": 0x04,
+  ".ACTOR_ATTR_CHECK_COLL_WALLS": 0x08, ".ACTOR_ATTR_CHECK_COLL_ACTORS": 0x10,
+  ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x20, ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x40,
   // fade
   ".FADE_OUT": 0x00, ".FADE_IN": 0x02, ".FADE_MODAL": 0x01, ".FADE_NONMODAL": 0x00,
   // VM_RAISE exception codes (vm_exceptions.h)

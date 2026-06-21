@@ -58,6 +58,16 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x33: ["i16"], // ACTOR_DEACTIVATE actor
   0x35: ["i16"], // ACTOR_SET_POS idx
   0x3a: ["i16"], // ACTOR_GET_POS idx
+  // actor movement (M3b): an i16 actor-ref; the move/dir ops add a u8 (attr or dir)
+  0x32: ["i16", "u8"], // ACTOR_MOVE_TO_INIT ref, attr
+  0x34: ["i16", "u8"], // ACTOR_SET_DIR ref, dir
+  0x36: ["i16", "u8"], // ACTOR_MOVE_TO_X ref, attr (blocking)
+  0x37: ["i16", "u8"], // ACTOR_MOVE_TO_Y ref, attr (blocking)
+  0x38: ["i16", "u8"], // ACTOR_MOVE_TO_XY ref, attr (blocking)
+  0x39: ["i16"], // ACTOR_MOVE_TO_SET_DIR_X ref
+  0x3b: ["i16"], // ACTOR_MOVE_TO_SET_DIR_Y ref
+  0x3c: ["i16"], // ACTOR_SET_ANIM_MOVING ref
+  0x3d: ["i16"], // ACTOR_MOVE_CANCEL ref
   0x51: ["u8"], // SET_SPRITES_VISIBLE mode
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
