@@ -89,6 +89,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
   VM_SCENE_POP_ALL: 0x6a,
+  // dialogue: render the text + wait for A (M4; gbavm-internal opcode, no operands).
+  VM_DISPLAY_TEXT: 0x90,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -161,6 +163,25 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
+  // M4: dialogue / text overlay opcodes still to be ported. VM_DISPLAY_TEXT is now
+  // bridged (op 0x90 -> Butano text render); the rest are dropped so projects with
+  // dialogue still build/run (the typewriter, control codes, the overlay window come
+  // later). VM_LOAD_TEXT's inline `.asciz` string is skipped via DIRECTIVES.
+  "VM_LOAD_TEXT",
+  "VM_DISPLAY_TEXT_EX",
+  "VM_OVERLAY_SHOW",
+  "VM_OVERLAY_HIDE",
+  "VM_OVERLAY_MOVE_TO",
+  "VM_OVERLAY_CLEAR",
+  "VM_OVERLAY_WAIT",
+  "VM_OVERLAY_SCROLL",
+  "VM_OVERLAY_SET_SCROLL",
+  "VM_OVERLAY_SET_SUBMAP_EX",
+  "VM_OVERLAY_SET_MAP_TILES",
+  "VM_SET_TEXT_SOUND",
+  "VM_SET_FONT",
+  "VM_SWITCH_TEXT_LAYER",
+  "VM_PRINTER_DETECT",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -408,7 +429,8 @@ export function parseGbvmAsm(
   let pendingSceneChange = false;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
 
-  const DIRECTIVES = /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry)\b/;
+  const DIRECTIVES =
+    /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
 
   for (const rawLine of asm.split(/\r?\n/)) {
     const line = stripComment(rawLine);
