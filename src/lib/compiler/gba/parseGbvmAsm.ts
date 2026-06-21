@@ -89,8 +89,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
   VM_SCENE_POP_ALL: 0x6a,
-  // dialogue: render the text + wait for A (M4; gbavm-internal opcode, no operands).
-  VM_DISPLAY_TEXT: 0x90,
+  // VM_LOAD_TEXT / VM_DISPLAY_TEXT are handled specially in the parse loop (the text
+  // string is captured from the inline .asciz and emitted after op 0x90).
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -163,11 +163,10 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
-  // M4: dialogue / text overlay opcodes still to be ported. VM_DISPLAY_TEXT is now
-  // bridged (op 0x90 -> Butano text render); the rest are dropped so projects with
-  // dialogue still build/run (the typewriter, control codes, the overlay window come
-  // later). VM_LOAD_TEXT's inline `.asciz` string is skipped via DIRECTIVES.
-  "VM_LOAD_TEXT",
+  // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT are handled specially (the text is captured
+  // from the inline .asciz and rendered via op 0x90). The remaining overlay/window
+  // ops are dropped so projects build/run (typewriter, control codes, the overlay
+  // window box come later).
   "VM_DISPLAY_TEXT_EX",
   "VM_OVERLAY_SHOW",
   "VM_OVERLAY_HIDE",
@@ -307,6 +306,38 @@ const stripComment = (line: string): string => {
 const splitArgs = (s: string): string[] =>
   s.trim() === "" ? [] : s.split(",").map((a) => a.trim()).filter((a) => a !== "");
 
+// Parse a `.asciz "..."` line (VM_LOAD_TEXT's inline string) into printable byte
+// values, unescaping C escapes and dropping GB Studio's text control codes (the
+// font/speed/etc. bytes below 0x20) so the captured text renders cleanly.
+const parseAsciz = (line: string): number[] => {
+  const m = line.match(/"((?:[^"\\]|\\.)*)"/);
+  if (!m) return [];
+  const raw = m[1];
+  const out: number[] = [];
+  const esc: Record<string, number> = { n: 10, t: 9, r: 13, "\\": 92, '"': 34 };
+  for (let i = 0; i < raw.length; i++) {
+    let code = raw.charCodeAt(i);
+    if (raw[i] === "\\" && i + 1 < raw.length) {
+      const next = raw[i + 1];
+      if (next >= "0" && next <= "7") {
+        let oct = "";
+        let j = i + 1;
+        while (j < raw.length && raw[j] >= "0" && raw[j] <= "7" && oct.length < 3) {
+          oct += raw[j];
+          j++;
+        }
+        code = parseInt(oct, 8);
+        i = j - 1;
+      } else {
+        code = esc[next] ?? next.charCodeAt(0);
+        i++;
+      }
+    }
+    if (code >= 0x20 && code <= 0x7e) out.push(code); // printable only
+  }
+  return out;
+};
+
 /**
  * Build an expression evaluator bound to a constant table. Handles SDCC's
  * `^/(...)/ ` and `^!...!` expression wrappers, named constants, and integer
@@ -428,6 +459,10 @@ export function parseGbvmAsm(
   // pointer; this flag bridges that pair into a 2-byte scene index.
   let pendingSceneChange = false;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
+  // M4 dialogue: VM_LOAD_TEXT sets captureText so the next .asciz line is captured as
+  // the string to render with the following VM_DISPLAY_TEXT (op 0x90 + inline text).
+  let captureText = false;
+  let textBytes: number[] = [];
 
   const DIRECTIVES =
     /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
@@ -446,6 +481,13 @@ export function parseGbvmAsm(
       if (!active) continue;
     }
 
+    // Capture VM_LOAD_TEXT's inline string (the .asciz right after it) for the next
+    // VM_DISPLAY_TEXT, before the generic directive skip drops it.
+    if (captureText && /^\.ascii?z?\b/.test(line)) {
+      textBytes = parseAsciz(line);
+      captureText = false;
+      continue;
+    }
     if (DIRECTIVES.test(line)) continue;
     if (/^[.\w$]+\s*=\s*.+$/.test(line) && !line.startsWith("VM_")) continue; // const define (pass 1)
 
@@ -544,6 +586,18 @@ export function parseGbvmAsm(
       } else {
         skipped.push(`IMPORT_FAR_PTR_DATA ${sym}`); // unbridged far data
       }
+      continue;
+    }
+
+    // M4 dialogue text: VM_LOAD_TEXT arms the .asciz capture; VM_DISPLAY_TEXT emits
+    // op 0x90 followed by the inline null-terminated text the engine renders.
+    if (mnemonic === "VM_LOAD_TEXT") {
+      captureText = true;
+      continue;
+    }
+    if (mnemonic === "VM_DISPLAY_TEXT") {
+      items.push({ kind: "raw", bytes: [0x90, ...textBytes, 0] });
+      textBytes = [];
       continue;
     }
 
