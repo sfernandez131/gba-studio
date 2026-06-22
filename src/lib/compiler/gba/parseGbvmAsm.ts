@@ -519,6 +519,12 @@ export function parseGbvmAsm(
   // the string to render with the following VM_DISPLAY_TEXT (op 0x90 + inline text).
   let captureText = false;
   let textBytes: number[] = [];
+  // M4i interpolation: VM_LOAD_TEXT N (N>0) is followed by a `.dw <var>, ...` line of
+  // N variable indices, then the `.asciz` with %d placeholders. captureTextVars arms
+  // capturing that .dw; textVarIndices feeds the op-0x90 payload so the engine can
+  // read each variable's value (script_memory[idx]) and substitute its decimal.
+  let captureTextVars = false;
+  let textVarIndices: number[] = [];
 
   const DIRECTIVES =
     /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
@@ -537,6 +543,13 @@ export function parseGbvmAsm(
       if (!active) continue;
     }
 
+    // Capture the `.dw <var>, ...` line of variable indices that follows
+    // VM_LOAD_TEXT N (N>0) for interpolation, before the generic .dw/macro handling.
+    if (captureTextVars && /^\.dw\b/.test(line)) {
+      textVarIndices = splitArgs(line.replace(/^\.dw\b/, "")).map((s) => ev(s));
+      captureTextVars = false;
+      continue;
+    }
     // Capture VM_LOAD_TEXT's inline string (the .asciz right after it) for the next
     // VM_DISPLAY_TEXT, before the generic directive skip drops it.
     if (captureText && /^\.ascii?z?\b/.test(line)) {
@@ -645,15 +658,24 @@ export function parseGbvmAsm(
       continue;
     }
 
-    // M4 dialogue text: VM_LOAD_TEXT arms the .asciz capture; VM_DISPLAY_TEXT emits
-    // op 0x90 followed by the inline null-terminated text the engine renders.
+    // M4 dialogue text: VM_LOAD_TEXT arms the .asciz capture (and the .dw var capture
+    // when its N operand is > 0); VM_DISPLAY_TEXT emits op 0x90 + a var count + the N
+    // 16-bit variable indices + the inline null-terminated text the engine renders.
     if (mnemonic === "VM_LOAD_TEXT") {
       captureText = true;
+      const a = splitArgs(argStr);
+      captureTextVars = a.length > 0 && ev(a[0]) > 0;
       continue;
     }
     if (mnemonic === "VM_DISPLAY_TEXT") {
-      items.push({ kind: "raw", bytes: [0x90, ...textBytes, 0] });
+      const varBytes: number[] = [];
+      for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      items.push({
+        kind: "raw",
+        bytes: [0x90, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+      });
       textBytes = [];
+      textVarIndices = [];
       continue;
     }
 
