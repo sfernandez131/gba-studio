@@ -447,6 +447,22 @@ function parseRpnLine(
 }
 
 /**
+ * Parse a `game_globals.i` include into a name -> value map (e.g. VAR_SCORE = 3).
+ * GB Studio emits one plain `NAME = <int>` per line (variable indices into the VM's
+ * shared script_memory, plus state-machine constants); pass the result to
+ * parseGbvmAsm's `globals` option so VAR_ operands resolve.
+ */
+export function parseGameGlobals(text: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = stripComment(rawLine);
+    const m = line.match(/^([A-Za-z_]\w*)\s*=\s*(-?\d+)$/);
+    if (m) out[m[1]] = parseInt(m[2], 10);
+  }
+  return out;
+}
+
+/**
  * Parse a GBVM assembly script into a GbaItem[] opcode stream.
  * `entrySymbol`, when given, restricts parsing to that routine's body (handy when a
  * file defines several `_name::` routines); otherwise the whole file is parsed.
@@ -458,10 +474,14 @@ export function parseGbvmAsm(
     // Resolve a scene far-ptr symbol (e.g. "_scene_main") to its gba_scenes[] index;
     // used to bridge VM_RAISE EXCEPTION_CHANGE_SCENE + IMPORT_FAR_PTR_DATA.
     sceneIndex?: (symbol: string) => number | undefined;
+    // Global-variable defines from game_globals.i (VAR_X = <script_memory index>).
+    // The script .s only `.include`s that file, so the bridge must be told the
+    // values to resolve VAR_ operands (Set/If Variable, RPN var refs, M4h).
+    globals?: Record<string, number>;
   } = {},
 ): ParseResult {
   const { entrySymbol, sceneIndex } = opts;
-  const consts: Record<string, number> = { ...BASE_CONSTS };
+  const consts: Record<string, number> = { ...BASE_CONSTS, ...(opts.globals ?? {}) };
 
   // First pass: collect local `.X = n` / `SYM = n` constant defines so forward
   // references resolve regardless of order.

@@ -19,7 +19,7 @@ import { ProjectResources } from "shared/lib/resources/types";
 import { assetFilename } from "shared/lib/helpers/assets";
 import { tileDataIndexFn } from "shared/lib/tiles/tileData";
 import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
-import { parseGbvmAsm } from "./parseGbvmAsm";
+import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import {
   linkGbaProgram,
   formatGbaScenesC,
@@ -72,6 +72,11 @@ const ejectGbaBuild = async ({
   // var, or far data) and is left for the linker to report as `unresolved`.
   const scriptForSymbol = (symbol: string): string | undefined =>
     compiledData.files[`${cNameOf(symbol)}.s`];
+
+  // GB Studio global variables are VAR_ symbols defined (as script_memory indices)
+  // in game_globals.i, which the scripts only `.include`. Parse that file once so
+  // parseGbvmAsm can resolve VAR_ operands (Set/If Variable, RPN var refs).
+  const globals = parseGameGlobals(compiledData.files["game_globals.i"] ?? "");
 
   // A scene change targets a scene by its far-ptr symbol ("_<scene.symbol>"); map
   // those to gba_scenes[] indices (the table below is built in this same order).
@@ -170,7 +175,7 @@ const ejectGbaBuild = async ({
     if (collected.has(symbol)) continue;
     const asmText = scriptForSymbol(symbol);
     if (asmText === undefined) continue;
-    const { items, skipped } = parseGbvmAsm(asmText, { sceneIndex });
+    const { items, skipped } = parseGbvmAsm(asmText, { sceneIndex, globals });
     for (const note of skipped) {
       warnings(`GBA: deferred unsupported instruction "${note}"`);
     }

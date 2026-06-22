@@ -1,4 +1,4 @@
-import { parseGbvmAsm } from "./parseGbvmAsm";
+import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import { emitGbaBytecode } from "./emitGbaBytecode";
 
 // The exact scene-init assembly GB Studio emits for a one-actor scene whose on-init
@@ -249,6 +249,36 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     const text = raw.bytes.slice(1, -1); // strip op 0x90 + null terminator
     // The speed code + its param survive inline; the font code + param are dropped.
     expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x21]); // \001 6 H i !
+  });
+
+  test("M4h: parseGameGlobals reads VAR_ = index defines (ignoring comments/junk)", () => {
+    const globals = parseGameGlobals(
+      [
+        "VAR_SCORE = 0",
+        "VAR_LIVES = 1 ; a comment",
+        "MAX_GLOBAL_VARS = 2",
+        ".include \"foo.i\"", // not a define
+        "",
+      ].join("\n"),
+    );
+    expect(globals).toEqual({ VAR_SCORE: 0, VAR_LIVES: 1, MAX_GLOBAL_VARS: 2 });
+  });
+
+  test("M4h: resolves VAR_ operands from the globals map (Set/If Variable)", () => {
+    const globals = { VAR_SCORE: 3, VAR_LIVES: 7 };
+    // VM_SET_CONST VAR_SCORE, 5 -> op 0x14 with idx 3; VM_IF_CONST .EQ, VAR_LIVES, 0
+    const { items } = parseGbvmAsm(
+      "        VM_SET_CONST VAR_SCORE, 5\n" +
+        "        VM_IF_CONST .EQ, VAR_LIVES, 0, 1$, 0\n" +
+        "1$:\n",
+      { globals },
+    );
+    expect(items[0]).toEqual({ kind: "op", op: 0x14, operands: [3, 5] });
+    expect(items[1]).toEqual({
+      kind: "op",
+      op: 0x1a,
+      operands: [1 /* .EQ */, 7, 0, { label: "1$" }, 0],
+    });
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
