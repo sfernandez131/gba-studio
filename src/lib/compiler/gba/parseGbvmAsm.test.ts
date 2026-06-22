@@ -171,24 +171,29 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toContain("VM_RANDOMIZE");
   });
 
-  test("M4: bridges VM_DISPLAY_TEXT (op 0x90); drops the rest + the inline .asciz", () => {
+  test("M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT -> op 0x90 with the captured inline text", () => {
     const { items, skipped } = parseGbvmAsm(
       [
         "        VM_OVERLAY_MOVE_TO 0, 14, 1",
         "        VM_LOAD_TEXT 0",
-        '        .asciz "Hello, GBA Studio!"',
+        '        .asciz "\\001\\002Hello, GBA Studio!"',
         "        VM_DISPLAY_TEXT",
         "        VM_OVERLAY_WAIT 1, 1, 0",
         "        VM_OVERLAY_HIDE",
         "",
       ].join("\n"),
     );
-    // VM_DISPLAY_TEXT now renders (op 0x90); the rest of the dialogue (and the inline
-    // string) is dropped, not thrown.
-    expect(items).toEqual([{ kind: "op", op: 0x90, operands: [] }]);
-    expect(skipped).toContain("VM_LOAD_TEXT 0");
+    // VM_DISPLAY_TEXT emits op 0x90 + the captured text (control codes stripped) +
+    // a null terminator; the overlay/window ops are dropped.
+    expect(items).toHaveLength(1);
+    const raw = items[0] as { kind: "raw"; bytes: number[] };
+    expect(raw.kind).toBe("raw");
+    expect(raw.bytes[0]).toBe(0x90);
+    expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
+    expect(String.fromCharCode(...raw.bytes.slice(1, -1))).toBe("Hello, GBA Studio!");
     expect(skipped).toContain("VM_OVERLAY_HIDE");
     expect(skipped).not.toContain("VM_DISPLAY_TEXT");
+    expect(skipped).not.toContain("VM_LOAD_TEXT 0");
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
