@@ -315,14 +315,26 @@ const stripComment = (line: string): string => {
 const splitArgs = (s: string): string[] =>
   s.trim() === "" ? [] : s.split(",").map((a) => a.trim()).filter((a) => a !== "");
 
-// Parse a `.asciz "..."` line (VM_LOAD_TEXT's inline string) into printable byte
-// values, unescaping C escapes and dropping GB Studio's text control codes (the
-// font/speed/etc. bytes below 0x20) so the captured text renders cleanly.
+// GB Studio text control codes (low bytes embedded in the string) and how many
+// parameter bytes each one carries (see scriptBuilder/helpers.ts textCode*): set
+// speed \001<n>, set font \002<n>, goto \003<x><y>, goto-rel \004<x><y>, input
+// \006<mask>. We must skip a code AND its params together so a param byte that
+// happens to fall in the printable range doesn't leak out as a glyph.
+const TEXT_CODE_PARAMS: Record<number, number> = {
+  0x01: 1, 0x02: 1, 0x03: 2, 0x04: 2, 0x06: 1,
+};
+
+// Parse a `.asciz "..."` line (VM_LOAD_TEXT's inline string) into the byte values
+// the engine renders: unescape C escapes, then keep printable ASCII and newline
+// (0x0A, for multi-line dialogue) while dropping GB Studio's other text control
+// codes together with their parameter bytes (speed/font/goto/etc. are interpreted
+// in later milestones; for now they're skipped cleanly so nothing renders as junk).
 const parseAsciz = (line: string): number[] => {
   const m = line.match(/"((?:[^"\\]|\\.)*)"/);
   if (!m) return [];
   const raw = m[1];
-  const out: number[] = [];
+  // Phase 1: unescape the C-string (incl. \NNN octal) into a raw byte stream.
+  const bytes: number[] = [];
   const esc: Record<string, number> = { n: 10, t: 9, r: 13, "\\": 92, '"': 34 };
   for (let i = 0; i < raw.length; i++) {
     let code = raw.charCodeAt(i);
@@ -342,7 +354,16 @@ const parseAsciz = (line: string): number[] => {
         i++;
       }
     }
-    if (code >= 0x20 && code <= 0x7e) out.push(code); // printable only
+    bytes.push(code & 0xff);
+  }
+  // Phase 2: apply the text-code grammar.
+  const out: number[] = [];
+  for (let i = 0; i < bytes.length; i++) {
+    const code = bytes[i];
+    if (code === 0x0a) out.push(0x0a); // newline (multi-line dialogue)
+    else if (code >= 0x20 && code <= 0x7e) out.push(code); // printable
+    else if (code in TEXT_CODE_PARAMS) i += TEXT_CODE_PARAMS[code]; // skip code + params
+    // other unknown control bytes (e.g. 0x0D scroll) are dropped for now
   }
   return out;
 };
