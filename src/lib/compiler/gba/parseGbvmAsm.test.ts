@@ -174,7 +174,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
   test("M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT -> op 0x90 with the captured inline text", () => {
     const { items, skipped } = parseGbvmAsm(
       [
-        "        VM_OVERLAY_MOVE_TO 0, 14, 1",
+        "        VM_OVERLAY_MOVE_TO 0, 14, .OVERLAY_IN_SPEED",
         "        VM_LOAD_TEXT 0",
         '        .asciz "\\001\\002Hello, GBA Studio!"',
         "        VM_DISPLAY_TEXT",
@@ -184,16 +184,37 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       ].join("\n"),
     );
     // VM_DISPLAY_TEXT emits op 0x90 + the captured text (control codes stripped) +
-    // a null terminator; the overlay/window ops are dropped.
-    expect(items).toHaveLength(1);
-    const raw = items[0] as { kind: "raw"; bytes: number[] };
-    expect(raw.kind).toBe("raw");
+    // a null terminator; the overlay window ops bracket it (M4d), VM_OVERLAY_WAIT
+    // is still dropped (the text op's own A-wait covers the modal wait).
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
     expect(String.fromCharCode(...raw.bytes.slice(1, -1))).toBe("Hello, GBA Studio!");
-    expect(skipped).toContain("VM_OVERLAY_HIDE");
+    expect(skipped).toContain("VM_OVERLAY_WAIT 1, 1, 0");
     expect(skipped).not.toContain("VM_DISPLAY_TEXT");
     expect(skipped).not.toContain("VM_LOAD_TEXT 0");
+  });
+
+  test("M4d: bridges the dialogue overlay window ops (MOVE_TO / SHOW / HIDE)", () => {
+    const { items, skipped } = parseGbvmAsm(
+      [
+        "        VM_OVERLAY_MOVE_TO 0, 18, .OVERLAY_SPEED_INSTANT",
+        "        VM_OVERLAY_MOVE_TO 0, 14, .OVERLAY_IN_SPEED",
+        "        VM_OVERLAY_SHOW 0, 14, .UI_COLOR_WHITE, .UI_DRAW_FRAME",
+        "        VM_OVERLAY_HIDE",
+        "",
+      ].join("\n"),
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x91, operands: [0, 18, -3] }, // snap off-screen (row 18)
+      { kind: "op", op: 0x91, operands: [0, 14, -1] }, // slide up to row 14
+      { kind: "op", op: 0x92, operands: [0, 14, 1, 1] }, // show white framed box
+      { kind: "op", op: 0x93, operands: [] }, // hide
+    ]);
+    expect(skipped).toEqual([]);
+    // Speed -1 / -3 encode as signed bytes (0xff / 0xfd) in the emitted stream.
+    const { bytes } = emitGbaBytecode(items);
+    expect(bytes.slice(0, 4)).toEqual([0x91, 0x00, 0x12, 0xfd]);
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
