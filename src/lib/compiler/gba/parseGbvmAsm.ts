@@ -325,10 +325,11 @@ const TEXT_CODE_PARAMS: Record<number, number> = {
 };
 
 // Parse a `.asciz "..."` line (VM_LOAD_TEXT's inline string) into the byte values
-// the engine renders: unescape C escapes, then keep printable ASCII and newline
-// (0x0A, for multi-line dialogue) while dropping GB Studio's other text control
-// codes together with their parameter bytes (speed/font/goto/etc. are interpreted
-// in later milestones; for now they're skipped cleanly so nothing renders as junk).
+// the engine renders: unescape C escapes, then keep printable ASCII, newline (0x0A,
+// multi-line) and the set-speed code (\001<n>, kept inline so the engine can vary
+// the typewriter rate). GB Studio's other text control codes are dropped together
+// with their parameter bytes (font/goto/etc. are interpreted in later milestones;
+// for now they're skipped cleanly so nothing renders as junk).
 const parseAsciz = (line: string): number[] => {
   const m = line.match(/"((?:[^"\\]|\\.)*)"/);
   if (!m) return [];
@@ -362,7 +363,12 @@ const parseAsciz = (line: string): number[] => {
     const code = bytes[i];
     if (code === 0x0a) out.push(0x0a); // newline (multi-line dialogue)
     else if (code >= 0x20 && code <= 0x7e) out.push(code); // printable
-    else if (code in TEXT_CODE_PARAMS) i += TEXT_CODE_PARAMS[code]; // skip code + params
+    else if (code === 0x01) {
+      // set-speed: keep inline (code + 1 param byte) so the engine can vary the
+      // typewriter rate; the engine skips these bytes when rendering glyphs.
+      out.push(0x01);
+      if (i + 1 < bytes.length) out.push(bytes[++i]);
+    } else if (code in TEXT_CODE_PARAMS) i += TEXT_CODE_PARAMS[code]; // skip code + params
     // other unknown control bytes (e.g. 0x0D scroll) are dropped for now
   }
   return out;

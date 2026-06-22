@@ -176,16 +176,16 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       [
         "        VM_OVERLAY_MOVE_TO 0, 14, .OVERLAY_IN_SPEED",
         "        VM_LOAD_TEXT 0",
-        '        .asciz "\\001\\002Hello, GBA Studio!"',
+        '        .asciz "Hello, GBA Studio!"',
         "        VM_DISPLAY_TEXT",
         "        VM_OVERLAY_WAIT 1, 1, 0",
         "        VM_OVERLAY_HIDE",
         "",
       ].join("\n"),
     );
-    // VM_DISPLAY_TEXT emits op 0x90 + the captured text (control codes stripped) +
-    // a null terminator; the overlay window ops bracket it (M4d), VM_OVERLAY_WAIT
-    // is still dropped (the text op's own A-wait covers the modal wait).
+    // VM_DISPLAY_TEXT emits op 0x90 + the captured text + a null terminator; the
+    // overlay window ops bracket it (M4d), VM_OVERLAY_WAIT is still dropped (the
+    // text op's own A-wait covers the modal wait).
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
@@ -221,9 +221,9 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     const { items } = parseGbvmAsm(
       [
         "        VM_LOAD_TEXT 0",
-        // \001\002 = set speed (1 param), \012 = newline, \003\041\041 = goto with
-        // two printable-range params (must be skipped, not leak as "!!").
-        '        .asciz "\\001\\002Line one\\012\\003\\041\\041Line two"',
+        // \012 = newline, \003\041\041 = goto with two printable-range params (must
+        // be skipped with the code, not leak as "!!").
+        '        .asciz "Line one\\012\\003\\041\\041Line two"',
         "        VM_DISPLAY_TEXT",
         "",
       ].join("\n"),
@@ -231,8 +231,24 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
     const text = raw.bytes.slice(1, -1); // strip op + null terminator
-    expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, codes gone
+    expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, goto gone
     expect(text).toContain(0x0a); // the newline byte survives
+  });
+
+  test("M4g: VM_DISPLAY_TEXT keeps the set-speed code (\\001) inline with its param", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        // \001\006 = set speed 5 (param speed+1=6); \002\001 = set font (dropped).
+        '        .asciz "\\001\\006Hi\\002\\001!"',
+        "        VM_DISPLAY_TEXT",
+        "",
+      ].join("\n"),
+    );
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const text = raw.bytes.slice(1, -1); // strip op 0x90 + null terminator
+    // The speed code + its param survive inline; the font code + param are dropped.
+    expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x21]); // \001 6 H i !
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
