@@ -217,6 +217,24 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(bytes.slice(0, 4)).toEqual([0x91, 0x00, 0x12, 0xfd]);
   });
 
+  test("M4f: VM_DISPLAY_TEXT keeps newlines (multi-line) and skips control-code params", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        // \001\002 = set speed (1 param), \012 = newline, \003\041\041 = goto with
+        // two printable-range params (must be skipped, not leak as "!!").
+        '        .asciz "\\001\\002Line one\\012\\003\\041\\041Line two"',
+        "        VM_DISPLAY_TEXT",
+        "",
+      ].join("\n"),
+    );
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    expect(raw.bytes[0]).toBe(0x90);
+    const text = raw.bytes.slice(1, -1); // strip op + null terminator
+    expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, codes gone
+    expect(text).toContain(0x0a); // the newline byte survives
+  });
+
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
   // lines (GB Studio's _switch emits one `_dw` per case). The parser collects
   // them into a single switch item with a relocatable jump table.
