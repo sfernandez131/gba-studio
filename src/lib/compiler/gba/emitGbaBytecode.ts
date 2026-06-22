@@ -81,6 +81,11 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x69: [], // SCENE_POP   (return to the pushed scene)
   0x6a: [], // SCENE_POP_ALL (return to the base scene)
   0x90: [], // DISPLAY_TEXT (dialogue: render text + wait for A)
+  // dialogue overlay window box (M4d). The box geometry is derived from Y (GB rows
+  // from the top of an 18-row screen); the engine draws a panel behind the text.
+  0x91: ["u8", "u8", "i8"], // OVERLAY_MOVE_TO x, y, speed (speed signed: -1 in, -2 out, -3 instant)
+  0x92: ["u8", "u8", "u8", "u8"], // OVERLAY_SHOW x, y, color, options
+  0x93: [], // OVERLAY_HIDE
 };
 
 export const GBA_OP_STOP = 0x00;

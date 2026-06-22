@@ -91,6 +91,11 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SCENE_POP_ALL: 0x6a,
   // VM_LOAD_TEXT / VM_DISPLAY_TEXT are handled specially in the parse loop (the text
   // string is captured from the inline .asciz and emitted after op 0x90).
+  // dialogue overlay window box (M4d): the panel the engine draws behind the text.
+  // gbavm-internal opcode numbers (the bridge translates GBVM macro names).
+  VM_OVERLAY_MOVE_TO: 0x91,
+  VM_OVERLAY_SHOW: 0x92,
+  VM_OVERLAY_HIDE: 0x93,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -164,13 +169,10 @@ const SKIP_MACROS = new Set<string>([
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
   // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT are handled specially (the text is captured
-  // from the inline .asciz and rendered via op 0x90). The remaining overlay/window
-  // ops are dropped so projects build/run (typewriter, control codes, the overlay
-  // window box come later).
+  // from the inline .asciz and rendered via op 0x90); VM_OVERLAY_SHOW/MOVE_TO/HIDE
+  // are bridged (M4d: the overlay window box). The remaining overlay/window ops are
+  // dropped so projects build/run (clear/scroll/submap/printer come later).
   "VM_DISPLAY_TEXT_EX",
-  "VM_OVERLAY_SHOW",
-  "VM_OVERLAY_HIDE",
-  "VM_OVERLAY_MOVE_TO",
   "VM_OVERLAY_CLEAR",
   "VM_OVERLAY_WAIT",
   "VM_OVERLAY_SCROLL",
@@ -199,6 +201,13 @@ const BASE_CONSTS: Record<string, number> = {
   ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x20, ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x40,
   // fade
   ".FADE_OUT": 0x00, ".FADE_IN": 0x02, ".FADE_MODAL": 0x01, ".FADE_NONMODAL": 0x00,
+  // dialogue overlay window box (M4d). MOVE_TO/SHOW speeds are negative sentinels;
+  // the engine reads them as int8 (-1 slide in, -2 slide out, -3 instant).
+  ".OVERLAY_IN_SPEED": -1, ".OVERLAY_TEXT_IN_SPEED": -1,
+  ".OVERLAY_OUT_SPEED": -2, ".OVERLAY_TEXT_OUT_SPEED": -2,
+  ".OVERLAY_SPEED_INSTANT": -3, ".MENU_CLOSED_Y": 0x12,
+  ".UI_COLOR_BLACK": 0, ".UI_COLOR_WHITE": 1,
+  ".UI_DRAW_FRAME": 1, ".UI_AUTO_SCROLL": 2,
   // VM_RAISE exception codes (vm_exceptions.h)
   EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
   EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
