@@ -188,8 +188,9 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     // text op's own A-wait covers the modal wait).
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
+    expect(raw.bytes[1]).toBe(0); // var count (no interpolation)
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
-    expect(String.fromCharCode(...raw.bytes.slice(1, -1))).toBe("Hello, GBA Studio!");
+    expect(String.fromCharCode(...raw.bytes.slice(2, -1))).toBe("Hello, GBA Studio!");
     expect(skipped).toContain("VM_OVERLAY_WAIT 1, 1, 0");
     expect(skipped).not.toContain("VM_DISPLAY_TEXT");
     expect(skipped).not.toContain("VM_LOAD_TEXT 0");
@@ -230,7 +231,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
-    const text = raw.bytes.slice(1, -1); // strip op + null terminator
+    const text = raw.bytes.slice(2, -1); // strip op + var-count + null terminator
     expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, goto gone
     expect(text).toContain(0x0a); // the newline byte survives
   });
@@ -246,7 +247,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       ].join("\n"),
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
-    const text = raw.bytes.slice(1, -1); // strip op 0x90 + null terminator
+    const text = raw.bytes.slice(2, -1); // strip op 0x90 + var-count + null terminator
     // The speed code + its param survive inline; the font code + param are dropped.
     expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x21]); // \001 6 H i !
   });
@@ -279,6 +280,24 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       op: 0x1a,
       operands: [1 /* .EQ */, 7, 0, { label: "1$" }, 0],
     });
+  });
+
+  test("M4i: VM_LOAD_TEXT N + .dw vars -> op 0x90 with var count + indices + %d text", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 1",
+        "        .dw VAR_SCORE",
+        '        .asciz "Score: %d!"',
+        "        VM_DISPLAY_TEXT",
+        "",
+      ].join("\n"),
+      { globals: { VAR_SCORE: 5 } },
+    );
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    // [0x90, nVars=1, idxLo=5, idxHi=0, "Score: %d!", 0]
+    expect(raw.bytes.slice(0, 4)).toEqual([0x90, 1, 5, 0]);
+    expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
+    expect(String.fromCharCode(...raw.bytes.slice(4, -1))).toBe("Score: %d!");
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
