@@ -324,13 +324,37 @@ const TEXT_CODE_PARAMS: Record<number, number> = {
   0x01: 1, 0x02: 1, 0x03: 2, 0x04: 2, 0x06: 1,
 };
 
+// GB Studio bakes a dialogue avatar into the text as a fixed 16-byte font-glyph code
+// at the start (_getAvatarCode): setSpeed0 (\001\001) + setFont<avatarFont> (\002 F) +
+// 4 avatar chars in a 2x2 (c0 c1 \n c2 c3) + setSpeed2 (\001\003) + gotoRel 1,-1
+// (\004\001\377) + setFont0 (\002\001). We match the (highly distinctive) structure and
+// recover the avatar index from the char base c0 = ((avatarIndex*4)%64)+64, so
+// avatarIndex%16 = (c0-64)/4 (exact for the first 16 avatars; higher banks would also
+// need the avatar-font index, deferred). Returns the index, or -1 if not an avatar.
+const AVATAR_CODE_LEN = 16;
+const detectAvatar = (bytes: number[]): number => {
+  if (
+    bytes.length >= AVATAR_CODE_LEN &&
+    bytes[0] === 0x01 && bytes[1] === 0x01 && bytes[2] === 0x02 &&
+    bytes[4] >= 0x40 && bytes[6] === 0x0a &&
+    bytes[9] === 0x01 && bytes[10] === 0x03 && bytes[11] === 0x04 &&
+    bytes[12] === 0x01 && bytes[13] === 0xff &&
+    bytes[14] === 0x02 && bytes[15] === 0x01
+  ) {
+    return Math.floor((bytes[4] - 64) / 4);
+  }
+  return -1;
+};
+
 // Parse a `.asciz "..."` line (VM_LOAD_TEXT's inline string) into the byte values
 // the engine renders: unescape C escapes, then keep printable ASCII, newline (0x0A,
 // multi-line) and the set-speed code (\001<n>, kept inline so the engine can vary
 // the typewriter rate). GB Studio's other text control codes are dropped together
 // with their parameter bytes (font/goto/etc. are interpreted in later milestones;
-// for now they're skipped cleanly so nothing renders as junk).
-const parseAsciz = (line: string): number[] => {
+// for now they're skipped cleanly so nothing renders as junk). A leading avatar code
+// (detectAvatar) is stripped so its glyph chars don't leak as garbage; `avatarOut`,
+// when given, receives the avatar index ({ index }).
+const parseAsciz = (line: string, avatarOut?: { index: number }): number[] => {
   const m = line.match(/"((?:[^"\\]|\\.)*)"/);
   if (!m) return [];
   const raw = m[1];
@@ -357,9 +381,13 @@ const parseAsciz = (line: string): number[] => {
     }
     bytes.push(code & 0xff);
   }
+  // A leading avatar code: record its index and skip its 16 bytes in phase 2.
+  const avatarIndex = detectAvatar(bytes);
+  if (avatarOut) avatarOut.index = avatarIndex;
+  const startAt = avatarIndex >= 0 ? AVATAR_CODE_LEN : 0;
   // Phase 2: apply the text-code grammar.
   const out: number[] = [];
-  for (let i = 0; i < bytes.length; i++) {
+  for (let i = startAt; i < bytes.length; i++) {
     const code = bytes[i];
     if (code === 0x0a) out.push(0x0a); // newline (multi-line dialogue)
     else if (code >= 0x20 && code <= 0x7e) out.push(code); // printable
@@ -525,6 +553,9 @@ export function parseGbvmAsm(
   // read each variable's value (script_memory[idx]) and substitute its decimal.
   let captureTextVars = false;
   let textVarIndices: number[] = [];
+  // M4m avatars: parseAsciz strips a leading avatar code and reports its index here;
+  // VM_DISPLAY_TEXT carries it as the op-0x90 avatar byte (0xff = no avatar).
+  let textAvatar = -1;
 
   const DIRECTIVES =
     /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
@@ -553,7 +584,9 @@ export function parseGbvmAsm(
     // Capture VM_LOAD_TEXT's inline string (the .asciz right after it) for the next
     // VM_DISPLAY_TEXT, before the generic directive skip drops it.
     if (captureText && /^\.ascii?z?\b/.test(line)) {
-      textBytes = parseAsciz(line);
+      const avatarOut = { index: -1 };
+      textBytes = parseAsciz(line, avatarOut);
+      textAvatar = avatarOut.index;
       captureText = false;
       continue;
     }
@@ -670,12 +703,14 @@ export function parseGbvmAsm(
     if (mnemonic === "VM_DISPLAY_TEXT") {
       const varBytes: number[] = [];
       for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      const avatarByte = textAvatar >= 0 ? textAvatar & 0xff : 0xff; // 0xff = no avatar
       items.push({
         kind: "raw",
-        bytes: [0x90, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+        bytes: [0x90, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
       });
       textBytes = [];
       textVarIndices = [];
+      textAvatar = -1;
       continue;
     }
 
