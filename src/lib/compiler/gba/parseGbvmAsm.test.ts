@@ -300,6 +300,23 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(String.fromCharCode(...raw.bytes.slice(4, -1))).toBe("Score: %d!");
   });
 
+  test("M4l: strips a leading dialogue avatar font-glyph code (no garbage chars)", () => {
+    // The real 16-byte avatar code from GB Studio (avatar 0): setSpeed0 \001\001,
+    // setFont \002\002, chars \100\101 \012 \102\103, setSpeed2 \001\003, gotoRel
+    // \004\001\377, setFont0 \002\001, then "Hi".
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        '        .asciz "\\001\\001\\002\\002\\100\\101\\012\\102\\103\\001\\003\\004\\001\\377\\002\\001Hi"',
+        "        VM_DISPLAY_TEXT",
+        "",
+      ].join("\n"),
+    );
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    // [0x90, nVars=0, "Hi", 0] - the avatar code (incl. its @ABC glyph chars) is gone.
+    expect(String.fromCharCode(...raw.bytes.slice(2, -1))).toBe("Hi");
+  });
+
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case
   // lines (GB Studio's _switch emits one `_dw` per case). The parser collects
   // them into a single switch item with a relocatable jump table.
