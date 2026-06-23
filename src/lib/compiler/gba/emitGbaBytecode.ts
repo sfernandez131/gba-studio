@@ -86,6 +86,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x91: ["u8", "u8", "i8"], // OVERLAY_MOVE_TO x, y, speed (speed signed: -1 in, -2 out, -3 instant)
   0x92: ["u8", "u8", "u8", "u8"], // OVERLAY_SHOW x, y, color, options
   0x93: [], // OVERLAY_HIDE
+  0x94: ["u8", "u8"], // OVERLAY_WAIT modal, condition (UI_WAIT_* bitfield) -- M4q
 };
 
 export const GBA_OP_STOP = 0x00;
