@@ -188,9 +188,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     // text op's own A-wait covers the modal wait).
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
-    expect(raw.bytes[1]).toBe(0); // var count (no interpolation)
+    expect(raw.bytes[1]).toBe(0xff); // avatar byte (none)
+    expect(raw.bytes[2]).toBe(0); // var count (no interpolation)
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
-    expect(String.fromCharCode(...raw.bytes.slice(2, -1))).toBe("Hello, GBA Studio!");
+    expect(String.fromCharCode(...raw.bytes.slice(3, -1))).toBe("Hello, GBA Studio!");
     expect(skipped).toContain("VM_OVERLAY_WAIT 1, 1, 0");
     expect(skipped).not.toContain("VM_DISPLAY_TEXT");
     expect(skipped).not.toContain("VM_LOAD_TEXT 0");
@@ -231,7 +232,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
-    const text = raw.bytes.slice(2, -1); // strip op + var-count + null terminator
+    const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
     expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, goto gone
     expect(text).toContain(0x0a); // the newline byte survives
   });
@@ -247,7 +248,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       ].join("\n"),
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
-    const text = raw.bytes.slice(2, -1); // strip op 0x90 + var-count + null terminator
+    const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
     // The speed code + its param survive inline; the font code + param are dropped.
     expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x21]); // \001 6 H i !
   });
@@ -294,10 +295,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       { globals: { VAR_SCORE: 5 } },
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
-    // [0x90, nVars=1, idxLo=5, idxHi=0, "Score: %d!", 0]
-    expect(raw.bytes.slice(0, 4)).toEqual([0x90, 1, 5, 0]);
+    // [0x90, avatar=0xff, nVars=1, idxLo=5, idxHi=0, "Score: %d!", 0]
+    expect(raw.bytes.slice(0, 5)).toEqual([0x90, 0xff, 1, 5, 0]);
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
-    expect(String.fromCharCode(...raw.bytes.slice(4, -1))).toBe("Score: %d!");
+    expect(String.fromCharCode(...raw.bytes.slice(5, -1))).toBe("Score: %d!");
   });
 
   test("M4l: strips a leading dialogue avatar font-glyph code (no garbage chars)", () => {
@@ -313,8 +314,11 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       ].join("\n"),
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
-    // [0x90, nVars=0, "Hi", 0] - the avatar code (incl. its @ABC glyph chars) is gone.
-    expect(String.fromCharCode(...raw.bytes.slice(2, -1))).toBe("Hi");
+    // [0x90, avatar=0, nVars=0, "Hi", 0] - the avatar code (incl. its @ABC glyph
+    // chars) is gone, and the avatar index (0) rides in the payload's avatar byte.
+    expect(raw.bytes[1]).toBe(0); // avatar 0
+    expect(raw.bytes[2]).toBe(0); // no vars
+    expect(String.fromCharCode(...raw.bytes.slice(3, -1))).toBe("Hi");
   });
 
   // VM_SWITCH is unique: the macro is followed by SIZE `.dw value, label` case

@@ -553,6 +553,9 @@ export function parseGbvmAsm(
   // read each variable's value (script_memory[idx]) and substitute its decimal.
   let captureTextVars = false;
   let textVarIndices: number[] = [];
+  // M4m avatars: parseAsciz strips a leading avatar code and reports its index here;
+  // VM_DISPLAY_TEXT carries it as the op-0x90 avatar byte (0xff = no avatar).
+  let textAvatar = -1;
 
   const DIRECTIVES =
     /^\.(module|include|globl|area|org|optsdcc|ds|incbin|bndry|asciz|ascii)\b/;
@@ -581,7 +584,9 @@ export function parseGbvmAsm(
     // Capture VM_LOAD_TEXT's inline string (the .asciz right after it) for the next
     // VM_DISPLAY_TEXT, before the generic directive skip drops it.
     if (captureText && /^\.ascii?z?\b/.test(line)) {
-      textBytes = parseAsciz(line);
+      const avatarOut = { index: -1 };
+      textBytes = parseAsciz(line, avatarOut);
+      textAvatar = avatarOut.index;
       captureText = false;
       continue;
     }
@@ -698,12 +703,14 @@ export function parseGbvmAsm(
     if (mnemonic === "VM_DISPLAY_TEXT") {
       const varBytes: number[] = [];
       for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      const avatarByte = textAvatar >= 0 ? textAvatar & 0xff : 0xff; // 0xff = no avatar
       items.push({
         kind: "raw",
-        bytes: [0x90, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+        bytes: [0x90, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
       });
       textBytes = [];
       textVarIndices = [];
+      textAvatar = -1;
       continue;
     }
 
