@@ -396,6 +396,12 @@ const parseAsciz = (line: string, avatarOut?: { index: number }): number[] => {
       // typewriter rate; the engine skips these bytes when rendering glyphs.
       out.push(0x01);
       if (i + 1 < bytes.length) out.push(bytes[++i]);
+    } else if (code === 0x02) {
+      // set-font: keep inline (code + 1 param byte = fontIndex+1) so the engine can
+      // switch font mid-text (M4p); the engine treats it as a segment boundary. A
+      // leading avatar code (with its own \002) is already stripped above.
+      out.push(0x02);
+      if (i + 1 < bytes.length) out.push(bytes[++i]);
     } else if (code in TEXT_CODE_PARAMS) i += TEXT_CODE_PARAMS[code]; // skip code + params
     // other unknown control bytes (e.g. 0x0D scroll) are dropped for now
   }

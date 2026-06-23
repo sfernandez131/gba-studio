@@ -37,6 +37,8 @@ type EjectGbaOptions = {
   outputRoot: string;
   compiledData: {
     files: Record<string, string>;
+    // Compiled font order (indices that dialogue \002 font-switch codes refer to).
+    usedFonts?: { id: string }[];
   };
   progress: (msg: string) => void;
   warnings: (msg: string) => void;
@@ -526,26 +528,28 @@ const ejectGbaBuild = async ({
     avatarHeader + "\n",
   );
 
-  // --- Dialogue font: graphics/dialogue_font.bmp + src/gba_font_assets.h (M4n/M4o) -
-  // Convert the project's default font (a grid of 8x8 glyphs, GB Studio chars from
-  // ASCII 32, 16 per row) to a Butano VARIABLE-WIDTH sprite font, so dialogue renders
-  // in the real game font with natural spacing. Like GB Studio's VWF, each glyph is
-  // left-aligned and its advance width derived from its drawn extent (M4o). M4o scope:
-  // the default font; mid-text font switching (\002 / !F:id!) is a follow-up.
+  // --- Dialogue fonts: graphics/dialogue_font_<i>.bmp + src/gba_font_assets.h
+  // (M4n/M4o/M4p). Emit each USED font (in the compiled order that dialogue \002
+  // font-switch codes index) as a Butano VARIABLE-WIDTH sprite font, so dialogue
+  // renders in the project fonts AND can switch font mid-text. Like GB Studio's VWF,
+  // each glyph is left-aligned with its advance width derived from its drawn extent;
+  // the empty (space) glyph gets a default advance.
   const FONT_GLYPHS = 94; // ASCII 33..126 (space=32 has no glyph; Butano spaces it)
   const FONT_GH = 8; // GB Studio font glyph height (8x8)
   const FONT_SPACE_W = 4; // advance width for empty glyphs (space)
-  const defaultFont =
-    projectData.fonts.find((f) => f.id === settings.defaultFontId) ??
-    projectData.fonts[0];
-  let fontWidths: number[] = []; // advance widths for ASCII 32..126 (95 entries)
-  if (defaultFont) {
+  const fontPalette: Rgb[] = [
+    [0, 0, 0], // 0: transparent
+    hexToRgb(settings.customColorsWhite || "E8F8E0"), // 1: light text on the dark box
+  ];
+  // Convert one GB Studio font image to a left-aligned glyph strip + advance widths.
+  const buildFont = async (
+    font: (typeof projectData.fonts)[number],
+  ): Promise<{ strip: Uint8Array; widths: number[] } | null> => {
     try {
-      // 1 = glyph pixel (drawn, text colour), 0 = background/transparent. GB Studio's
-      // light "white" shade is ~g=248, and the transparent marker is magenta, so treat
-      // light pixels and magenta as background and the darker drawn pixels as the glyph.
+      // Light "white" (~g=248) + the magenta transparent marker are background; the
+      // darker drawn pixels are the glyph (1).
       const fontImg = await readFileToIndexedImage(
-        assetFilename(projectRoot, "fonts", defaultFont),
+        assetFilename(projectRoot, "fonts", font),
         (r, g, b) => (g >= 200 || (r > 200 && b > 200) ? 0 : 1),
       );
       const cols = Math.max(1, Math.floor(fontImg.width / 8));
@@ -584,54 +588,91 @@ const ejectGbaBuild = async ({
           }
         }
       }
-      fontWidths = widths;
-      const fontPalette: Rgb[] = [
-        [0, 0, 0], // 0: transparent
-        hexToRgb(settings.customColorsWhite || "E8F8E0"), // 1: light text on the dark box
-      ];
-      await writeFile(
-        Path.join(gbaEngineRoot, "graphics", "dialogue_font.bmp"),
-        indexedImageToBmp(
-          { width: 8, height: FONT_GLYPHS * FONT_GH, data: strip },
-          fontPalette,
-          { align: 8 },
-        ),
-      );
-      await writeFile(
-        Path.join(gbaEngineRoot, "graphics", "dialogue_font.json"),
-        JSON.stringify({ type: "sprite", height: FONT_GH }) + "\n",
-      );
-      progress(`Converting font ${defaultFont.filename} -> dialogue_font`);
+      return { strip, widths };
     } catch (e) {
-      fontWidths = [];
-      warnings(`GBA: could not read font "${defaultFont.filename}"`);
+      return null;
     }
+  };
+  // Fonts to emit, in compiled order (so \002 indices match); fall back to just the
+  // default font when the compiled font order isn't available.
+  const fontList = (
+    compiledData.usedFonts && compiledData.usedFonts.length
+      ? compiledData.usedFonts.map((uf) =>
+          projectData.fonts.find((f) => f.id === uf.id),
+        )
+      : [
+          projectData.fonts.find((f) => f.id === settings.defaultFontId) ??
+            projectData.fonts[0],
+        ]
+  ).filter((f): f is NonNullable<typeof f> => Boolean(f));
+  const fontIncludes: string[] = [];
+  const fontDefs: string[] = [];
+  const fontCases: string[] = [];
+  let firstFontIdx = -1;
+  for (let i = 0; i < fontList.length; i++) {
+    const built = await buildFont(fontList[i]);
+    if (!built) {
+      warnings(`GBA: could not read font "${fontList[i].filename}"`);
+      continue;
+    }
+    const name = `dialogue_font_${i}`;
+    await writeFile(
+      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      indexedImageToBmp(
+        { width: 8, height: FONT_GLYPHS * FONT_GH, data: built.strip },
+        fontPalette,
+        { align: 8 },
+      ),
+    );
+    await writeFile(
+      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      JSON.stringify({ type: "sprite", height: FONT_GH }) + "\n",
+    );
+    const widthsRows: string[] = [];
+    for (let w = 0; w < built.widths.length; w += 16) {
+      widthsRows.push("    " + built.widths.slice(w, w + 16).join(", ") + ",");
+    }
+    fontIncludes.push(`#include "bn_sprite_items_${name}.h"`);
+    fontDefs.push(
+      `constexpr int8_t gba_font_${i}_widths[] = { // advance width per ASCII char 32..126`,
+      ...widthsRows,
+      "};",
+      `constexpr bn::sprite_font gba_font_${i}(bn::sprite_items::${name},`,
+      `    bn::utf8_characters_map_ref(), gba_font_${i}_widths);`,
+    );
+    fontCases.push(`        case ${i}: return gba_font_${i};`);
+    if (firstFontIdx < 0) firstFontIdx = i;
+    progress(`Converting font ${fontList[i].filename} -> ${name}`);
   }
-  // Emit the descriptor: a variable-width sprite_font when we derived widths, else
-  // fall back to Butano's fixed-width constructor so the engine still compiles.
+  // Emit the descriptor: a gba_dialogue_font(idx) lookup over the emitted fonts, so
+  // the engine can pick the font for each \002 segment. Falls back to Butano's
+  // built-in font if no project font could be read (engine still compiles).
   const fontHeaderLines = [
-    "// Generated by GBA Studio (M4o) - dialogue font (project default, variable-width).",
+    "// Generated by GBA Studio (M4p) - dialogue fonts (project fonts, variable-width).",
     "#ifndef GBA_FONT_ASSETS_H",
     "#define GBA_FONT_ASSETS_H",
     '#include "bn_sprite_font.h"',
     '#include "bn_utf8_characters_map.h"',
-    '#include "bn_sprite_items_dialogue_font.h"',
   ];
-  if (fontWidths.length === 95) {
-    const widthsRows: string[] = [];
-    for (let i = 0; i < fontWidths.length; i += 16) {
-      widthsRows.push("    " + fontWidths.slice(i, i + 16).join(", ") + ",");
-    }
+  if (fontCases.length > 0) {
     fontHeaderLines.push(
-      "constexpr int8_t gba_font_widths[] = { // advance width per ASCII char 32..126",
-      ...widthsRows,
-      "};",
-      "constexpr bn::sprite_font gba_dialogue_font(bn::sprite_items::dialogue_font,",
-      "    bn::utf8_characters_map_ref(), gba_font_widths);",
+      ...fontIncludes,
+      ...fontDefs,
+      `constexpr int gba_dialogue_font_count = ${fontCases.length};`,
+      "inline const bn::sprite_font& gba_dialogue_font(int idx) {",
+      "    switch(idx) {",
+      ...fontCases,
+      `    default: return gba_font_${firstFontIdx < 0 ? 0 : firstFontIdx};`,
+      "    }",
+      "}",
     );
   } else {
     fontHeaderLines.push(
-      "constexpr bn::sprite_font gba_dialogue_font(bn::sprite_items::dialogue_font);",
+      '#include "common_variable_8x16_sprite_font.h"',
+      "constexpr int gba_dialogue_font_count = 1;",
+      "inline const bn::sprite_font& gba_dialogue_font(int) {",
+      "    return common::variable_8x16_sprite_font;",
+      "}",
     );
   }
   fontHeaderLines.push("#endif");

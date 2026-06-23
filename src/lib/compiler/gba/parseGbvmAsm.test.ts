@@ -237,11 +237,11 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(text).toContain(0x0a); // the newline byte survives
   });
 
-  test("M4g: VM_DISPLAY_TEXT keeps the set-speed code (\\001) inline with its param", () => {
+  test("M4g/M4p: VM_DISPLAY_TEXT keeps the set-speed (\\001) and set-font (\\002) codes inline", () => {
     const { items } = parseGbvmAsm(
       [
         "        VM_LOAD_TEXT 0",
-        // \001\006 = set speed 5 (param speed+1=6); \002\001 = set font (dropped).
+        // \001\006 = set speed 5 (param speed+1=6); \002\001 = set font 0 (kept, M4p).
         '        .asciz "\\001\\006Hi\\002\\001!"',
         "        VM_DISPLAY_TEXT",
         "",
@@ -249,8 +249,8 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     );
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
-    // The speed code + its param survive inline; the font code + param are dropped.
-    expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x21]); // \001 6 H i !
+    // Both the speed code and the font code survive inline with their params (M4p).
+    expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x02, 0x01, 0x21]);
   });
 
   test("M4h: parseGameGlobals reads VAR_ = index defines (ignoring comments/junk)", () => {

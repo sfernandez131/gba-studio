@@ -2094,6 +2094,9 @@ const compile = async (
     sceneMap,
     variableMap,
     usedSceneTypeIds,
+    // GBA eject needs the compiled font order so dialogue \002 font-switch codes
+    // (indices into this list) map to the right emitted Butano font.
+    usedFonts: precompiled.usedFonts,
   };
 };
 
