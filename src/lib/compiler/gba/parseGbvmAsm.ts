@@ -96,6 +96,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_OVERLAY_MOVE_TO: 0x91,
   VM_OVERLAY_SHOW: 0x92,
   VM_OVERLAY_HIDE: 0x93,
+  // M4q wait codes: VM_OVERLAY_WAIT blocks until its UI conditions (window slid /
+  // text revealed / button); the dialogue A-wait now lives here (the display op only
+  // reveals). VM_DISPLAY_TEXT_EX (0x95) is handled specially in the parse loop.
+  VM_OVERLAY_WAIT: 0x94,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -168,13 +172,11 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
-  // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT are handled specially (the text is captured
-  // from the inline .asciz and rendered via op 0x90); VM_OVERLAY_SHOW/MOVE_TO/HIDE
-  // are bridged (M4d: the overlay window box). The remaining overlay/window ops are
+  // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT/_EX are handled specially (the text is captured
+  // from the inline .asciz and rendered via op 0x90/0x95); VM_OVERLAY_SHOW/MOVE_TO/HIDE
+  // /WAIT are bridged (M4d box + M4q wait). The remaining overlay/window ops are
   // dropped so projects build/run (clear/scroll/submap/printer come later).
-  "VM_DISPLAY_TEXT_EX",
   "VM_OVERLAY_CLEAR",
-  "VM_OVERLAY_WAIT",
   "VM_OVERLAY_SCROLL",
   "VM_OVERLAY_SET_SCROLL",
   "VM_OVERLAY_SET_SUBMAP_EX",
@@ -208,6 +210,12 @@ const BASE_CONSTS: Record<string, number> = {
   ".OVERLAY_SPEED_INSTANT": -3, ".MENU_CLOSED_Y": 0x12,
   ".UI_COLOR_BLACK": 0, ".UI_COLOR_WHITE": 1,
   ".UI_DRAW_FRAME": 1, ".UI_AUTO_SCROLL": 2,
+  // VM_OVERLAY_WAIT (M4q): modal flag + the wait-condition bitfield (vm.i).
+  ".UI_NONMODAL": 0, ".UI_MODAL": 1, ".UI_WAIT_NONE": 0,
+  ".UI_WAIT_WINDOW": 1, ".UI_WAIT_TEXT": 2, ".UI_WAIT_BTN_A": 4,
+  ".UI_WAIT_BTN_B": 8, ".UI_WAIT_BTN_ANY": 16,
+  // VM_DISPLAY_TEXT_EX (M4q): display flags + tile.
+  ".DISPLAY_DEFAULT": 0, ".DISPLAY_PRESERVE_POS": 1, ".TEXT_TILE_CONTINUE": 0xff,
   // VM_RAISE exception codes (vm_exceptions.h)
   EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
   EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
@@ -713,6 +721,23 @@ export function parseGbvmAsm(
       items.push({
         kind: "raw",
         bytes: [0x90, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+      });
+      textBytes = [];
+      textVarIndices = [];
+      textAvatar = -1;
+      continue;
+    }
+    if (mnemonic === "VM_DISPLAY_TEXT_EX") {
+      // Like VM_DISPLAY_TEXT but carries the display flag (bit 0 = .DISPLAY_PRESERVE_POS
+      // = append) so the engine continues an existing box across !W: wait chunks (M4q).
+      const exArgs = splitArgs(argStr);
+      const flag = exArgs.length > 0 ? ev(exArgs[0]) & 0xff : 0;
+      const varBytes: number[] = [];
+      for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      const avatarByte = textAvatar >= 0 ? textAvatar & 0xff : 0xff;
+      items.push({
+        kind: "raw",
+        bytes: [0x95, flag, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
       });
       textBytes = [];
       textVarIndices = [];

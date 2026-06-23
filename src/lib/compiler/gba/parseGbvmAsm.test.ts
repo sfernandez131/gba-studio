@@ -178,23 +178,43 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "        VM_LOAD_TEXT 0",
         '        .asciz "Hello, GBA Studio!"',
         "        VM_DISPLAY_TEXT",
-        "        VM_OVERLAY_WAIT 1, 1, 0",
+        "        VM_OVERLAY_WAIT .UI_MODAL, ^/(.UI_WAIT_WINDOW | .UI_WAIT_TEXT | .UI_WAIT_BTN_A)/",
         "        VM_OVERLAY_HIDE",
         "",
       ].join("\n"),
     );
     // VM_DISPLAY_TEXT emits op 0x90 + the captured text + a null terminator; the
-    // overlay window ops bracket it (M4d), VM_OVERLAY_WAIT is still dropped (the
-    // text op's own A-wait covers the modal wait).
+    // overlay window ops bracket it (M4d), and VM_OVERLAY_WAIT is bridged to op 0x94
+    // with [modal, condition] (M4q: the A-wait now lives here, not in the text op).
     const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
     expect(raw.bytes[0]).toBe(0x90);
     expect(raw.bytes[1]).toBe(0xff); // avatar byte (none)
     expect(raw.bytes[2]).toBe(0); // var count (no interpolation)
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
     expect(String.fromCharCode(...raw.bytes.slice(3, -1))).toBe("Hello, GBA Studio!");
-    expect(skipped).toContain("VM_OVERLAY_WAIT 1, 1, 0");
+    const wait = items.find((i) => i.kind === "op" && i.op === 0x94) as
+      | { kind: "op"; op: number; operands: number[] }
+      | undefined;
+    expect(wait?.operands).toEqual([1, 1 | 2 | 4]); // modal=1, condition = WINDOW|TEXT|BTN_A
     expect(skipped).not.toContain("VM_DISPLAY_TEXT");
     expect(skipped).not.toContain("VM_LOAD_TEXT 0");
+  });
+
+  test("M4q: VM_DISPLAY_TEXT_EX -> op 0x95 with the preserve-pos flag + inline text", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        '        .asciz "World"',
+        "        VM_DISPLAY_TEXT_EX .DISPLAY_PRESERVE_POS, .TEXT_TILE_CONTINUE",
+        "",
+      ].join("\n"),
+    );
+    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    expect(raw.bytes[0]).toBe(0x95);
+    expect(raw.bytes[1]).toBe(1); // .DISPLAY_PRESERVE_POS (append)
+    expect(raw.bytes[2]).toBe(0xff); // avatar none
+    expect(raw.bytes[3]).toBe(0); // var count
+    expect(String.fromCharCode(...raw.bytes.slice(4, -1))).toBe("World");
   });
 
   test("M4d: bridges the dialogue overlay window ops (MOVE_TO / SHOW / HIDE)", () => {
