@@ -128,6 +128,20 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   // exact flag bits are irrelevant; we keep the IN/OUT distinction for readability.
   VM_FADE_IN: () => [{ kind: "op", op: 0x57, operands: [0x02] }],
   VM_FADE_OUT: () => [{ kind: "op", op: 0x57, operands: [0x00] }],
+  // Music (M5a): VM_MUSIC_PLAY <bank>, <_<sym>_Data>, <loop> -> op 0x60 [track, loop];
+  // the track symbol resolves to the emitted DMG track index via dataSymbols (the bank
+  // operand is dropped - GBA is flat). Drop the op if the track isn't emitted (e.g. an
+  // unsupported .uge track) so the project still builds. VM_MUSIC_STOP -> op 0x61.
+  VM_MUSIC_PLAY: (a, ev) => {
+    let track: number;
+    try {
+      track = ev(a[1]) & 0xff;
+    } catch {
+      return null;
+    }
+    return [{ kind: "op", op: 0x60, operands: [track, a.length > 2 ? ev(a[2]) & 0xff : 0] }];
+  },
+  VM_MUSIC_STOP: () => [{ kind: "op", op: 0x61, operands: [] }],
   // VM_RET[_FAR][_N] -> opcode with explicit arg count (0 when omitted).
   VM_RET: (a, ev) => [{ kind: "op", op: 0x05, operands: [a.length ? ev(a[0]) : 0] }],
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
@@ -216,6 +230,8 @@ const BASE_CONSTS: Record<string, number> = {
   ".UI_WAIT_BTN_B": 8, ".UI_WAIT_BTN_ANY": 16,
   // VM_DISPLAY_TEXT_EX (M4q): display flags + tile.
   ".DISPLAY_DEFAULT": 0, ".DISPLAY_PRESERVE_POS": 1, ".TEXT_TILE_CONTINUE": 0xff,
+  // VM_MUSIC_PLAY loop flag (M5a).
+  ".MUSIC_NO_LOOP": 0, ".MUSIC_LOOP": 1,
   // VM_RAISE exception codes (vm_exceptions.h)
   EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
   EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
@@ -520,10 +536,17 @@ export function parseGbvmAsm(
     // The script .s only `.include`s that file, so the bridge must be told the
     // values to resolve VAR_ operands (Set/If Variable, RPN var refs, M4h).
     globals?: Record<string, number>;
+    // Data-asset symbols the bridge resolves to emitted indices, e.g. music track data
+    // (`_<sym>_Data` -> DMG track index) for VM_MUSIC_PLAY (M5a).
+    dataSymbols?: Record<string, number>;
   } = {},
 ): ParseResult {
   const { entrySymbol, sceneIndex } = opts;
-  const consts: Record<string, number> = { ...BASE_CONSTS, ...(opts.globals ?? {}) };
+  const consts: Record<string, number> = {
+    ...BASE_CONSTS,
+    ...(opts.globals ?? {}),
+    ...(opts.dataSymbols ?? {}),
+  };
 
   // First pass: collect local `.X = n` / `SYM = n` constant defines so forward
   // references resolve regardless of order.
