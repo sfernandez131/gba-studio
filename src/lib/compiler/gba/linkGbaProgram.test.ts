@@ -143,12 +143,19 @@ describe("linkGbaProgram", () => {
           actorsInit: [{ index: 1, dir: 2, x: 2304, y: 2048 }],
           playerMove: 1,
           collisions: [0, 15, 0, 0],
+          triggers: [
+            { x: 3, y: 4, w: 2, h: 1, scriptCName: "trigger_door_interact" },
+          ],
         },
       ],
       0,
     );
     expect(c).toContain("extern unsigned char scene_main_init[];");
     expect(c).toContain("extern unsigned char actor_player_update[];");
+    expect(c).toContain("extern unsigned char trigger_door_interact[];");
+    expect(c).toContain(
+      "static const GbaTrigger scene0_triggers[] = { { 3, 4, 2, 1, trigger_door_interact } };",
+    );
     expect(c).toContain(
       "static unsigned char * const scene0_updates[] = { actor_player_update };",
     );
@@ -162,7 +169,7 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_collisions[] = { 0, 15, 0, 0 };",
     );
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 1, 240, 160, scene0_actors_init, 1, 1, scene0_collisions },",
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 1, 240, 160, scene0_actors_init, 1, 1, scene0_collisions, scene0_triggers, 1 },",
     );
     expect(c).toContain("const unsigned int gba_scenes_count = 1;");
     expect(c).toContain("const unsigned int gba_start_scene = 0;");
@@ -179,6 +186,7 @@ describe("linkGbaProgram", () => {
           actorsInit: [],
           playerMove: 0,
           collisions: [],
+          triggers: [],
         },
       ],
       0,
@@ -191,7 +199,7 @@ describe("linkGbaProgram", () => {
       "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0 } };",
     );
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160, scene0_actors_init, 0, 0, 0 },",
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160, scene0_actors_init, 0, 0, 0, 0, 0 },",
     );
   });
 
