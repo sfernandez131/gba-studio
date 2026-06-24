@@ -102,6 +102,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_OVERLAY_WAIT: 0x94,
   // Audio master volume (M5c): VM_SOUND_MASTERVOL <vol> -> op 0x63 [vol].
   VM_SOUND_MASTERVOL: 0x63,
+  // SRAM save (M6a): SAVE_PEEK (check/read a save) + SAVE_CLEAR. Save/load themselves
+  // are VM_RAISE EXCEPTION_SAVE/LOAD (already bridged via op 0x27).
+  VM_SAVE_PEEK: 0x2e,
+  VM_SAVE_CLEAR: 0x2f,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -723,11 +727,20 @@ export function parseGbvmAsm(
         // scene far-ptr, which the following IMPORT_FAR_PTR_DATA becomes).
         items.push({ kind: "op", op: 0x27, operands: [code, 2] });
         pendingSceneChange = true;
+      } else if (code === 3 || code === 4 /* EXCEPTION_SAVE / LOAD (M6a) */) {
+        // Save/load: keep the raise with its 1-byte slot payload (the following
+        // .SAVE_SLOT byte); the main loop persists/restores SRAM on the exception.
+        items.push({ kind: "op", op: 0x27, operands: [code, a.length > 1 ? ev(a[1]) : 1] });
       } else {
-        // reset/save/load/terminate aren't bridged yet; drop the raise (its inline
-        // data, if any, is dropped by the IMPORT_FAR_PTR_DATA handler below).
+        // reset/terminate aren't bridged yet; drop the raise (its inline data, if
+        // any, is dropped by the IMPORT_FAR_PTR_DATA handler below).
         skipped.push(`VM_RAISE ${argStr.trim()}`.trim());
       }
+      continue;
+    }
+    if (mnemonic === ".SAVE_SLOT") {
+      // The 1-byte slot payload for a preceding VM_RAISE EXCEPTION_SAVE/LOAD (M6a).
+      items.push({ kind: "raw", bytes: [ev(splitArgs(argStr)[0] ?? "0") & 0xff] });
       continue;
     }
     if (mnemonic === "IMPORT_FAR_PTR_DATA") {
