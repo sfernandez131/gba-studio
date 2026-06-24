@@ -82,6 +82,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x6a: [], // SCENE_POP_ALL (return to the base scene)
   0x60: ["u8", "u8"], // MUSIC_PLAY track, loop (M5a)
   0x61: [], // MUSIC_STOP (M5a)
+  0x66: ["u8"], // SFX_PLAY sfx index (M5b)
   0x90: [], // DISPLAY_TEXT (dialogue: render text + wait for A)
   // dialogue overlay window box (M4d). The box geometry is derived from Y (GB rows
   // from the top of an 18-row screen); the engine draws a panel behind the text.
