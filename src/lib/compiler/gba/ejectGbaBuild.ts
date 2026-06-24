@@ -265,6 +265,28 @@ const ejectGbaBuild = async ({
         }
       }
     }
+    // Trigger zones (M6b): a tile rect + an enter script (`_<symbol>_interact`); the
+    // engine runs the script when the player walks into the rect. Skip empty triggers.
+    const triggers: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      scriptCName: string;
+    }[] = [];
+    (scene.triggers ?? []).forEach((trigger) => {
+      const symbol = `_${trigger.symbol}_interact`;
+      if (scriptForSymbol(symbol) !== undefined) {
+        triggers.push({
+          x: trigger.x,
+          y: trigger.y,
+          w: trigger.width,
+          h: trigger.height,
+          scriptCName: cNameOf(symbol),
+        });
+        queue.push(symbol);
+      }
+    });
     sceneEntries.push({
       initCName: cNameOf(initSymbol),
       actorUpdates,
@@ -273,6 +295,7 @@ const ejectGbaBuild = async ({
       actorsInit,
       playerMove,
       collisions,
+      triggers,
     });
     queue.push(initSymbol);
   }
