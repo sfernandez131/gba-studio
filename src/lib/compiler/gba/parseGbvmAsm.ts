@@ -142,6 +142,19 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     return [{ kind: "op", op: 0x60, operands: [track, a.length > 2 ? ev(a[2]) & 0xff : 0] }];
   },
   VM_MUSIC_STOP: () => [{ kind: "op", op: 0x61, operands: [] }],
+  // Sound effects (M5b): VM_SFX_PLAY <bank>, _<sym>, <mute_mask>, <prio> -> op 0x66
+  // [sfx]; the sound symbol resolves to the emitted bn::sound index via dataSymbols
+  // (bank/mute_mask/priority dropped - Butano mixes DirectSound itself). Drop the op
+  // if the sound isn't emitted (e.g. an unsupported vgm/fxhammer effect).
+  VM_SFX_PLAY: (a, ev) => {
+    let sfx: number;
+    try {
+      sfx = ev(a[1]) & 0xff;
+    } catch {
+      return null;
+    }
+    return [{ kind: "op", op: 0x66, operands: [sfx] }];
+  },
   // VM_RET[_FAR][_N] -> opcode with explicit arg count (0 when omitted).
   VM_RET: (a, ev) => [{ kind: "op", op: 0x05, operands: [a.length ? ev(a[0]) : 0] }],
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
