@@ -100,6 +100,8 @@ const MACRO_TO_OP: Record<string, number> = {
   // text revealed / button); the dialogue A-wait now lives here (the display op only
   // reveals). VM_DISPLAY_TEXT_EX (0x95) is handled specially in the parse loop.
   VM_OVERLAY_WAIT: 0x94,
+  // Audio master volume (M5c): VM_SOUND_MASTERVOL <vol> -> op 0x63 [vol].
+  VM_SOUND_MASTERVOL: 0x63,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
@@ -212,6 +214,10 @@ const SKIP_MACROS = new Set<string>([
   "VM_SET_FONT",
   "VM_SWITCH_TEXT_LAYER",
   "VM_PRINTER_DETECT",
+  // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
+  // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,
+  // so per-channel music muting is not needed - dropped.
+  "VM_MUSIC_MUTE",
 ]);
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
