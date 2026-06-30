@@ -229,13 +229,23 @@ const ejectGbaBuild = async ({
     // Placed actors' initial state (runtime index i+1; player = 0). Position in
     // subpixels (256 per 8px tile, 32 per pixel); direction -> engine dir code.
     const dirCode = { down: 0, right: 1, up: 2, left: 3 } as const;
+    // M6c: each placed actor may carry an interact script (`_<symbol>_interact`, its
+    // "On Interact" script); the engine runs it when the player faces the actor + hits
+    // A. "0" when the actor has none.
     const actorsInit = scene.actors.map((actor, i) => {
       const unit = actor.coordinateType === "pixels" ? 32 : 256;
+      const interactSym = `_${actor.symbol}_interact`;
+      let interact = "0";
+      if (scriptForSymbol(interactSym) !== undefined) {
+        interact = cNameOf(interactSym);
+        queue.push(interactSym);
+      }
       return {
         index: i + 1,
         dir: dirCode[actor.direction] ?? 0,
         x: Math.round(actor.x * unit),
         y: Math.round(actor.y * unit),
+        interact,
       };
     });
     // Player (actor 0): if the scene has a player sprite, place it at the project
@@ -246,6 +256,7 @@ const ejectGbaBuild = async ({
         dir: dirCode[settings.startDirection] ?? 0,
         x: Math.round(settings.startX * 256),
         y: Math.round(settings.startY * 256),
+        interact: "0",
       });
     }
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and

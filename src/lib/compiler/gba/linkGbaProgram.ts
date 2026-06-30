@@ -205,7 +205,14 @@ export interface GbaSceneEntry {
   widthPx: number; // scene logical size (for the engine's camera clamp)
   heightPx: number;
   // Placed actors' initial state (engine places them on load before scripts run).
-  actorsInit: { index: number; dir: number; x: number; y: number }[];
+  // interact (M6c): the actor's On-Interact script C name, or "0" when it has none.
+  actorsInit: {
+    index: number;
+    dir: number;
+    x: number;
+    y: number;
+    interact: string;
+  }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
   collisions: number[]; // one byte per tile (row-major); empty = no collision grid
   // Trigger zones (M6b): a tile rect { x, y, w, h } + the enter-script's C name.
@@ -224,6 +231,7 @@ export function formatGbaScenesC(
   for (const s of scenes) {
     externs.add(s.initCName);
     for (const u of s.actorUpdates) externs.add(u.cName);
+    for (const a of s.actorsInit) if (a.interact !== "0") externs.add(a.interact);
     for (const t of s.triggers) externs.add(t.scriptCName);
   }
   const out: string[] = [
@@ -245,13 +253,13 @@ export function formatGbaScenesC(
     out.push(
       `static const unsigned char scene${i}_update_actors[] = { ${indices} };`,
     );
-    // Placed actors' initial state: { index, dir, x, y }. A single zero row when
-    // empty (C forbids zero-size arrays; the engine iterates by the count).
+    // Placed actors' initial state: { index, dir, x, y, interact }. A single zero row
+    // when empty (C forbids zero-size arrays; the engine iterates by the count).
     const inits = s.actorsInit.length
       ? s.actorsInit
-          .map((a) => `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y} }`)
+          .map((a) => `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact} }`)
           .join(", ")
-      : "{ 0, 0, 0, 0 }";
+      : "{ 0, 0, 0, 0, 0 }";
     out.push(`static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`);
     // Collision grid (one byte/tile). Emit the array only when some tile is solid;
     // otherwise the scene gets a null grid and only its bounds block movement.
