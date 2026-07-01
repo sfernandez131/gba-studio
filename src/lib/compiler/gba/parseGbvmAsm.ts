@@ -261,6 +261,10 @@ const BASE_CONSTS: Record<string, number> = {
   ".DISPLAY_DEFAULT": 0, ".DISPLAY_PRESERVE_POS": 1, ".TEXT_TILE_CONTINUE": 0xff,
   // VM_MUSIC_PLAY loop flag (M5a).
   ".MUSIC_NO_LOOP": 0, ".MUSIC_LOOP": 1,
+  // Camera shake axis flags (M6h). The Camera Shake event writes these to the shake-
+  // settings global; gbavm's shake is a fixed horizontal jitter, so the value only needs
+  // to resolve (it lands in an allocated engine var the engine ignores).
+  ".CAMERA_SHAKE_X": 1, ".CAMERA_SHAKE_Y": 2,
   // VM_RAISE exception codes (vm_exceptions.h)
   EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
   EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
