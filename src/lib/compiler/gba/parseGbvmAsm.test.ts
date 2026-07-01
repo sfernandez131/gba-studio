@@ -165,6 +165,29 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(cos).toEqual([{ kind: "op", op: 0x8a, operands: [-1, -2, 5] }]);
   });
 
+  test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
+    expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
+      { kind: "op", op: 0x71, operands: [1, 8] },
+    ]);
+    expect(parseGbvmAsm("        VM_TIMER_STOP 1\n").items).toEqual([
+      { kind: "op", op: 0x72, operands: [1] },
+    ]);
+    expect(parseGbvmAsm("        VM_TIMER_RESET 1\n").items).toEqual([
+      { kind: "op", op: 0x73, operands: [1] },
+    ]);
+  });
+
+  test("M6f: bridges VM_TIMER_PREPARE to op 0x70 with a script ptr operand", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_TIMER_PREPARE 1, ___bank_tmr, _tmr\n",
+    );
+    expect(items.find((i) => i.kind === "op" && i.op === 0x70)).toEqual({
+      kind: "op",
+      op: 0x70,
+      operands: [1, 0, { label: "_tmr" }],
+    });
+  });
+
   test("drops VM_RANDOMIZE (no GBA equivalent) and reports it skipped", () => {
     const { items, skipped } = parseGbvmAsm("        VM_RANDOMIZE\n");
     expect(items).toEqual([]);

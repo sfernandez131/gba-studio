@@ -106,6 +106,12 @@ const MACRO_TO_OP: Record<string, number> = {
   // are VM_RAISE EXCEPTION_SAVE/LOAD (already bridged via op 0x27).
   VM_SAVE_PEEK: 0x2e,
   VM_SAVE_CLEAR: 0x2f,
+  // Timers (M6f): PREPARE arms a slot with a script (addr is a ptr -> collected proc), SET
+  // starts it firing every N ticks, STOP/RESET disable / restart it.
+  VM_TIMER_PREPARE: 0x70,
+  VM_TIMER_SET: 0x71,
+  VM_TIMER_STOP: 0x72,
+  VM_TIMER_RESET: 0x73,
 };
 
 // On GBA, the editor's joypad read (VM_GET_*INT8 from _joypads) is retargeted to
