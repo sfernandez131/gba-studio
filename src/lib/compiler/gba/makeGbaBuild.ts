@@ -1,14 +1,22 @@
-// GBA Studio - GBA make step (devkitARM / Butano).
+// GBA Studio - GBA make step (Butano on Wonderful Toolchain or devkitARM).
 //
 // Counterpart to makeBuild.ts for the GBA target. Builds the gbavm engine tree
 // (with the game_script.c written by ejectGbaBuild) into a .gba and copies it to
 // <buildRoot>/build/gba/<romFilename> for the CLI/UI copy-out to collect.
 //
 // M2: builds in-place in the gbavm engine tree (gbaEngineRoot) so Butano's
-// relative LIBBUTANO path and warm build cache are reused. On Windows the build
-// runs through the devkitPro msys2 login shell (which sets up DEVKITPRO + PATH),
-// matching the proven manual build. Isolated/vendored build dirs are a later
-// packaging concern.
+// relative LIBBUTANO path and warm build cache are reused. Isolated/vendored
+// build dirs are a later packaging concern.
+//
+// Toolchain: Butano's butano.mak picks devkitARM when DEVKITARM is set, else
+// Wonderful Toolchain when WONDERFUL_TOOLCHAIN is set. Wonderful is PREFERRED
+// when installed - its packages are redistributable, unlike devkitPro's, so
+// it's what shipped builds will use (the M9 packaging path, see
+// GBA_STUDIO_ROADMAP.md) - with devkitARM as the fallback. Force a choice with
+// GBA_TOOLCHAIN=wonderful|devkitarm. (A suspected WT DMG-music bug turned out
+// to be a pre-existing engine bug hit on both toolchains - gbavm#43; WT output
+// is verified equivalent.) IMPORTANT: the two toolchains' objects are
+// incompatible - run a clean build in the engine tree when switching.
 
 import os from "os";
 import Path from "path";
@@ -35,6 +43,27 @@ const toUnixPath = (p: string): string =>
     .replace(/\\/g, "/")
     .replace(/^([A-Za-z]):\//, (_m, drive: string) => `/${drive.toLowerCase()}/`);
 
+// Locate a Wonderful Toolchain install. On Windows it lives inside an MSYS2
+// tree at <msys2>/opt/wonderful (WONDERFUL_MSYS2 or C:/msys64); on Unix at
+// $WONDERFUL_TOOLCHAIN or /opt/wonderful.
+const findWonderful = async (): Promise<
+  { msys2Root: string } | { root: string } | null
+> => {
+  if (process.platform === "win32") {
+    const msys2Root =
+      process.env.WONDERFUL_MSYS2?.replace(/\\/g, "/") ?? "C:/msys64";
+    if (await pathExists(`${msys2Root}/opt/wonderful/bin`)) {
+      return { msys2Root };
+    }
+    return null;
+  }
+  const root = process.env.WONDERFUL_TOOLCHAIN ?? "/opt/wonderful";
+  if (await pathExists(`${root}/bin`)) {
+    return { root };
+  }
+  return null;
+};
+
 const makeGbaBuild = async ({
   buildRoot,
   romFilename,
@@ -43,27 +72,73 @@ const makeGbaBuild = async ({
 }: MakeGbaOptions) => {
   cancelling = false;
   const envDkp = process.env.DEVKITPRO?.replace(/\\/g, "/");
+  const toolchainPref = process.env.GBA_TOOLCHAIN?.toLowerCase();
+  const wonderful =
+    toolchainPref === "devkitarm" ? null : await findWonderful();
+  if (toolchainPref === "wonderful" && !wonderful) {
+    throw new Error(
+      "GBA build: GBA_TOOLCHAIN=wonderful but no Wonderful Toolchain install found " +
+        "(expected <msys2>/opt/wonderful on Windows, $WONDERFUL_TOOLCHAIN or /opt/wonderful elsewhere).",
+    );
+  }
 
   let command: string;
   let args: string[];
   let options: SpawnOptions;
+  let toolchainName: string;
 
-  if (process.platform === "win32") {
-    // On Windows, DEVKITPRO is the msys2 *mount* path (e.g. /opt/devkitpro), not
-    // a usable Win32 path - use the env value only if it's a drive-letter path,
-    // else the standard install location. The msys2 login shell (-l) then sources
-    // the profile that exports DEVKITPRO/DEVKITARM and puts make + toolchain on PATH.
+  if (wonderful && "msys2Root" in wonderful) {
+    // Wonderful Toolchain on Windows: run make through the standard MSYS2 bash
+    // with the env the Wonderful shell would set. DEVKITARM/DEVKITPRO must be
+    // unset or butano.mak picks devkitARM instead.
+    toolchainName = "Wonderful Toolchain";
+    command = `${wonderful.msys2Root}/usr/bin/bash.exe`;
+    args = [
+      "-lc",
+      `cd '${toUnixPath(gbaEngineRoot)}' && unset DEVKITARM DEVKITPRO && ` +
+        `export WONDERFUL_TOOLCHAIN=/opt/wonderful PATH=/opt/wonderful/bin:$PATH && ` +
+        `make -j${cpuCount}`,
+    ];
+    options = {
+      env: { ...process.env, MSYSTEM: "UCRT64" },
+      shell: false,
+    };
+  } else if (wonderful && "root" in wonderful) {
+    toolchainName = "Wonderful Toolchain";
+    const env = { ...process.env };
+    delete env.DEVKITARM;
+    delete env.DEVKITPRO;
+    command = "make";
+    args = [`-j${cpuCount}`];
+    options = {
+      cwd: gbaEngineRoot,
+      shell: true,
+      env: {
+        ...env,
+        WONDERFUL_TOOLCHAIN: wonderful.root,
+        PATH: envWith([`${wonderful.root}/bin`]),
+      },
+    };
+  } else if (process.platform === "win32") {
+    // devkitARM fallback. On Windows, DEVKITPRO is the msys2 *mount* path (e.g.
+    // /opt/devkitpro), not a usable Win32 path - use the env value only if it's
+    // a drive-letter path, else the standard install location. The msys2 login
+    // shell (-l) then sources the profile that exports DEVKITPRO/DEVKITARM and
+    // puts make + toolchain on PATH.
+    toolchainName = "devkitARM";
     const dkpWin = envDkp && /^[A-Za-z]:/.test(envDkp) ? envDkp : "C:/devkitPro";
     const bash = `${dkpWin}/msys2/usr/bin/bash.exe`;
     if (!(await pathExists(bash))) {
       throw new Error(
-        `GBA build: devkitPro msys2 bash not found at ${bash}. Install devkitPro (Windows) or set DEVKITPRO to its Windows path.`,
+        `GBA build: no GBA toolchain found. Install Wonderful Toolchain (MSYS2 + ` +
+          `/opt/wonderful) or devkitPro (msys2 bash not found at ${bash}).`,
       );
     }
     command = bash;
     args = ["-lc", `cd '${toUnixPath(gbaEngineRoot)}' && make -j${cpuCount}`];
     options = { env: process.env, shell: false };
   } else {
+    toolchainName = "devkitARM";
     const devkitPro = envDkp ?? "/opt/devkitpro";
     const devkitArm = `${devkitPro}/devkitARM`;
     command = "make";
@@ -80,7 +155,7 @@ const makeGbaBuild = async ({
     };
   }
 
-  progress("Building GBA ROM (devkitARM/Butano)...");
+  progress(`Building GBA ROM (${toolchainName}/Butano)...`);
   const { child, completed } = spawn(command, args, options, {
     onLog: (msg) => progress(msg),
     onError: (msg) => warnings(msg),
@@ -89,7 +164,7 @@ const makeGbaBuild = async ({
   try {
     await completed;
   } catch (code) {
-    throw new Error(`GBA build: devkitARM make failed (exit ${code})`);
+    throw new Error(`GBA build: ${toolchainName} make failed (exit ${code})`);
   } finally {
     childSet.delete(child);
   }
