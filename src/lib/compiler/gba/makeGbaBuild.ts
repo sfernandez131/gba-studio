@@ -9,14 +9,14 @@
 // build dirs are a later packaging concern.
 //
 // Toolchain: Butano's butano.mak picks devkitARM when DEVKITARM is set, else
-// Wonderful Toolchain when WONDERFUL_TOOLCHAIN is set. devkitARM is the default
-// here; set GBA_TOOLCHAIN=wonderful to opt in to Wonderful (whose packages are
-// redistributable, unlike devkitPro's - the M9 packaging path, see
-// GBA_STUDIO_ROADMAP.md). Wonderful is NOT the default yet: a WT-built ROM runs
-// correctly but DMG (PSG) music plays silent - gbt-player leaves SOUNDCNT_L
-// channel routing at 0 (devkitARM: FF77, WT: 0077) - root cause not yet found.
-// IMPORTANT: the two toolchains' objects are incompatible - run a clean build
-// in the engine tree when switching.
+// Wonderful Toolchain when WONDERFUL_TOOLCHAIN is set. Wonderful is PREFERRED
+// when installed - its packages are redistributable, unlike devkitPro's, so
+// it's what shipped builds will use (the M9 packaging path, see
+// GBA_STUDIO_ROADMAP.md) - with devkitARM as the fallback. Force a choice with
+// GBA_TOOLCHAIN=wonderful|devkitarm. (A suspected WT DMG-music bug turned out
+// to be a pre-existing engine bug hit on both toolchains - gbavm#43; WT output
+// is verified equivalent.) IMPORTANT: the two toolchains' objects are
+// incompatible - run a clean build in the engine tree when switching.
 
 import os from "os";
 import Path from "path";
@@ -74,7 +74,7 @@ const makeGbaBuild = async ({
   const envDkp = process.env.DEVKITPRO?.replace(/\\/g, "/");
   const toolchainPref = process.env.GBA_TOOLCHAIN?.toLowerCase();
   const wonderful =
-    toolchainPref === "wonderful" ? await findWonderful() : null;
+    toolchainPref === "devkitarm" ? null : await findWonderful();
   if (toolchainPref === "wonderful" && !wonderful) {
     throw new Error(
       "GBA build: GBA_TOOLCHAIN=wonderful but no Wonderful Toolchain install found " +
