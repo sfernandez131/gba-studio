@@ -25,8 +25,13 @@ export const enginesRoot = normalize(`${rootDir}/appData/engine`);
 export const defaultEngineRoot = normalize(`${enginesRoot}/gbvm`);
 // gbavm (GBA/Butano) engine tree. Not yet vendored into appData; defaults to the
 // sibling dev checkout and can be overridden with GBAVM_ROOT. Used by the GBA build.
+// `process` doesn't exist in the renderer (webpack target "web"), and unlike
+// NODE_ENV this env read isn't substituted at build time - guard so importing
+// this module doesn't throw there. The override only matters to the CLI/main
+// process build, which run under Node.
 export const gbaEngineRoot = normalize(
-  process.env.GBAVM_ROOT ?? "D:/source/gbavm",
+  (typeof process !== "undefined" ? process.env.GBAVM_ROOT : undefined) ??
+    "D:/source/gbavm",
 );
 export const defaultEngineMetaPath = normalize(`${enginesRoot}/engine.json`);
 export const buildToolsRoot = normalize(`${rootDir}/buildTools`);

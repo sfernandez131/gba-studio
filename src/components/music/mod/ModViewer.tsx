@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import styled from "styled-components";
+import { SingleValue } from "react-select";
 import { musicSelectors } from "store/features/entities/entitiesState";
 import musicActions from "store/features/music/musicActions";
 import { Button } from "ui/buttons/Button";
 import { PauseIcon, PlayIcon } from "ui/icons/Icons";
 import { CheckboxField } from "ui/form/CheckboxField";
+import { Select, Option } from "ui/form/Select";
+import { FormField } from "ui/form/layout/FormLayout";
 import l10n from "shared/lib/lang/l10n";
 import entitiesActions from "store/features/entities/entitiesActions";
 import electronActions from "store/features/electron/electronActions";
@@ -70,6 +73,12 @@ const TrackSettings = styled.div`
   padding: 20px;
 `;
 
+const BackendField = styled.div`
+  margin-top: 20px;
+  min-width: 240px;
+  text-align: left;
+`;
+
 const ModViewer = ({ trackId, allowConvertToUge }: ModViewerProps) => {
   const dispatch = useAppDispatch();
   const track = useAppSelector((state) =>
@@ -96,6 +105,33 @@ const ModViewer = ({ trackId, allowConvertToUge }: ModViewerProps) => {
       }),
     );
   }, [dispatch, track?.settings.disableSpeedConversion, trackId]);
+
+  const backendOptions: Option[] = useMemo(
+    () => [
+      { value: "dmg", label: l10n("FIELD_GBA_AUDIO_BACKEND_DMG") },
+      { value: "maxmod", label: l10n("FIELD_GBA_AUDIO_BACKEND_MAXMOD") },
+    ],
+    [],
+  );
+
+  const currentBackend = track?.settings?.gbaAudioBackend ?? "dmg";
+
+  const onChangeGbaAudioBackend = useCallback(
+    (newValue: SingleValue<Option>) => {
+      if (!newValue) {
+        return;
+      }
+      dispatch(
+        entitiesActions.editMusicSettings({
+          musicId: trackId,
+          changes: {
+            gbaAudioBackend: newValue.value === "maxmod" ? "maxmod" : "dmg",
+          },
+        }),
+      );
+    },
+    [dispatch, trackId],
+  );
 
   const onEdit = useCallback(() => {
     if (track) {
@@ -151,6 +187,22 @@ const ModViewer = ({ trackId, allowConvertToUge }: ModViewerProps) => {
             onChange={onChangeSpeedConversion}
             checked={track.settings?.disableSpeedConversion ?? false}
           />
+          <BackendField>
+            <FormField
+              name="gbaAudioBackend"
+              label={l10n("FIELD_GBA_AUDIO_BACKEND")}
+              info={l10n("FIELD_GBA_AUDIO_BACKEND_INFO")}
+            >
+              <Select
+                name="gbaAudioBackend"
+                value={backendOptions.find(
+                  (option) => option.value === currentBackend,
+                )}
+                options={backendOptions}
+                onChange={onChangeGbaAudioBackend}
+              />
+            </FormField>
+          </BackendField>
           {allowConvertToUge && (
             <>
               <FixedSpacer height={20} />
