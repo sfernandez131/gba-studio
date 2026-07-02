@@ -111,9 +111,16 @@ const AppToolbar: FC = () => {
     dispatch(clipboardActions.fetchClipboard());
   }, [dispatch]);
 
+  const isGBA = useAppSelector(
+    (state) => state.project.present.settings.platform === "gba",
+  );
+
   const onRun = useCallback(() => {
-    dispatch(buildGameActions.buildGame({ buildType: "web" }));
-  }, [dispatch]);
+    // GBA projects play in the embedded mGBA-wasm window; GB projects in binjgb.
+    dispatch(
+      buildGameActions.buildGame({ buildType: isGBA ? "gba" : "web" }),
+    );
+  }, [dispatch, isGBA]);
 
   const onBuild = useCallback(
     (buildType: BuildType) => () => {

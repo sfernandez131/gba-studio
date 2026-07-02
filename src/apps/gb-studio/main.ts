@@ -56,6 +56,7 @@ import {
   buildUUID,
   EMULATOR_MUTED_SETTING_KEY,
   LOCALE_SETTING_KEY,
+  mgbaRoot,
   musicTemplatesRoot,
   THEME_SETTING_KEY,
 } from "consts";
@@ -212,6 +213,7 @@ let playWindow: BrowserWindow | null = null;
 let musicWindow: BrowserWindow | null;
 
 let playWindowSgb = false;
+let playWindowGba = false;
 let hasCheckedForUpdate = false;
 let documentEdited = false;
 let documentName = "";
@@ -233,6 +235,12 @@ const l10nManager = new L10nManager();
 const templateManager = new TemplateManager();
 
 const isDevMode = !!process.execPath.match(/[\\/]electron/);
+
+// The GBA play window runs the mGBA WebAssembly core, whose threaded build
+// needs SharedArrayBuffer. The play window loads from file:// (no COOP/COEP
+// headers possible), so force-enable SAB for this app instead. Must be set
+// before app ready.
+app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 
 const validProjectExt = [".json", ".gbsproj"];
 
@@ -646,8 +654,9 @@ export const createPlay = async (
   url: string,
   sgb: boolean,
   debugEnabled?: boolean,
+  gba?: boolean,
 ) => {
-  if (playWindow && sgb !== playWindowSgb) {
+  if (playWindow && (sgb !== playWindowSgb || !!gba !== playWindowGba)) {
     playWindow.close();
     playWindow = null;
   }
@@ -655,8 +664,8 @@ export const createPlay = async (
   if (!playWindow) {
     // Create the browser window.
     playWindow = new BrowserWindow({
-      width: sgb ? 512 : 480,
-      height: sgb ? 448 : 432,
+      width: gba ? 480 : sgb ? 512 : 480,
+      height: gba ? 320 : sgb ? 448 : 432,
       fullscreenable: false,
       autoHideMenuBar: true,
       useContentSize: true,
@@ -673,6 +682,7 @@ export const createPlay = async (
       playWindow.webContents.setAudioMuted(true);
     }
     playWindowSgb = sgb;
+    playWindowGba = !!gba;
   } else {
     playWindow.show();
   }
@@ -1589,6 +1599,42 @@ ipcMain.handle(
           `file://${outputRoot}/build/web/index.html`,
           sgbEnabled && colorMode === "mono",
           debuggerEnabled,
+        );
+      }
+
+      if (buildType === "gba" && !exportBuild) {
+        // Embedded GBA play window: assemble the mGBA-wasm player around the
+        // built ROM (GBA counterpart of the binjgb web build above).
+        const playRoot = Path.join(outputRoot, "build", "play-gba");
+        await copy(mgbaRoot, playRoot);
+        await copy(
+          Path.join(outputRoot, "build", "gba", romFilename),
+          Path.join(playRoot, "rom", romFilename),
+        );
+        const sanitize = (s: string) => String(s || "").replace(/["<>]/g, "");
+        const playHtml = (
+          await readFile(Path.join(playRoot, "index.html"), "utf8")
+        ).replace(/___PROJECT_NAME___/g, sanitize(project.metadata.name));
+        await writeFile(Path.join(playRoot, "index.html"), playHtml);
+        const playJs = (
+          await readFile(Path.join(playRoot, "js", "script.js"), "utf8")
+        ).replace(
+          /ROM_FILENAME = "[^"]*"/,
+          `ROM_FILENAME = "rom/${romFilename}"`,
+        );
+        await writeFile(Path.join(playRoot, "js", "script.js"), playJs);
+
+        buildLog(`-`);
+        buildLog(
+          `${l10n("COMPILER_BUILD_SUCCESS")} ${l10n(
+            "COMPILER_STARTING_EMULATOR",
+          )}...`,
+        );
+        createPlay(
+          `file://${playRoot.replace(/\\/g, "/")}/index.html`,
+          false,
+          false,
+          true,
         );
       }
 

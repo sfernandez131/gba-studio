@@ -1,0 +1,14 @@
+The files js/mgba.js and js/mgba.wasm are a build of mGBA compiled to
+WebAssembly, used under the Mozilla Public License 2.0.
+
+- mGBA: https://github.com/mgba-emu/mgba (c) Jeffrey Pfau and contributors
+- WebAssembly build: https://github.com/thenick775/mgba/tree/feature/wasm
+  (npm: @thenick775/mgba-wasm) (c) Nicholas VanCise
+- License text: https://www.mozilla.org/en-US/MPL/2.0/
+
+Complete corresponding source for these files is available at the
+repositories above. Local modifications: js/mgba.js is patched from an ES
+module to a classic script (import.meta.url replaced with
+document.currentScript/self.location, module worker type removed, default
+export exposed as window.mGBA) so it can load from file:// URLs inside the
+GBA Studio play window. These patched files remain under MPL 2.0.
