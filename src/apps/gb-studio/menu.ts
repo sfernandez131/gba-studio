@@ -288,6 +288,13 @@ const buildMenu = async ({
                 notifyListeners("build", "pocket");
               },
             },
+            {
+              label: l10n("MENU_EXPORT_GBA"),
+              accelerator: "CommandOrControl+Shift+G",
+              click() {
+                notifyListeners("build", "gba");
+              },
+            },
           ],
         },
         { type: "separator" },

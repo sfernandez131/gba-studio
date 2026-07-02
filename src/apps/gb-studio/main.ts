@@ -1527,21 +1527,30 @@ ipcMain.handle(
                   `${projectRoot}/build/web/index.html`,
                 )}`
               : `${l10n("COMPILER_ROM_READY_AT")} ${Path.normalize(
-                  `${projectRoot}/build/rom/${romFilename}`,
+                  buildType === "gba"
+                    ? `${projectRoot}/build/gba/${romFilename}`
+                    : `${projectRoot}/build/rom/${romFilename}`,
                 )}`
           }`,
         );
       }
 
-      const usageData = await romUsage({
-        buildRoot: outputRoot,
-        romStem,
-        tmpPath: getTmp(),
-        progress,
-        warnings,
-      });
+      // GBA builds have no GBDK .map for romusage to analyse - devkit linker
+      // map format differs; GBA ROM stats are a follow-up.
+      const usageData =
+        buildType === "gba"
+          ? null
+          : await romUsage({
+              buildRoot: outputRoot,
+              romStem,
+              tmpPath: getTmp(),
+              progress,
+              warnings,
+            });
 
-      sendToProjectWindow("debugger:romusage", usageData);
+      if (usageData) {
+        sendToProjectWindow("debugger:romusage", usageData);
+      }
 
       if (buildType === "web" && !exportBuild) {
         buildLog(`-`);
