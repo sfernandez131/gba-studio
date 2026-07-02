@@ -305,6 +305,10 @@ const AppToolbar: FC = () => {
             {l10n("TOOLBAR_EXPORT_POCKET")}
             <MenuAccelerator accelerator="CommandOrControl+Shift+M" />
           </MenuItem>
+          <MenuItem onClick={onBuild("gba")}>
+            {l10n("TOOLBAR_EXPORT_GBA")}
+            <MenuAccelerator accelerator="CommandOrControl+Shift+G" />
+          </MenuItem>
         </DropdownButton>
         <FixedSpacer width={10} />
         {cancelling ? (
