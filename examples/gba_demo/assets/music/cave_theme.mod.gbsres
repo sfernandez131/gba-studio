@@ -1,0 +1,11 @@
+{
+  "_resourceType": "music",
+  "id": "c0febeef-0000-4000-8000-0000000000ca",
+  "name": "cave_theme",
+  "symbol": "song_cave_theme",
+  "settings": {
+    "gbaAudioBackend": "maxmod"
+  },
+  "filename": "cave_theme.mod",
+  "type": "mod"
+}

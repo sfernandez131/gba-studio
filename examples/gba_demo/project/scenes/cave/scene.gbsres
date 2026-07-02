@@ -26,6 +26,13 @@
   "autoFadeSpeed": 1,
   "script": [
     {
+      "id": "e2000000-0000-4000-8000-000000000010",
+      "command": "EVENT_MUSIC_PLAY",
+      "args": {
+        "musicId": "c0febeef-0000-4000-8000-0000000000ca"
+      }
+    },
+    {
       "id": "e2000000-0000-4000-8000-000000000001",
       "command": "EVENT_TEXT",
       "args": {
