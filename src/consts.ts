@@ -36,6 +36,9 @@ export const gbaEngineRoot = normalize(
 export const defaultEngineMetaPath = normalize(`${enginesRoot}/engine.json`);
 export const buildToolsRoot = normalize(`${rootDir}/buildTools`);
 export const binjgbRoot = normalize(`${rootDir}/appData/wasm/binjgb`);
+// mGBA WebAssembly core + player page for the embedded GBA play window (MPL
+// 2.0 - see appData/wasm/mgba/LICENSE.mgba.txt). GBA counterpart to binjgb.
+export const mgbaRoot = normalize(`${rootDir}/appData/wasm/mgba`);
 export const projectTemplatesRoot = normalize(`${rootDir}/appData/templates`);
 export const musicTemplatesRoot = normalize(`${rootDir}/appData/music`);
 export const localesRoot = normalize(`${rootDir}/src/lang`);
