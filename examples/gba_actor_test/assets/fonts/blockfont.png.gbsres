@@ -1,0 +1,10 @@
+{
+  "_resourceType": "font",
+  "id": "b10cf047-0000-4000-8000-0000000000b1",
+  "name": "Block Font",
+  "symbol": "font_blockfont",
+  "width": 128,
+  "height": 112,
+  "mapping": {},
+  "filename": "blockfont.png"
+}

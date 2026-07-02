@@ -1,0 +1,45 @@
+{
+  "_resourceType": "script",
+  "id": "dddddddd-0000-4000-8000-000000000001",
+  "name": "My Script",
+  "symbol": "my_script",
+  "description": "Cross-proc link test: nudges the player on scene init.",
+  "variables": {},
+  "actors": {},
+  "script": [
+    {
+      "id": "dddddddd-0000-4000-8000-000000000002",
+      "command": "EVENT_ACTOR_SET_POSITION_RELATIVE",
+      "args": {
+        "actorId": "player",
+        "x": { "type": "number", "value": 2 },
+        "y": { "type": "number", "value": 0 }
+      }
+    },
+    {
+      "id": "dddddddd-0000-4000-8000-000000000003",
+      "command": "EVENT_WAIT",
+      "args": {
+        "units": "frames",
+        "frames": { "type": "number", "value": 30 },
+        "time": { "type": "number", "value": 0.5 }
+      }
+    },
+    {
+      "id": "dddddddd-0000-4000-8000-000000000005",
+      "command": "EVENT_SCENE_PUSH_STATE",
+      "args": {}
+    },
+    {
+      "id": "dddddddd-0000-4000-8000-000000000004",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000002",
+        "x": { "type": "number", "value": 5 },
+        "y": { "type": "number", "value": 5 },
+        "direction": "down",
+        "fadeSpeed": 0
+      }
+    }
+  ]
+}

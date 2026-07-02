@@ -1,0 +1,21 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000003",
+  "_index": 0,
+  "name": "Back",
+  "symbol": "trigger_back",
+  "prefabId": "",
+  "x": 20,
+  "y": 18,
+  "width": 9,
+  "height": 6,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000005",
+      "command": "EVENT_LOAD_DATA",
+      "args": { "saveSlot": 0 }
+    }
+  ],
+  "leaveScript": []
+}

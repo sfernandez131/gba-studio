@@ -1,0 +1,34 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000010",
+  "_index": 1,
+  "name": "Save Point",
+  "symbol": "trigger_save",
+  "prefabId": "",
+  "x": 30,
+  "y": 8,
+  "width": 4,
+  "height": 3,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000011",
+      "command": "EVENT_SAVE_DATA",
+      "args": {
+        "saveSlot": 0
+      },
+      "children": {
+        "true": []
+      }
+    },
+    {
+      "id": "d00d0000-0000-4000-8000-000000000012",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "Game saved.",
+        "avatarId": ""
+      }
+    }
+  ],
+  "leaveScript": []
+}

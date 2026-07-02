@@ -1,0 +1,31 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000001",
+  "_index": 0,
+  "type": "POINTNCLICK",
+  "name": "Main",
+  "symbol": "scene_main",
+  "x": 100,
+  "y": 100,
+  "width": 20,
+  "height": 18,
+  "backgroundId": "1e5f9d6a-bdbc-43e6-8c34-22f5bb5dea05",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": ["", "", "", "", "", ""],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [
+    {
+      "id": "eeeeeeee-0000-4000-8000-000000000001",
+      "command": "EVENT_CALL_CUSTOM_EVENT",
+      "args": {
+        "customEventId": "dddddddd-0000-4000-8000-000000000001",
+        "__name": "My Script"
+      }
+    }
+  ],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}

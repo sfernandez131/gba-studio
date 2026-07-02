@@ -1,0 +1,36 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000002",
+  "_index": 1,
+  "type": "TOPDOWN",
+  "name": "Second",
+  "symbol": "scene_second",
+  "x": 300,
+  "y": 100,
+  "width": 48,
+  "height": 32,
+  "collisions": "",
+  "backgroundId": "1e5f9d6a-bdbc-43e6-8c34-22f5bb5dea05",
+  "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": ["", "", "", "", "", ""],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b1",
+      "command": "EVENT_SAVE_DATA",
+      "args": { "saveSlot": 1 },
+      "children": { "true": [] }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b0",
+      "command": "EVENT_TEXT",
+      "args": { "text": "Scene 2 (slot 1).\nWalk DOWN.", "avatarId": "" }
+    }
+  ],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}

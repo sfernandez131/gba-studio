@@ -1,0 +1,78 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000020",
+  "_index": 0,
+  "name": "Gem",
+  "symbol": "trigger_gem",
+  "prefabId": "",
+  "x": 22,
+  "y": 24,
+  "width": 5,
+  "height": 4,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000021",
+      "command": "EVENT_IF_TRUE",
+      "args": {
+        "variable": "0"
+      },
+      "children": {
+        "true": [
+          {
+            "id": "d00d0000-0000-4000-8000-000000000022",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "The Gem is already\nyours.",
+              "avatarId": ""
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "d00d0000-0000-4000-8000-000000000023",
+            "command": "EVENT_SOUND_PLAY_EFFECT",
+            "args": {
+              "type": "b33b0000-0000-4000-8000-0000000000be",
+              "priority": "medium",
+              "wait": false
+            }
+          },
+          {
+            "id": "d00d0000-0000-4000-8000-000000000024",
+            "command": "EVENT_CAMERA_SHAKE",
+            "args": {
+              "time": 1,
+              "units": "time",
+              "shakeDirection": "horizontal",
+              "magnitude": {
+                "type": "number",
+                "value": 5
+              }
+            }
+          },
+          {
+            "id": "d00d0000-0000-4000-8000-000000000025",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "You found the Gem!\nThe cave rumbles!",
+              "avatarId": ""
+            }
+          },
+          {
+            "id": "d00d0000-0000-4000-8000-000000000026",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "0",
+              "value": {
+                "type": "number",
+                "value": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "leaveScript": []
+}

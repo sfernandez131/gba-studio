@@ -1,0 +1,13 @@
+{
+  "_resourceType": "background",
+  "id": "b6000000-0000-4000-8000-000000000001",
+  "name": "village",
+  "symbol": "bg_village",
+  "tileColors": "",
+  "filename": "village.png",
+  "width": 48,
+  "height": 32,
+  "imageWidth": 384,
+  "imageHeight": 256,
+  "autoColor": false
+}
