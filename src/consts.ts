@@ -307,6 +307,7 @@ export const defaultProjectSettings: Settings = {
   defaultPlayerSprites: {},
   musicDriver: "gbt",
   cartType: "mbc5",
+  platform: "gb",
   batterylessEnabled: false,
   favoriteEvents: ["EVENT_TEXT", "EVENT_SWITCH_SCENE"],
   customColorsWhite: "E8F8E0",

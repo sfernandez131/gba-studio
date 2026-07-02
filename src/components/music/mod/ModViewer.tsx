@@ -86,6 +86,9 @@ const ModViewer = ({ trackId, allowConvertToUge }: ModViewerProps) => {
   );
   const allMusic = useAppSelector(musicSelectors.selectAll);
   const playing = useAppSelector((state) => state.music.playing);
+  const isGBA = useAppSelector(
+    (state) => state.project.present.settings.platform === "gba",
+  );
 
   const onPlay = useCallback(() => {
     dispatch(musicActions.playMusic({ musicId: trackId }));
@@ -187,22 +190,24 @@ const ModViewer = ({ trackId, allowConvertToUge }: ModViewerProps) => {
             onChange={onChangeSpeedConversion}
             checked={track.settings?.disableSpeedConversion ?? false}
           />
-          <BackendField>
-            <FormField
-              name="gbaAudioBackend"
-              label={l10n("FIELD_GBA_AUDIO_BACKEND")}
-              info={l10n("FIELD_GBA_AUDIO_BACKEND_INFO")}
-            >
-              <Select
+          {isGBA && (
+            <BackendField>
+              <FormField
                 name="gbaAudioBackend"
-                value={backendOptions.find(
-                  (option) => option.value === currentBackend,
-                )}
-                options={backendOptions}
-                onChange={onChangeGbaAudioBackend}
-              />
-            </FormField>
-          </BackendField>
+                label={l10n("FIELD_GBA_AUDIO_BACKEND")}
+                info={l10n("FIELD_GBA_AUDIO_BACKEND_INFO")}
+              >
+                <Select
+                  name="gbaAudioBackend"
+                  value={backendOptions.find(
+                    (option) => option.value === currentBackend,
+                  )}
+                  options={backendOptions}
+                  onChange={onChangeGbaAudioBackend}
+                />
+              </FormField>
+            </BackendField>
+          )}
           {allowConvertToUge && (
             <>
               <FixedSpacer height={20} />
