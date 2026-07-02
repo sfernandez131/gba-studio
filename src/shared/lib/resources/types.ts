@@ -649,6 +649,12 @@ export type SoundAsset = ExtractResource<SoundResourceAsset>;
 
 export const MusicSettings = Type.Object({
   disableSpeedConversion: Type.Optional(Type.Boolean()),
+  // GBA target: which audio path plays this track. "dmg" (default) = the 4 Game Boy
+  // PSG channels via gbt-player (chiptune, faithful to GB Studio); "maxmod" = the GBA's
+  // native DirectSound tracker mixer (sampled/richer). Ignored by non-GBA targets.
+  gbaAudioBackend: Type.Optional(
+    Type.Union([Type.Literal("dmg"), Type.Literal("maxmod")]),
+  ),
 });
 
 export type MusicSettings = Static<typeof MusicSettings>;

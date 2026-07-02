@@ -19,7 +19,7 @@ import {
 import compileSprites from "./compileSprites";
 import compileAvatars from "./compileAvatars";
 import compileEmotes from "./compileEmotes";
-import compileFonts from "./compileFonts";
+import compileFonts, { PrecompiledFontData } from "./compileFonts";
 import {
   compileBackground,
   compileBackgroundHeader,
@@ -1350,6 +1350,9 @@ const compile = async (
   sceneMap: Record<string, SceneMapData>;
   variableMap: Record<string, VariableMapData>;
   usedSceneTypeIds: string[];
+  // GBA eject needs the compiled font order so dialogue \002 font-switch codes
+  // (indices into this list) map to the right emitted Butano font.
+  usedFonts: PrecompiledFontData[];
 }> => {
   const output: Record<string, string> = {};
   const symbols: Record<string, string> = {};
