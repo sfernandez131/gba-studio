@@ -1,0 +1,33 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000030",
+  "_index": 1,
+  "name": "To Village",
+  "symbol": "trigger_tovillage",
+  "prefabId": "",
+  "x": 20,
+  "y": 0,
+  "width": 9,
+  "height": 3,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000031",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000001",
+        "x": {
+          "type": "number",
+          "value": 24
+        },
+        "y": {
+          "type": "number",
+          "value": 13
+        },
+        "direction": "up",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}

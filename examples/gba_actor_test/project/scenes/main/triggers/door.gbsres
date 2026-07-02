@@ -1,0 +1,27 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000001",
+  "_index": 0,
+  "name": "Door",
+  "symbol": "trigger_door",
+  "prefabId": "",
+  "x": 20,
+  "y": 18,
+  "width": 9,
+  "height": 6,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000002",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000002",
+        "x": { "type": "number", "value": 24 },
+        "y": { "type": "number", "value": 16 },
+        "direction": "down",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}

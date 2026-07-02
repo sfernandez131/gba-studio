@@ -1,0 +1,8 @@
+{
+  "_resourceType": "sound",
+  "id": "b33b0000-0000-4000-8000-0000000000be",
+  "name": "beep",
+  "symbol": "sound_beep",
+  "type": "wav",
+  "filename": "beep.wav"
+}

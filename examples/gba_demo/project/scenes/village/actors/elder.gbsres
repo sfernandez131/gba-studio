@@ -1,0 +1,59 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000001",
+  "_index": 0,
+  "symbol": "actor_elder",
+  "prefabId": "",
+  "name": "Elder",
+  "coordinateType": "tiles",
+  "x": 24,
+  "y": 11,
+  "frame": 0,
+  "animate": false,
+  "spriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "paletteId": "",
+  "direction": "up",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "collisionExtraFlags": [],
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "el000000-0000-4000-8000-000000000001",
+      "command": "EVENT_IF_TRUE",
+      "args": {
+        "variable": "0"
+      },
+      "children": {
+        "true": [
+          {
+            "id": "el000000-0000-4000-8000-000000000002",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "You found the Gem!\nYou are a hero!",
+              "avatarId": ""
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "el000000-0000-4000-8000-000000000003",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "A Gem is lost in the\nCave to the south.",
+              "avatarId": ""
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}

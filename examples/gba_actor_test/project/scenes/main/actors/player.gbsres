@@ -1,0 +1,43 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000001",
+  "_index": 0,
+  "name": "Npc",
+  "symbol": "actor_npc",
+  "spriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "x": 24,
+  "y": 17,
+  "direction": "up",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "paletteId": "",
+  "animate": false,
+  "frame": 0,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "prefabId": "",
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000a1",
+      "command": "EVENT_CAMERA_SHAKE",
+      "args": {
+        "time": 1.5,
+        "units": "time",
+        "shakeDirection": "horizontal",
+        "magnitude": { "type": "number", "value": 5 }
+      }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000a0",
+      "command": "EVENT_TEXT",
+      "args": { "text": "Shaken!", "avatarId": "" }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}
