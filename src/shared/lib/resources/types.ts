@@ -748,6 +748,17 @@ export const CartType = Type.Union([
 
 export type CartType = Static<typeof CartType>;
 
+// Target platform for the project. "gb" = the classic Game Boy / Game Boy
+// Color pipeline (GBDK, unchanged upstream behavior); "gba" = Game Boy
+// Advance (gbavm/Butano). Editor UI that only applies to one platform is
+// gated on this. Old projects load as "gb" via Value.Cast defaults.
+export const PlatformSetting = Type.Union([
+  Type.Literal("gb"),
+  Type.Literal("gba"),
+]);
+
+export type PlatformSetting = Static<typeof PlatformSetting>;
+
 export const ScriptEditorCtxType = Type.Union([
   Type.Literal("entity"),
   Type.Literal("script"),
@@ -878,6 +889,7 @@ export const SettingsResource = Type.Object({
   defaultPlayerSprites: Type.Record(Type.String(), Type.String()),
   musicDriver: MusicDriverSetting,
   cartType: CartType,
+  platform: PlatformSetting,
   batterylessEnabled: Type.Boolean(),
   favoriteEvents: Type.Array(Type.String()),
   customColorsWhite: Type.String(),

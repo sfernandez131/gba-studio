@@ -62,6 +62,7 @@
   },
   "musicDriver": "huge",
   "cartType": "mbc5",
+  "platform": "gba",
   "batterylessEnabled": false,
   "customColorsWhite": "E8F8E0",
   "customColorsLight": "B0F088",

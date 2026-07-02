@@ -18,6 +18,7 @@ import editorActions from "store/features/editor/editorActions";
 import { useRestoreScroll } from "ui/hooks/use-restore-scroll";
 import { useSaveScroll } from "ui/hooks/use-save-scroll";
 import { SettingsSectionColor } from "components/settings/section/SettingsSectionColor";
+import { SettingsSectionPlatform } from "components/settings/section/SettingsSectionPlatform";
 import { SettingsSectionWeb } from "components/settings/section/SettingsSectionWeb";
 import { SettingsSectionBuild } from "components/settings/section/SettingsSectionBuild";
 import { SettingsSectionSGB } from "components/settings/section/SettingsSectionSGB";
@@ -85,6 +86,9 @@ const SettingsPage = () => {
                 onChange={onSearch}
               />
             </SettingsSearchWrapper>
+            <SettingsMenuItem onClick={onMenuItem("settingsPlatform")}>
+              {l10n("SETTINGS_PLATFORM")}
+            </SettingsMenuItem>
             <SettingsMenuItem onClick={onMenuItem("settingsColor")}>
               {l10n("SETTINGS_COLOR")}
             </SettingsMenuItem>
@@ -125,6 +129,7 @@ const SettingsPage = () => {
         </SettingsMenuColumn>
       )}
       <SettingsContentColumn ref={scrollRef}>
+        <SettingsSectionPlatform searchTerm={searchTerm} />
         <SettingsSectionColor searchTerm={searchTerm} />
         <SettingsSectionSGB searchTerm={searchTerm} />
         <SettingsSectionSceneTypes searchTerm={searchTerm} />
