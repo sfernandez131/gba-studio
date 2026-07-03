@@ -37,6 +37,7 @@ interface SpriteAnimation {
   frames: SpriteFrame[];
 }
 interface SpriteState {
+  name: string;
   animationType: string;
   flipLeft: boolean;
   animations: SpriteAnimation[];
@@ -57,7 +58,10 @@ export interface SpriteSheet {
   frameWidth: number;
   frameHeight: number;
   frameCount: number;
-  // 8 ranges in toEngineOrder: Down, Right, Up, Left, then the moving variants.
+  // statesOrder.length rows of 8 ranges in toEngineOrder (Down, Right, Up,
+  // Left, then the moving variants), row-major. A global state the sprite
+  // doesn't define reuses the default state's row, so switching to it is a
+  // safe no-op (M10c).
   animRanges: AnimRange[];
 }
 
@@ -100,39 +104,61 @@ export function buildSpriteSheet(
   sprite: SpriteSheetInput,
   src: IndexedImage,
   spriteMode: string,
+  statesOrder: string[] = [""],
 ): SpriteSheet {
   const fw = sprite.canvasWidth;
   const fh = sprite.canvasHeight;
   const tileW = 8;
   const tileH = spriteMode === "8x16" ? 16 : 8;
-  const state = sprite.states[0];
-
-  // Expand stored animations into the 8 engine animations (with per-animation
-  // mirror flag), in engine order.
-  const engineAnims = toEngineOrder(
-    animationMapBySpriteType(
-      state.animations,
-      state.animationType as Parameters<typeof animationMapBySpriteType>[1],
-      state.flipLeft,
-      (animation, flip) => ({ animation, flip }),
-    ),
-  );
 
   const frames: IndexedImage[] = [];
-  const animRanges: AnimRange[] = [];
-  for (const ea of engineAnims) {
-    const start = frames.length;
-    const frameList = ea && ea.animation ? ea.animation.frames : [];
-    if (frameList.length === 0) {
-      frames.push(makeIndexedImage(fw, fh)); // blank frame keeps the range valid
-    } else {
-      for (const frame of frameList) {
-        frames.push(
-          assembleFrame(frame, src, fw, fh, tileW, tileH, !!(ea && ea.flip)),
-        );
+
+  // Expand ONE sprite state into its 8 engine-order animation ranges,
+  // appending its frames to the shared frame stack.
+  const buildStateRanges = (state: SpriteState): AnimRange[] => {
+    const engineAnims = toEngineOrder(
+      animationMapBySpriteType(
+        state.animations,
+        state.animationType as Parameters<typeof animationMapBySpriteType>[1],
+        state.flipLeft,
+        (animation, flip) => ({ animation, flip }),
+      ),
+    );
+    const ranges: AnimRange[] = [];
+    for (const ea of engineAnims) {
+      const start = frames.length;
+      const frameList = ea && ea.animation ? ea.animation.frames : [];
+      if (frameList.length === 0) {
+        frames.push(makeIndexedImage(fw, fh)); // blank frame keeps the range valid
+      } else {
+        for (const frame of frameList) {
+          frames.push(
+            assembleFrame(frame, src, fw, fh, tileW, tileH, !!(ea && ea.flip)),
+          );
+        }
       }
+      ranges.push({ start, len: frames.length - start });
     }
-    animRanges.push({ start, len: frames.length - start });
+    return ranges;
+  };
+
+  // Frames are emitted once per state the sprite actually defines; the
+  // project-global state table then maps each global state to its sheet
+  // state's ranges (default state when the sprite doesn't define it).
+  const rangesByStateName = new Map<string, AnimRange[]>();
+  for (const state of sprite.states) {
+    if (!rangesByStateName.has(state.name)) {
+      rangesByStateName.set(state.name, buildStateRanges(state));
+    }
+  }
+  const defaultRanges =
+    rangesByStateName.get(sprite.states[0]?.name ?? "") ??
+    rangesByStateName.values().next().value ??
+    [];
+
+  const animRanges: AnimRange[] = [];
+  for (const globalState of statesOrder) {
+    animRanges.push(...(rangesByStateName.get(globalState) ?? defaultRanges));
   }
 
   // Stack frames into one tall image.

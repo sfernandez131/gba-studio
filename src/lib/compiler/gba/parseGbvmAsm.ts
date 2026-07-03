@@ -79,6 +79,9 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_ACTOR_SET_MOVE_SPEED: 0x3e,
   VM_ACTOR_SET_HIDDEN: 0x3f,
   VM_ACTOR_GET_DIR: 0x40,
+  // animation states (M10c): the state operand is the global STATE_* index
+  // from game_globals.i, already merged into the operand evaluator (M4h).
+  VM_ACTOR_SET_ANIM_SET: 0x41,
   VM_ACTOR_MOVE_CANCEL: 0x3d,
   VM_SET_SPRITE_VISIBLE: 0x51,
   VM_INPUT_GET: 0x54,
@@ -215,6 +218,10 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
+  // M10c: the Set Animation State event emits VM_ACTOR_SET_FLAGS right after
+  // VM_ACTOR_SET_ANIM_SET, only to toggle ACTOR_FLAG_ANIM_NOLOOP. GBA anims
+  // always loop for now (no-loop is a follow-up), so the flags write is dropped.
+  "VM_ACTOR_SET_FLAGS",
   // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT/_EX are handled specially (the text is captured
   // from the inline .asciz and rendered via op 0x90/0x95); VM_OVERLAY_SHOW/MOVE_TO/HIDE
   // /WAIT are bridged (M4d box + M4q wait). The remaining overlay/window ops are

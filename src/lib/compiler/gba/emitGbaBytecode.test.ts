@@ -48,8 +48,8 @@ describe("emitGbaBytecode", () => {
 
   test("throws clearly on an unsupported opcode", () => {
     expect(() =>
-      emitGbaBytecode([{ kind: "op", op: 0x41, operands: [0] }]), // DISPLAY_TEXT (not yet ported)
-    ).toThrow(/No GBA encoding for opcode 0x41/);
+      emitGbaBytecode([{ kind: "op", op: 0x42, operands: [0] }]), // unassigned opcode
+    ).toThrow(/No GBA encoding for opcode 0x42/);
   });
 
   test("encodes a VM_SWITCH header + relocatable 6-byte case entries", () => {

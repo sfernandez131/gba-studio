@@ -177,6 +177,14 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ).toEqual([{ kind: "op", op: 0x40, operands: [-2, -1] }]);
   });
 
+  test("M10c: bridges VM_ACTOR_SET_ANIM_SET to op 0x41 resolving STATE_ globals", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_ACTOR_SET_ANIM_SET .ARG0, STATE_ATTACK\n",
+      { globals: { STATE_ATTACK: 2 } },
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x41, operands: [-1, 2] }]);
+  });
+
   test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
     expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
       { kind: "op", op: 0x71, operands: [1, 8] },

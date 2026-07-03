@@ -1353,6 +1353,9 @@ const compile = async (
   // GBA eject needs the compiled font order so dialogue \002 font-switch codes
   // (indices into this list) map to the right emitted Butano font.
   usedFonts: PrecompiledFontData[];
+  // GBA eject needs the global animation-state order so sprite state-table rows
+  // line up with the STATE_* indices scripts pass (M10c).
+  statesOrder: string[];
 }> => {
   const output: Record<string, string> = {};
   const symbols: Record<string, string> = {};
@@ -2100,6 +2103,10 @@ const compile = async (
     // GBA eject needs the compiled font order so dialogue \002 font-switch codes
     // (indices into this list) map to the right emitted Butano font.
     usedFonts: precompiled.usedFonts,
+    // GBA eject needs the global animation-state order so each sprite's state
+    // table rows line up with the STATE_* indices scripts pass to
+    // VM_ACTOR_SET_ANIM_SET (M10c).
+    statesOrder: precompiled.statesOrder,
   };
 };
 
