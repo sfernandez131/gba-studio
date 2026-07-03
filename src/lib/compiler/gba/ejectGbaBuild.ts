@@ -312,7 +312,7 @@ const ejectGbaBuild = async ({
     // Collision grid sized to the engine's tile dims (widthPx/8 x heightPx/8),
     // copied from the scene's per-tile collision bytes. Empty when nothing is solid.
     const sceneColl: number[] = scene.collisions ?? [];
-    let collisions: number[] = [];
+    const collisions: number[] = [];
     if (sceneColl.some((v) => v & 0x0f)) {
       const collTw = Math.floor(widthPx / 8);
       const collTh = Math.floor(heightPx / 8);

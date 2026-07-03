@@ -230,7 +230,7 @@ export const Knob = ({
 
   const [isDragging, setIsDragging] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [isKeyboardAdjusting, setIsKeyboardAdjusting] = useState(false);
+  const [_isKeyboardAdjusting, setIsKeyboardAdjusting] = useState(false);
   const [draftValue, setDraftValue] = useState("");
   const [overlayValue, setOverlayValue] = useState<number | null>(null);
   const [dragAxisState, setDragAxisState] = useState<DragAxis>(null);
