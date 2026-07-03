@@ -39,7 +39,7 @@
       "args": {
         "actorId": "player",
         "spriteStateId": "Attack",
-        "loopAnim": true
+        "loopAnim": false
       }
     },
     {

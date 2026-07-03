@@ -82,6 +82,10 @@ const MACRO_TO_OP: Record<string, number> = {
   // animation states (M10c): the state operand is the global STATE_* index
   // from game_globals.i, already merged into the operand evaluator (M4h).
   VM_ACTOR_SET_ANIM_SET: 0x41,
+  // M10e: actor flags / collision toggle / single-op blocking Move To
+  VM_ACTOR_SET_FLAGS: 0x44,
+  VM_ACTOR_SET_COLL_ENABLED: 0x45,
+  VM_ACTOR_MOVE_TO: 0x46,
   VM_ACTOR_MOVE_CANCEL: 0x3d,
   VM_SET_SPRITE_VISIBLE: 0x51,
   VM_INPUT_GET: 0x54,
@@ -233,10 +237,6 @@ const SKIP_MACROS = new Set<string>([
   // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
   // its RNG once at boot from a hardware timer instead (P0).
   "VM_RANDOMIZE",
-  // M10c: the Set Animation State event emits VM_ACTOR_SET_FLAGS right after
-  // VM_ACTOR_SET_ANIM_SET, only to toggle ACTOR_FLAG_ANIM_NOLOOP. GBA anims
-  // always loop for now (no-loop is a follow-up), so the flags write is dropped.
-  "VM_ACTOR_SET_FLAGS",
   // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT/_EX are handled specially (the text is captured
   // from the inline .asciz and rendered via op 0x90/0x95); VM_OVERLAY_SHOW/MOVE_TO/HIDE
   // /WAIT are bridged (M4d box + M4q wait). The remaining overlay/window ops are
@@ -277,6 +277,11 @@ const BASE_CONSTS: Record<string, number> = {
   ".OVERLAY_IN_SPEED": -1, ".OVERLAY_TEXT_IN_SPEED": -1,
   ".OVERLAY_OUT_SPEED": -2, ".OVERLAY_TEXT_OUT_SPEED": -2,
   ".OVERLAY_SPEED_INSTANT": -3, ".MENU_CLOSED_Y": 0x12,
+  // Actor flags (vm.i, M10e): HIDDEN/ANIM_NOLOOP/COLLISION are honored; the
+  // others land in the mask and are ignored by the engine.
+  ".ACTOR_FLAG_PINNED": 0x01, ".ACTOR_FLAG_HIDDEN": 0x02,
+  ".ACTOR_FLAG_ANIM_NOLOOP": 0x04, ".ACTOR_FLAG_COLLISION": 0x08,
+  ".ACTOR_FLAG_PERSISTENT": 0x10,
   ".UI_COLOR_BLACK": 0, ".UI_COLOR_WHITE": 1,
   ".UI_DRAW_FRAME": 1, ".UI_AUTO_SCROLL": 2,
   // VM_OVERLAY_WAIT (M4q): modal flag + the wait-condition bitfield (vm.i).

@@ -74,6 +74,9 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x40: ["i16", "i16"], // ACTOR_GET_DIR ref, dest var
   0x41: ["i16", "u8"], // ACTOR_SET_ANIM_SET ref, global state index (M10c)
   0x42: ["i16", "u8"], // ACTOR_EMOTE ref, emote sprite index (M10d)
+  0x44: ["i16", "u8", "u8"], // ACTOR_SET_FLAGS ref, flags, mask (M10e)
+  0x45: ["i16", "u8"], // ACTOR_SET_COLL_ENABLED ref, enabled (M10e)
+  0x46: ["i16"], // ACTOR_MOVE_TO ref {ID,X,Y,ATTR} (blocking) (M10e)
   0x51: ["u8"], // SET_SPRITES_VISIBLE mode
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
