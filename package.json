@@ -26,6 +26,7 @@
     "missing-translations": "node src/lang/list_missing.js",
     "audit:music-web-l10n": "node src/apps/gbs-music-web/lang/auditMusicWebL10N.js",
     "make:cli": "webpack --config ./src/apps/gb-studio-cli/webpack.cli.config.js",
+    "gba:matrix": "node scripts/generate-gba-support-matrix.js",
     "start:music-web": "cross-env NODE_ENV=development webpack serve --config src/apps/gbs-music-web/webpack.music.web.config.js",
     "build:music-web": "cross-env NODE_ENV=production webpack --config src/apps/gbs-music-web/webpack.music.web.config.js",
     "start:cli": "env NO_TYPE_CHECKING=1 npm run make:cli && node out/cli/gb-studio-cli",
