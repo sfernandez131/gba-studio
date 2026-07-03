@@ -34,17 +34,10 @@
       }
     },
     {
-      "id": "abcdef01-0000-4000-8000-0000000000a2",
-      "command": "EVENT_ACTOR_HIDE",
-      "args": {
-        "actorId": "bbbbbbbb-0000-4000-8000-000000000001"
-      }
-    },
-    {
       "id": "abcdef01-0000-4000-8000-000000000060",
       "command": "EVENT_TEXT",
       "args": {
-        "text": "Speed 2 set.\nNPC hidden.",
+        "text": "Speed 2 set.\nNPC blocks the path.",
         "avatarId": ""
       }
     }
