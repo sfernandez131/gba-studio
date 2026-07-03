@@ -239,8 +239,8 @@ const isDevMode = !!process.execPath.match(/[\\/]electron/);
 // The GBA play window runs the mGBA WebAssembly core, whose threaded build
 // needs SharedArrayBuffer. The play window loads from file:// (no COOP/COEP
 // headers possible), so force-enable SAB for this app instead. Must be set
-// before app ready.
-app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
+// before app ready. (Optional chain: absent on the jest electron mock.)
+app.commandLine?.appendSwitch("enable-features", "SharedArrayBuffer");
 
 const validProjectExt = [".json", ".gbsproj"];
 
