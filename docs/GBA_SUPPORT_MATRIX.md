@@ -8,11 +8,11 @@ use, so this table is exact, not aspirational.
 | Category | Count |
 |---|---|
 | Encoded directly to a gbavm opcode | 77 |
-| Expanded to equivalent gbavm sequences | 17 |
+| Expanded to equivalent gbavm sequences | 18 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **95 / 156 (61%)** |
+| **Supported total** | **96 / 156 (62%)** |
 | Skipped with a warning (safe no-op) | 11 |
-| Unbridged (build fails on use) | 50 |
+| Unbridged (build fails on use) | 49 |
 
 ## Unbridged — the honest to-do list
 
@@ -21,7 +21,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | Macro |
 |---|
 | `VM_ACTOR_BEGIN_UPDATE` |
-| `VM_ACTOR_EMOTE` |
 | `VM_ACTOR_GET_ANIM_FRAME` |
 | `VM_ACTOR_MOVE_TO` |
 | `VM_ACTOR_REPLACE_TILE` |
@@ -179,6 +178,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 
 | Macro |
 |---|
+| `VM_ACTOR_EMOTE` |
 | `VM_FADE_IN` |
 | `VM_FADE_OUT` |
 | `VM_GET_INT8` |

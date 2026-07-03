@@ -174,6 +174,21 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     }
     return [{ kind: "op", op: 0x66, operands: [sfx] }];
   },
+  // Emotes (M10d): VM_ACTOR_EMOTE <actor-ref>, <bank>, _<emote.symbol> -> op 0x42
+  // [ref, emote]; the emote symbol resolves to the emitted sprite index via
+  // dataSymbols (bank dropped - GBA is flat). Drop the op if the emote wasn't
+  // emitted so the project still builds.
+  VM_ACTOR_EMOTE: (a, ev) => {
+    let refVal: number;
+    let emote: number;
+    try {
+      refVal = ev(a[0]);
+      emote = ev(a[2]) & 0xff;
+    } catch {
+      return null;
+    }
+    return [{ kind: "op", op: 0x42, operands: [refVal, emote] }];
+  },
   // VM_RET[_FAR][_N] -> opcode with explicit arg count (0 when omitted).
   VM_RET: (a, ev) => [{ kind: "op", op: 0x05, operands: [a.length ? ev(a[0]) : 0] }],
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
