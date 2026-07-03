@@ -293,6 +293,8 @@ const ejectGbaBuild = async ({
         x: Math.round(actor.x * unit),
         y: Math.round(actor.y * unit),
         interact,
+        // M10a: authored speed -> subpixels/frame (GB Studio speed 1 = 1px = 32).
+        moveSpeed: Math.max(1, Math.round((actor.moveSpeed ?? 1) * 32)),
       };
     });
     // Player (actor 0): if the scene has a player sprite, place it at the project
@@ -304,6 +306,7 @@ const ejectGbaBuild = async ({
         x: Math.round(settings.startX * 256),
         y: Math.round(settings.startY * 256),
         interact: "0",
+        moveSpeed: Math.max(1, Math.round((settings.startMoveSpeed ?? 1) * 32)),
       });
     }
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and

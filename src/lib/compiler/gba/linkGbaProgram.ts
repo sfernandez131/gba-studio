@@ -212,6 +212,7 @@ export interface GbaSceneEntry {
     x: number;
     y: number;
     interact: string;
+    moveSpeed: number; // M10a: subpixels/frame (32 = 1px); 0 = engine default
   }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
   collisions: number[]; // one byte per tile (row-major); empty = no collision grid
@@ -257,9 +258,12 @@ export function formatGbaScenesC(
     // when empty (C forbids zero-size arrays; the engine iterates by the count).
     const inits = s.actorsInit.length
       ? s.actorsInit
-          .map((a) => `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact} }`)
+          .map(
+            (a) =>
+              `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact}, ${a.moveSpeed} }`,
+          )
           .join(", ")
-      : "{ 0, 0, 0, 0, 0 }";
+      : "{ 0, 0, 0, 0, 0, 0 }";
     out.push(`static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`);
     // Collision grid (one byte/tile). Emit the array only when some tile is solid;
     // otherwise the scene gets a null grid and only its bounds block movement.
