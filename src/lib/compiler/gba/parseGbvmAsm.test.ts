@@ -193,6 +193,20 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(items).toEqual([{ kind: "op", op: 0x42, operands: [-1, 5] }]);
   });
 
+  test("M10e: bridges actor flags / collision toggle / single-op Move To", () => {
+    expect(
+      parseGbvmAsm(
+        "        VM_ACTOR_SET_FLAGS .ARG0, ^/(.ACTOR_FLAG_HIDDEN | .ACTOR_FLAG_ANIM_NOLOOP)/, .ACTOR_FLAG_ANIM_NOLOOP\n",
+      ).items,
+    ).toEqual([{ kind: "op", op: 0x44, operands: [-1, 6, 4] }]);
+    expect(
+      parseGbvmAsm("        VM_ACTOR_SET_COLL_ENABLED .ARG0, 1\n").items,
+    ).toEqual([{ kind: "op", op: 0x45, operands: [-1, 1] }]);
+    expect(parseGbvmAsm("        VM_ACTOR_MOVE_TO .ARG0\n").items).toEqual([
+      { kind: "op", op: 0x46, operands: [-1] },
+    ]);
+  });
+
   test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
     expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
       { kind: "op", op: 0x71, operands: [1, 8] },
