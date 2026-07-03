@@ -188,7 +188,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
   test("M10d: expands VM_ACTOR_EMOTE to op 0x42 resolving the emote data symbol", () => {
     const { items } = parseGbvmAsm(
       "        VM_ACTOR_EMOTE .ARG0, ___bank_emote_shock, _emote_shock\n",
-      { dataSymbols: { _emote_shock: 5 } },
+      { dataSymbols: { ["_emote_shock"]: 5 } },
     );
     expect(items).toEqual([{ kind: "op", op: 0x42, operands: [-1, 5] }]);
   });
