@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 76 |
+| Encoded directly to a gbavm opcode | 77 |
 | Expanded to equivalent gbavm sequences | 17 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **94 / 156 (60%)** |
-| Skipped with a warning (safe no-op) | 10 |
-| Unbridged (build fails on use) | 52 |
+| **Supported total** | **95 / 156 (61%)** |
+| Skipped with a warning (safe no-op) | 11 |
+| Unbridged (build fails on use) | 50 |
 
 ## Unbridged — the honest to-do list
 
@@ -27,11 +27,9 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_REPLACE_TILE` |
 | `VM_ACTOR_SET_ANIM` |
 | `VM_ACTOR_SET_ANIM_FRAME` |
-| `VM_ACTOR_SET_ANIM_SET` |
 | `VM_ACTOR_SET_ANIM_TICK` |
 | `VM_ACTOR_SET_BOUNDS` |
 | `VM_ACTOR_SET_COLL_ENABLED` |
-| `VM_ACTOR_SET_FLAGS` |
 | `VM_ACTOR_SET_SPRITESHEET` |
 | `VM_ACTOR_SET_SPRITESHEET_BY_REF` |
 | `VM_ACTOR_TERMINATE_UPDATE` |
@@ -79,6 +77,7 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 
 | Macro |
 |---|
+| `VM_ACTOR_SET_FLAGS` |
 | `VM_MUSIC_MUTE` |
 | `VM_OVERLAY_CLEAR` |
 | `VM_OVERLAY_SCROLL` |
@@ -109,6 +108,7 @@ One-to-one macro → gbavm opcode.
 | `VM_ACTOR_MOVE_TO_XY` |
 | `VM_ACTOR_MOVE_TO_Y` |
 | `VM_ACTOR_SET_ANIM_MOVING` |
+| `VM_ACTOR_SET_ANIM_SET` |
 | `VM_ACTOR_SET_DIR` |
 | `VM_ACTOR_SET_HIDDEN` |
 | `VM_ACTOR_SET_MOVE_SPEED` |

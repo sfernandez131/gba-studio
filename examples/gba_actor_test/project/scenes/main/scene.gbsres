@@ -34,17 +34,19 @@
       }
     },
     {
-      "id": "abcdef01-0000-4000-8000-0000000000a2",
-      "command": "EVENT_ACTOR_HIDE",
+      "id": "abcdef01-0000-4000-8000-0000000000a3",
+      "command": "EVENT_ACTOR_SET_STATE",
       "args": {
-        "actorId": "bbbbbbbb-0000-4000-8000-000000000001"
+        "actorId": "player",
+        "spriteStateId": "Attack",
+        "loopAnim": true
       }
     },
     {
       "id": "abcdef01-0000-4000-8000-000000000060",
       "command": "EVENT_TEXT",
       "args": {
-        "text": "Speed 2 set.\nNPC hidden.",
+        "text": "Attack state set.\nPlayer animates in place.",
         "avatarId": ""
       }
     }
