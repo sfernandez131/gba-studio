@@ -185,6 +185,14 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(items).toEqual([{ kind: "op", op: 0x41, operands: [-1, 2] }]);
   });
 
+  test("M10d: expands VM_ACTOR_EMOTE to op 0x42 resolving the emote data symbol", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_ACTOR_EMOTE .ARG0, ___bank_emote_shock, _emote_shock\n",
+      { dataSymbols: { ["_emote_shock"]: 5 } },
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x42, operands: [-1, 5] }]);
+  });
+
   test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
     expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
       { kind: "op", op: 0x71, operands: [1, 8] },

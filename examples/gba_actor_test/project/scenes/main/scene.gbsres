@@ -43,10 +43,18 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000a4",
+      "command": "EVENT_ACTOR_EMOTE",
+      "args": {
+        "actorId": "player",
+        "emoteId": "56423c9c-dca0-4f5b-ad92-28e9660d50f1"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-000000000060",
       "command": "EVENT_TEXT",
       "args": {
-        "text": "Attack state set.\nPlayer animates in place.",
+        "text": "Emote + attack state.",
         "avatarId": ""
       }
     }
