@@ -165,6 +165,18 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(cos).toEqual([{ kind: "op", op: 0x8a, operands: [-1, -2, 5] }]);
   });
 
+  test("M10a: bridges VM_ACTOR_SET_MOVE_SPEED / SET_HIDDEN / GET_DIR to ops 0x3e / 0x3f / 0x40", () => {
+    expect(
+      parseGbvmAsm("        VM_ACTOR_SET_MOVE_SPEED .ARG0, 64\n").items,
+    ).toEqual([{ kind: "op", op: 0x3e, operands: [-1, 64] }]);
+    expect(parseGbvmAsm("        VM_ACTOR_SET_HIDDEN .ARG0, 1\n").items).toEqual(
+      [{ kind: "op", op: 0x3f, operands: [-1, 1] }],
+    );
+    expect(
+      parseGbvmAsm("        VM_ACTOR_GET_DIR .ARG1, .ARG0\n").items,
+    ).toEqual([{ kind: "op", op: 0x40, operands: [-2, -1] }]);
+  });
+
   test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
     expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
       { kind: "op", op: 0x71, operands: [1, 8] },

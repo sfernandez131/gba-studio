@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 73 |
+| Encoded directly to a gbavm opcode | 76 |
 | Expanded to equivalent gbavm sequences | 17 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **91 / 156 (58%)** |
+| **Supported total** | **94 / 156 (60%)** |
 | Skipped with a warning (safe no-op) | 10 |
-| Unbridged (build fails on use) | 55 |
+| Unbridged (build fails on use) | 52 |
 
 ## Unbridged — the honest to-do list
 
@@ -23,7 +23,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_BEGIN_UPDATE` |
 | `VM_ACTOR_EMOTE` |
 | `VM_ACTOR_GET_ANIM_FRAME` |
-| `VM_ACTOR_GET_DIR` |
 | `VM_ACTOR_MOVE_TO` |
 | `VM_ACTOR_REPLACE_TILE` |
 | `VM_ACTOR_SET_ANIM` |
@@ -33,8 +32,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_SET_BOUNDS` |
 | `VM_ACTOR_SET_COLL_ENABLED` |
 | `VM_ACTOR_SET_FLAGS` |
-| `VM_ACTOR_SET_HIDDEN` |
-| `VM_ACTOR_SET_MOVE_SPEED` |
 | `VM_ACTOR_SET_SPRITESHEET` |
 | `VM_ACTOR_SET_SPRITESHEET_BY_REF` |
 | `VM_ACTOR_TERMINATE_UPDATE` |
@@ -102,6 +99,7 @@ One-to-one macro → gbavm opcode.
 | `VM_ACTOR_ACTIVATE` |
 | `VM_ACTOR_DEACTIVATE` |
 | `VM_ACTOR_GET_ANGLE` |
+| `VM_ACTOR_GET_DIR` |
 | `VM_ACTOR_GET_POS` |
 | `VM_ACTOR_MOVE_CANCEL` |
 | `VM_ACTOR_MOVE_TO_INIT` |
@@ -112,6 +110,8 @@ One-to-one macro → gbavm opcode.
 | `VM_ACTOR_MOVE_TO_Y` |
 | `VM_ACTOR_SET_ANIM_MOVING` |
 | `VM_ACTOR_SET_DIR` |
+| `VM_ACTOR_SET_HIDDEN` |
+| `VM_ACTOR_SET_MOVE_SPEED` |
 | `VM_ACTOR_SET_POS` |
 | `VM_BEGINTHREAD` |
 | `VM_CALL` |
