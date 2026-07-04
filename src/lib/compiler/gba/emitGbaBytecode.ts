@@ -260,7 +260,8 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
       continue;
     }
     const spec = GBA_OPCODE_SPECS[item.op];
-    if (!spec) throw new Error(`No GBA encoding for opcode 0x${item.op.toString(16)}`);
+    if (!spec)
+      throw new Error(`No GBA encoding for opcode 0x${item.op.toString(16)}`);
     push8(item.op);
     spec.forEach((t, i) => {
       const operand = item.operands[i];
@@ -279,7 +280,11 @@ export function emitGbaBytecode(items: GbaItem[]): GbaProgram {
           // VM_CALL_NATIVE), or far data (VM_GET_FAR) — not a label in this blob.
           // Record it as a symbolic relocation; the project linker (linkGbaProgram)
           // resolves it to a `&symbol` field the engine patches in at load.
-          symRelocs.push({ at: bytes.length, symbol: operand.label, kind: "code" });
+          symRelocs.push({
+            at: bytes.length,
+            symbol: operand.label,
+            kind: "code",
+          });
         } else {
           throw new Error(`Unknown label "${operand.label}"`);
         }

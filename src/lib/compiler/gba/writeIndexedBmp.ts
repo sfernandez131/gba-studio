@@ -18,7 +18,8 @@ export interface IndexedSource {
   data: Uint8Array | number[]; // one palette index (0..15) per pixel, top-down row-major
 }
 
-const ceilTo = (v: number, m: number): number => Math.max(m, Math.ceil(v / m) * m);
+const ceilTo = (v: number, m: number): number =>
+  Math.max(m, Math.ceil(v / m) * m);
 
 /**
  * Encode an indexed image as an 8bpp BMP (16-colour palette), centred on a
@@ -40,7 +41,8 @@ export function indexedImageToBmp(
   const canvas = new Uint8Array(canvasW * canvasH);
   for (let y = 0; y < src.height; y++) {
     for (let x = 0; x < src.width; x++) {
-      canvas[(offY + y) * canvasW + (offX + x)] = src.data[y * src.width + x] & 0x0f;
+      canvas[(offY + y) * canvasW + (offX + x)] =
+        src.data[y * src.width + x] & 0x0f;
     }
   }
 

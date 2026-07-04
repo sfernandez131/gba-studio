@@ -11,12 +11,20 @@ import { emitGbaBytecode, formatGbaProgramC, GbaItem } from "./emitGbaBytecode";
 // RPN: g2 = min(g2 + 4, 0x0A00). Moves the actor right 4 subpx/frame, clamping at
 // x = 160px so a screenshot is timing-independent. Raw stream (no leading 0x15).
 const RPN_MOVE_RIGHT_CLAMPED = [
-  0xfd, 0x02, 0x00, // REF   g2
-  0xfe, 0x04, 0x00, // INT16 4
+  0xfd,
+  0x02,
+  0x00, // REF   g2
+  0xfe,
+  0x04,
+  0x00, // INT16 4
   0x0a, //             ADD
-  0xfe, 0x00, 0x0a, // INT16 0x0A00 (160px*16)
+  0xfe,
+  0x00,
+  0x0a, // INT16 0x0A00 (160px*16)
   0x14, //             MIN (clamp)
-  0xfb, 0x02, 0x00, // REF_SET g2
+  0xfb,
+  0x02,
+  0x00, // REF_SET g2
   0x00, //             end
 ];
 

@@ -14,12 +14,7 @@ import { getROMFilename } from "shared/lib/helpers/filePaths";
 
 declare const VERSION: string;
 
-type Command =
-  | "export"
-  | "make:rom"
-  | "make:pocket"
-  | "make:web"
-  | "make:gba";
+type Command = "export" | "make:rom" | "make:pocket" | "make:web" | "make:gba";
 
 const buildTypeForCommand = (command: Command): BuildType => {
   if (command === "make:web") {

@@ -41,7 +41,10 @@ let cancelling = false;
 const toUnixPath = (p: string): string =>
   p
     .replace(/\\/g, "/")
-    .replace(/^([A-Za-z]):\//, (_m, drive: string) => `/${drive.toLowerCase()}/`);
+    .replace(
+      /^([A-Za-z]):\//,
+      (_m, drive: string) => `/${drive.toLowerCase()}/`,
+    );
 
 // Locate a Wonderful Toolchain install. On Windows it lives inside an MSYS2
 // tree at <msys2>/opt/wonderful (WONDERFUL_MSYS2 or C:/msys64); on Unix at
@@ -126,7 +129,8 @@ const makeGbaBuild = async ({
     // shell (-l) then sources the profile that exports DEVKITPRO/DEVKITARM and
     // puts make + toolchain on PATH.
     toolchainName = "devkitARM";
-    const dkpWin = envDkp && /^[A-Za-z]:/.test(envDkp) ? envDkp : "C:/devkitPro";
+    const dkpWin =
+      envDkp && /^[A-Za-z]:/.test(envDkp) ? envDkp : "C:/devkitPro";
     const bash = `${dkpWin}/msys2/usr/bin/bash.exe`;
     if (!(await pathExists(bash))) {
       throw new Error(

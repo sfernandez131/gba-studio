@@ -11,7 +11,14 @@
 // happens in the gbavm engine tree (gbaEngineRoot); an isolated/vendored build
 // dir is a later packaging concern.
 
-import { writeFile, readFile, ensureDir, pathExists, readdir, remove } from "fs-extra";
+import {
+  writeFile,
+  readFile,
+  ensureDir,
+  pathExists,
+  readdir,
+  remove,
+} from "fs-extra";
 import Path from "path";
 import { PNG } from "pngjs";
 import { gbaEngineRoot } from "consts";
@@ -429,7 +436,10 @@ const ejectGbaBuild = async ({
         `native/engine/far-data linking lands in a later milestone`,
     );
   }
-  await writeFile(Path.join(gbaEngineRoot, "src", "gba_program.c"), linked.source);
+  await writeFile(
+    Path.join(gbaEngineRoot, "src", "gba_program.c"),
+    linked.source,
+  );
   await writeFile(
     Path.join(gbaEngineRoot, "src", "gba_scenes.c"),
     formatGbaScenesC(sceneEntries, startSceneIndex),
@@ -486,7 +496,9 @@ const ejectGbaBuild = async ({
       data[i] = idx;
     }
     if (clamped) {
-      warnings(`GBA: "${Path.basename(file)}" has >255 colours; extras clamped`);
+      warnings(
+        `GBA: "${Path.basename(file)}" has >255 colours; extras clamped`,
+      );
     }
     return { img: { width: png.width, height: png.height, data }, palette };
   };
@@ -642,7 +654,9 @@ const ejectGbaBuild = async ({
     spriteTables.push(`static const GbaActorSprite scene${s}_sprites[] = {`);
     spriteTables.push(...rows);
     spriteTables.push("};");
-    spriteTables.push(`static const int scene${s}_sprites_count = ${maxIndex + 1};`);
+    spriteTables.push(
+      `static const int scene${s}_sprites_count = ${maxIndex + 1};`,
+    );
     spriteCases.push(
       `        case ${s}: return (actorIdx >= 0 && actorIdx < scene${s}_sprites_count) ? ` +
         `&scene${s}_sprites[actorIdx] : nullptr;`,
@@ -843,7 +857,9 @@ const ejectGbaBuild = async ({
         let maxX = -1;
         for (let y = 0; y < FONT_GH; y++) {
           for (let x = 0; x < 8; x++) {
-            if (fontImg.data[(row * FONT_GH + y) * fontImg.width + (col * 8 + x)]) {
+            if (
+              fontImg.data[(row * FONT_GH + y) * fontImg.width + (col * 8 + x)]
+            ) {
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
             }
@@ -963,7 +979,10 @@ const ejectGbaBuild = async ({
   // The built .gba is collected here by makeGbaBuild (mirrors build/rom for GBDK).
   await ensureDir(Path.join(outputRoot, "build", "gba"));
 
-  const totalBytes = linked.procs.reduce((n, p) => n + p.program.bytes.length, 0);
+  const totalBytes = linked.procs.reduce(
+    (n, p) => n + p.program.bytes.length,
+    0,
+  );
   progress(
     `GBA link: ${linked.procs.length} proc(s)/${totalBytes}b across ` +
       `${sceneEntries.length} scene(s) (start index ${startSceneIndex}), ` +

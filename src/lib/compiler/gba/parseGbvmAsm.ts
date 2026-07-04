@@ -162,7 +162,13 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     } catch {
       return null;
     }
-    return [{ kind: "op", op: 0x60, operands: [track, a.length > 2 ? ev(a[2]) & 0xff : 0] }];
+    return [
+      {
+        kind: "op",
+        op: 0x60,
+        operands: [track, a.length > 2 ? ev(a[2]) & 0xff : 0],
+      },
+    ];
   },
   VM_MUSIC_STOP: () => [{ kind: "op", op: 0x61, operands: [] }],
   // Sound effects (M5b): VM_SFX_PLAY <bank>, _<sym>, <mute_mask>, <prio> -> op 0x66
@@ -194,23 +200,35 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     return [{ kind: "op", op: 0x42, operands: [refVal, emote] }];
   },
   // VM_RET[_FAR][_N] -> opcode with explicit arg count (0 when omitted).
-  VM_RET: (a, ev) => [{ kind: "op", op: 0x05, operands: [a.length ? ev(a[0]) : 0] }],
+  VM_RET: (a, ev) => [
+    { kind: "op", op: 0x05, operands: [a.length ? ev(a[0]) : 0] },
+  ],
   VM_RET_N: (a, ev) => [{ kind: "op", op: 0x05, operands: [ev(a[0])] }],
-  VM_RET_FAR: (a, ev) => [{ kind: "op", op: 0x0b, operands: [a.length ? ev(a[0]) : 0] }],
+  VM_RET_FAR: (a, ev) => [
+    { kind: "op", op: 0x0b, operands: [a.length ? ev(a[0]) : 0] },
+  ],
   VM_RET_FAR_N: (a, ev) => [{ kind: "op", op: 0x0b, operands: [ev(a[0])] }],
   // Engine-symbol writes -> an RPN raw-memory write to the symbol's address (mirrors
   // vm.i). ADDR is arg 0, the value/source is arg 1. The 32-bit address is a "ram"
   // symbolic relocation the linker resolves to the engine var it allocates.
   // VM_SET_CONST_*: write a constant.  VM_SET_*: write VM variable IDXA's value.
-  VM_SET_CONST_INT8: (a, ev) => [memSetItem(MEM_I8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev)],
-  VM_SET_CONST_UINT8: (a, ev) => [memSetItem(MEM_U8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev)],
+  VM_SET_CONST_INT8: (a, ev) => [
+    memSetItem(MEM_I8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev),
+  ],
+  VM_SET_CONST_UINT8: (a, ev) => [
+    memSetItem(MEM_U8, [RPN_INT8, ev(a[1]) & 0xff], a[0], ev),
+  ],
   VM_SET_CONST_INT16: (a, ev) => {
     const v = ev(a[1]);
-    return [memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev)];
+    return [
+      memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev),
+    ];
   },
   VM_SET_CONST_UINT16: (a, ev) => {
     const v = ev(a[1]);
-    return [memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev)];
+    return [
+      memSetItem(MEM_I16, [RPN_INT16, v & 0xff, (v >> 8) & 0xff], a[0], ev),
+    ];
   },
   VM_SET_INT8: (a, ev) => {
     const i = ev(a[1]);
@@ -222,11 +240,15 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   },
   VM_SET_INT16: (a, ev) => {
     const i = ev(a[1]);
-    return [memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+    return [
+      memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev),
+    ];
   },
   VM_SET_UINT16: (a, ev) => {
     const i = ev(a[1]);
-    return [memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev)];
+    return [
+      memSetItem(MEM_I16, [RPN_REF, i & 0xff, (i >> 8) & 0xff], a[0], ev),
+    ];
   },
 };
 
@@ -260,62 +282,136 @@ const SKIP_MACROS = new Set<string>([
 // in the .s are layered on top of these.
 const BASE_CONSTS: Record<string, number> = {
   // sprite mode
-  ".MODE_8X8": 0, ".MODE_8X16": 1,
+  ".MODE_8X8": 0,
+  ".MODE_8X16": 1,
   // VM_GET_FAR object size
-  ".GET_BYTE": 0, ".GET_WORD": 1,
+  ".GET_BYTE": 0,
+  ".GET_WORD": 1,
   // directions
-  ".DIR_DOWN": 0, ".DIR_RIGHT": 1, ".DIR_UP": 2, ".DIR_LEFT": 3,
+  ".DIR_DOWN": 0,
+  ".DIR_RIGHT": 1,
+  ".DIR_UP": 2,
+  ".DIR_LEFT": 3,
   // actor move-to attribute flags (gbavm ignores collision/axis bits - it uses the
   // emitted op sequence - but the operand must still evaluate to a byte).
-  ".ACTOR_ATTR_CHECK_COLL": 0x01, ".ACTOR_ATTR_H_FIRST": 0x02, ".ACTOR_ATTR_DIAGONAL": 0x04,
-  ".ACTOR_ATTR_CHECK_COLL_WALLS": 0x08, ".ACTOR_ATTR_CHECK_COLL_ACTORS": 0x10,
-  ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x20, ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x40,
+  ".ACTOR_ATTR_CHECK_COLL": 0x01,
+  ".ACTOR_ATTR_H_FIRST": 0x02,
+  ".ACTOR_ATTR_DIAGONAL": 0x04,
+  ".ACTOR_ATTR_CHECK_COLL_WALLS": 0x08,
+  ".ACTOR_ATTR_CHECK_COLL_ACTORS": 0x10,
+  ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x20,
+  ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x40,
   // fade
-  ".FADE_OUT": 0x00, ".FADE_IN": 0x02, ".FADE_MODAL": 0x01, ".FADE_NONMODAL": 0x00,
+  ".FADE_OUT": 0x00,
+  ".FADE_IN": 0x02,
+  ".FADE_MODAL": 0x01,
+  ".FADE_NONMODAL": 0x00,
   // dialogue overlay window box (M4d). MOVE_TO/SHOW speeds are negative sentinels;
   // the engine reads them as int8 (-1 slide in, -2 slide out, -3 instant).
-  ".OVERLAY_IN_SPEED": -1, ".OVERLAY_TEXT_IN_SPEED": -1,
-  ".OVERLAY_OUT_SPEED": -2, ".OVERLAY_TEXT_OUT_SPEED": -2,
-  ".OVERLAY_SPEED_INSTANT": -3, ".MENU_CLOSED_Y": 0x12,
+  ".OVERLAY_IN_SPEED": -1,
+  ".OVERLAY_TEXT_IN_SPEED": -1,
+  ".OVERLAY_OUT_SPEED": -2,
+  ".OVERLAY_TEXT_OUT_SPEED": -2,
+  ".OVERLAY_SPEED_INSTANT": -3,
+  ".MENU_CLOSED_Y": 0x12,
   // Actor flags (vm.i, M10e): HIDDEN/ANIM_NOLOOP/COLLISION are honored; the
   // others land in the mask and are ignored by the engine.
-  ".ACTOR_FLAG_PINNED": 0x01, ".ACTOR_FLAG_HIDDEN": 0x02,
-  ".ACTOR_FLAG_ANIM_NOLOOP": 0x04, ".ACTOR_FLAG_COLLISION": 0x08,
+  ".ACTOR_FLAG_PINNED": 0x01,
+  ".ACTOR_FLAG_HIDDEN": 0x02,
+  ".ACTOR_FLAG_ANIM_NOLOOP": 0x04,
+  ".ACTOR_FLAG_COLLISION": 0x08,
   ".ACTOR_FLAG_PERSISTENT": 0x10,
-  ".UI_COLOR_BLACK": 0, ".UI_COLOR_WHITE": 1,
-  ".UI_DRAW_FRAME": 1, ".UI_AUTO_SCROLL": 2,
+  ".UI_COLOR_BLACK": 0,
+  ".UI_COLOR_WHITE": 1,
+  ".UI_DRAW_FRAME": 1,
+  ".UI_AUTO_SCROLL": 2,
   // VM_OVERLAY_WAIT (M4q): modal flag + the wait-condition bitfield (vm.i).
-  ".UI_NONMODAL": 0, ".UI_MODAL": 1, ".UI_WAIT_NONE": 0,
-  ".UI_WAIT_WINDOW": 1, ".UI_WAIT_TEXT": 2, ".UI_WAIT_BTN_A": 4,
-  ".UI_WAIT_BTN_B": 8, ".UI_WAIT_BTN_ANY": 16,
+  ".UI_NONMODAL": 0,
+  ".UI_MODAL": 1,
+  ".UI_WAIT_NONE": 0,
+  ".UI_WAIT_WINDOW": 1,
+  ".UI_WAIT_TEXT": 2,
+  ".UI_WAIT_BTN_A": 4,
+  ".UI_WAIT_BTN_B": 8,
+  ".UI_WAIT_BTN_ANY": 16,
   // VM_DISPLAY_TEXT_EX (M4q): display flags + tile.
-  ".DISPLAY_DEFAULT": 0, ".DISPLAY_PRESERVE_POS": 1, ".TEXT_TILE_CONTINUE": 0xff,
+  ".DISPLAY_DEFAULT": 0,
+  ".DISPLAY_PRESERVE_POS": 1,
+  ".TEXT_TILE_CONTINUE": 0xff,
   // VM_MUSIC_PLAY loop flag (M5a).
-  ".MUSIC_NO_LOOP": 0, ".MUSIC_LOOP": 1,
+  ".MUSIC_NO_LOOP": 0,
+  ".MUSIC_LOOP": 1,
   // Camera shake axis flags (M6h). The Camera Shake event writes these to the shake-
   // settings global; gbavm's shake is a fixed horizontal jitter, so the value only needs
   // to resolve (it lands in an allocated engine var the engine ignores).
-  ".CAMERA_SHAKE_X": 1, ".CAMERA_SHAKE_Y": 2,
+  ".CAMERA_SHAKE_X": 1,
+  ".CAMERA_SHAKE_Y": 2,
   // VM_RAISE exception codes (vm_exceptions.h)
-  EXCEPTION_RESET: 1, EXCEPTION_CHANGE_SCENE: 2, EXCEPTION_SAVE: 3,
-  EXCEPTION_LOAD: 4, EXCEPTION_TERMINATE: 5,
+  EXCEPTION_RESET: 1,
+  EXCEPTION_CHANGE_SCENE: 2,
+  EXCEPTION_SAVE: 3,
+  EXCEPTION_LOAD: 4,
+  EXCEPTION_TERMINATE: 5,
   // camera lock flags (written to _camera_settings)
-  ".CAMERA_LOCK": 0x03, ".CAMERA_LOCK_X": 0x01, ".CAMERA_LOCK_Y": 0x02,
-  ".CAMERA_UNLOCK": 0x00, ".CAMERA_LOCK_X_MIN": 0x04, ".CAMERA_LOCK_X_MAX": 0x08,
-  ".CAMERA_LOCK_Y_MIN": 0x10, ".CAMERA_LOCK_Y_MAX": 0x20,
+  ".CAMERA_LOCK": 0x03,
+  ".CAMERA_LOCK_X": 0x01,
+  ".CAMERA_LOCK_Y": 0x02,
+  ".CAMERA_UNLOCK": 0x00,
+  ".CAMERA_LOCK_X_MIN": 0x04,
+  ".CAMERA_LOCK_X_MAX": 0x08,
+  ".CAMERA_LOCK_Y_MIN": 0x10,
+  ".CAMERA_LOCK_Y_MAX": 0x20,
   // if / rpn conditions
-  ".EQ": 1, ".LT": 2, ".LTE": 3, ".GT": 4, ".GTE": 5, ".NE": 6,
+  ".EQ": 1,
+  ".LT": 2,
+  ".LTE": 3,
+  ".GT": 4,
+  ".GTE": 5,
+  ".NE": 6,
   // rpn operators
-  ".AND": 7, ".OR": 8, ".NOT": 9, ".ADD": 10, ".SUB": 11, ".MUL": 12, ".DIV": 13,
-  ".MOD": 14, ".B_AND": 15, ".B_OR": 16, ".B_XOR": 17, ".SHL": 18, ".SHR": 19,
-  ".MIN": 20, ".MAX": 21, ".ATAN2": 22, ".ABS": 23, ".B_NOT": 24, ".NEG": 25,
-  ".ISQRT": 26, ".RND": 27,
+  ".AND": 7,
+  ".OR": 8,
+  ".NOT": 9,
+  ".ADD": 10,
+  ".SUB": 11,
+  ".MUL": 12,
+  ".DIV": 13,
+  ".MOD": 14,
+  ".B_AND": 15,
+  ".B_OR": 16,
+  ".B_XOR": 17,
+  ".SHL": 18,
+  ".SHR": 19,
+  ".MIN": 20,
+  ".MAX": 21,
+  ".ATAN2": 22,
+  ".ABS": 23,
+  ".B_NOT": 24,
+  ".NEG": 25,
+  ".ISQRT": 26,
+  ".RND": 27,
   // rpn memory-access type tags (char codes) - only needed if REF_MEM is supported
-  ".MEM_I8": 0x69, ".MEM_U8": 0x75, ".MEM_I16": 0x49,
+  ".MEM_I8": 0x69,
+  ".MEM_U8": 0x75,
+  ".MEM_I16": 0x49,
   // stack-arg aliases (vm.i: .ARG0 = -1 .. .ARG16 = -17)
-  ".ARG0": -1, ".ARG1": -2, ".ARG2": -3, ".ARG3": -4, ".ARG4": -5, ".ARG5": -6,
-  ".ARG6": -7, ".ARG7": -8, ".ARG8": -9, ".ARG9": -10, ".ARG10": -11, ".ARG11": -12,
-  ".ARG12": -13, ".ARG13": -14, ".ARG14": -15, ".ARG15": -16, ".ARG16": -17,
+  ".ARG0": -1,
+  ".ARG1": -2,
+  ".ARG2": -3,
+  ".ARG3": -4,
+  ".ARG4": -5,
+  ".ARG5": -6,
+  ".ARG6": -7,
+  ".ARG7": -8,
+  ".ARG8": -9,
+  ".ARG9": -10,
+  ".ARG10": -11,
+  ".ARG11": -12,
+  ".ARG12": -13,
+  ".ARG13": -14,
+  ".ARG14": -15,
+  ".ARG15": -16,
+  ".ARG16": -17,
 };
 
 // RPN sub-instruction (.R_*) opcode bytes (signed VM_OP_* values as unsigned bytes).
@@ -401,7 +497,12 @@ const stripComment = (line: string): string => {
 // Split a macro argument list on top-level commas (parentheses may nest, but the
 // GBVM macros we read never put a comma inside an expression).
 const splitArgs = (s: string): string[] =>
-  s.trim() === "" ? [] : s.split(",").map((a) => a.trim()).filter((a) => a !== "");
+  s.trim() === ""
+    ? []
+    : s
+        .split(",")
+        .map((a) => a.trim())
+        .filter((a) => a !== "");
 
 // GB Studio text control codes (low bytes embedded in the string) and how many
 // parameter bytes each one carries (see scriptBuilder/helpers.ts textCode*): set
@@ -409,7 +510,11 @@ const splitArgs = (s: string): string[] =>
 // \006<mask>. We must skip a code AND its params together so a param byte that
 // happens to fall in the printable range doesn't leak out as a glyph.
 const TEXT_CODE_PARAMS: Record<number, number> = {
-  0x01: 1, 0x02: 1, 0x03: 2, 0x04: 2, 0x06: 1,
+  0x01: 1,
+  0x02: 1,
+  0x03: 2,
+  0x04: 2,
+  0x06: 1,
 };
 
 // GB Studio bakes a dialogue avatar into the text as a fixed 16-byte font-glyph code
@@ -423,11 +528,18 @@ const AVATAR_CODE_LEN = 16;
 const detectAvatar = (bytes: number[]): number => {
   if (
     bytes.length >= AVATAR_CODE_LEN &&
-    bytes[0] === 0x01 && bytes[1] === 0x01 && bytes[2] === 0x02 &&
-    bytes[4] >= 0x40 && bytes[6] === 0x0a &&
-    bytes[9] === 0x01 && bytes[10] === 0x03 && bytes[11] === 0x04 &&
-    bytes[12] === 0x01 && bytes[13] === 0xff &&
-    bytes[14] === 0x02 && bytes[15] === 0x01
+    bytes[0] === 0x01 &&
+    bytes[1] === 0x01 &&
+    bytes[2] === 0x02 &&
+    bytes[4] >= 0x40 &&
+    bytes[6] === 0x0a &&
+    bytes[9] === 0x01 &&
+    bytes[10] === 0x03 &&
+    bytes[11] === 0x04 &&
+    bytes[12] === 0x01 &&
+    bytes[13] === 0xff &&
+    bytes[14] === 0x02 &&
+    bytes[15] === 0x01
   ) {
     return Math.floor((bytes[4] - 64) / 4);
   }
@@ -456,7 +568,12 @@ const parseAsciz = (line: string, avatarOut?: { index: number }): number[] => {
       if (next >= "0" && next <= "7") {
         let oct = "";
         let j = i + 1;
-        while (j < raw.length && raw[j] >= "0" && raw[j] <= "7" && oct.length < 3) {
+        while (
+          j < raw.length &&
+          raw[j] >= "0" &&
+          raw[j] <= "7" &&
+          oct.length < 3
+        ) {
           oct += raw[j];
           j++;
         }
@@ -477,8 +594,10 @@ const parseAsciz = (line: string, avatarOut?: { index: number }): number[] => {
   const out: number[] = [];
   for (let i = startAt; i < bytes.length; i++) {
     const code = bytes[i];
-    if (code === 0x0a) out.push(0x0a); // newline (multi-line dialogue)
-    else if (code >= 0x20 && code <= 0x7e) out.push(code); // printable
+    if (code === 0x0a)
+      out.push(0x0a); // newline (multi-line dialogue)
+    else if (code >= 0x20 && code <= 0x7e)
+      out.push(code); // printable
     else if (code === 0x01) {
       // set-speed: keep inline (code + 1 param byte) so the engine can vary the
       // typewriter rate; the engine skips these bytes when rendering glyphs.
@@ -521,12 +640,17 @@ function makeEvaluator(consts: Record<string, number>) {
     }
     // eslint-disable-next-line no-new-func
     const v = Function(`"use strict";return (${s});`)() as number;
-    if (!Number.isFinite(v)) throw new Error(`Expression "${raw}" did not evaluate to a number`);
+    if (!Number.isFinite(v))
+      throw new Error(`Expression "${raw}" did not evaluate to a number`);
     return v | 0;
   };
 }
 
-const encodeRpnRef = (op: number, idx: number): number[] => [op, idx & 0xff, (idx >> 8) & 0xff];
+const encodeRpnRef = (op: number, idx: number): number[] => [
+  op,
+  idx & 0xff,
+  (idx >> 8) & 0xff,
+];
 
 /**
  * Parse one RPN block body (the lines between `VM_RPN` and `.R_STOP`) into the raw
@@ -541,14 +665,32 @@ function parseRpnLine(
   relocs: RpnReloc[],
 ): boolean {
   switch (mnemonic) {
-    case ".R_INT8": out.push(RPN_INT8, ev(args[0]) & 0xff); return false;
-    case ".R_INT16": { const v = ev(args[0]); out.push(RPN_INT16, v & 0xff, (v >> 8) & 0xff); return false; }
-    case ".R_REF": out.push(...encodeRpnRef(RPN_REF, ev(args[0]))); return false;
-    case ".R_REF_IND": out.push(...encodeRpnRef(RPN_REF_IND, ev(args[0]))); return false;
-    case ".R_REF_SET": out.push(...encodeRpnRef(RPN_REF_SET, ev(args[0]))); return false;
-    case ".R_REF_SET_IND": out.push(...encodeRpnRef(RPN_REF_SET_IND, ev(args[0]))); return false;
-    case ".R_OPERATOR": out.push(ev(args[0]) & 0xff); return false;
-    case ".R_STOP": out.push(RPN_STOP); return true; // block complete
+    case ".R_INT8":
+      out.push(RPN_INT8, ev(args[0]) & 0xff);
+      return false;
+    case ".R_INT16": {
+      const v = ev(args[0]);
+      out.push(RPN_INT16, v & 0xff, (v >> 8) & 0xff);
+      return false;
+    }
+    case ".R_REF":
+      out.push(...encodeRpnRef(RPN_REF, ev(args[0])));
+      return false;
+    case ".R_REF_IND":
+      out.push(...encodeRpnRef(RPN_REF_IND, ev(args[0])));
+      return false;
+    case ".R_REF_SET":
+      out.push(...encodeRpnRef(RPN_REF_SET, ev(args[0])));
+      return false;
+    case ".R_REF_SET_IND":
+      out.push(...encodeRpnRef(RPN_REF_SET_IND, ev(args[0])));
+      return false;
+    case ".R_OPERATOR":
+      out.push(ev(args[0]) & 0xff);
+      return false;
+    case ".R_STOP":
+      out.push(RPN_STOP);
+      return true; // block complete
     // Raw-memory ops: `.R_REF_MEM* TYPE, ADDR` -> opcode + type tag + 32-bit ADDR
     // (an engine-symbol relocation, the GBA-specific part).
     case ".R_REF_MEM_SET":
@@ -633,13 +775,11 @@ export function parseGbvmAsm(
   let rpnBytes: number[] = [];
   let rpnRelocs: RpnReloc[] = [];
   // VM_SWITCH accumulates the ".dw value, label" case table that follows it.
-  let pendingSwitch:
-    | {
-        operands: [number, number, number];
-        size: number;
-        cases: { value: number; target: { label: string } }[];
-      }
-    | null = null;
+  let pendingSwitch: {
+    operands: [number, number, number];
+    size: number;
+    cases: { value: number; target: { label: string } }[];
+  } | null = null;
   // VM_RAISE EXCEPTION_CHANGE_SCENE is followed by an IMPORT_FAR_PTR_DATA scene
   // pointer; this flag bridges that pair into a 2-byte scene index.
   let pendingSceneChange = false;
@@ -669,7 +809,10 @@ export function parseGbvmAsm(
     if (entrySymbol !== undefined) {
       const lbl = line.match(/^([A-Za-z_][\w]*)::?$/);
       if (lbl) {
-        if (lbl[1] === entrySymbol) { active = true; continue; }
+        if (lbl[1] === entrySymbol) {
+          active = true;
+          continue;
+        }
         if (active) break; // reached the following routine
       }
       if (!active) continue;
@@ -746,15 +889,27 @@ export function parseGbvmAsm(
       continue;
     }
 
-    if (mnemonic === "VM_RPN") { inRpn = true; rpnBytes = []; rpnRelocs = []; continue; }
-    if (mnemonic === "VM_STOP") { items.push({ kind: "stop" }); continue; }
+    if (mnemonic === "VM_RPN") {
+      inRpn = true;
+      rpnBytes = [];
+      rpnRelocs = [];
+      continue;
+    }
+    if (mnemonic === "VM_STOP") {
+      items.push({ kind: "stop" });
+      continue;
+    }
     if (mnemonic === "VM_SWITCH") {
       // VM_SWITCH IDX, SIZE, N  followed by SIZE `.dw value, label` case lines.
       const a = splitArgs(argStr);
       const size = ev(a[1]);
       pendingSwitch = { operands: [ev(a[0]), size, ev(a[2])], size, cases: [] };
       if (size === 0) {
-        items.push({ kind: "switch", operands: pendingSwitch.operands, cases: [] });
+        items.push({
+          kind: "switch",
+          operands: pendingSwitch.operands,
+          cases: [],
+        });
         pendingSwitch = null;
       }
       continue;
@@ -771,7 +926,11 @@ export function parseGbvmAsm(
       } else if (code === 3 || code === 4 /* EXCEPTION_SAVE / LOAD (M6a) */) {
         // Save/load: keep the raise with its 1-byte slot payload (the following
         // .SAVE_SLOT byte); the main loop persists/restores SRAM on the exception.
-        items.push({ kind: "op", op: 0x27, operands: [code, a.length > 1 ? ev(a[1]) : 1] });
+        items.push({
+          kind: "op",
+          op: 0x27,
+          operands: [code, a.length > 1 ? ev(a[1]) : 1],
+        });
       } else {
         // reset/terminate aren't bridged yet; drop the raise (its inline data, if
         // any, is dropped by the IMPORT_FAR_PTR_DATA handler below).
@@ -781,7 +940,10 @@ export function parseGbvmAsm(
     }
     if (mnemonic === ".SAVE_SLOT") {
       // The 1-byte slot payload for a preceding VM_RAISE EXCEPTION_SAVE/LOAD (M6a).
-      items.push({ kind: "raw", bytes: [ev(splitArgs(argStr)[0] ?? "0") & 0xff] });
+      items.push({
+        kind: "raw",
+        bytes: [ev(splitArgs(argStr)[0] ?? "0") & 0xff],
+      });
       continue;
     }
     if (mnemonic === "IMPORT_FAR_PTR_DATA") {
@@ -812,11 +974,19 @@ export function parseGbvmAsm(
     }
     if (mnemonic === "VM_DISPLAY_TEXT") {
       const varBytes: number[] = [];
-      for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      for (const idx of textVarIndices)
+        varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
       const avatarByte = textAvatar >= 0 ? textAvatar & 0xff : 0xff; // 0xff = no avatar
       items.push({
         kind: "raw",
-        bytes: [0x90, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+        bytes: [
+          0x90,
+          avatarByte,
+          textVarIndices.length & 0xff,
+          ...varBytes,
+          ...textBytes,
+          0,
+        ],
       });
       textBytes = [];
       textVarIndices = [];
@@ -829,11 +999,20 @@ export function parseGbvmAsm(
       const exArgs = splitArgs(argStr);
       const flag = exArgs.length > 0 ? ev(exArgs[0]) & 0xff : 0;
       const varBytes: number[] = [];
-      for (const idx of textVarIndices) varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
+      for (const idx of textVarIndices)
+        varBytes.push(idx & 0xff, (idx >> 8) & 0xff);
       const avatarByte = textAvatar >= 0 ? textAvatar & 0xff : 0xff;
       items.push({
         kind: "raw",
-        bytes: [0x95, flag, avatarByte, textVarIndices.length & 0xff, ...varBytes, ...textBytes, 0],
+        bytes: [
+          0x95,
+          flag,
+          avatarByte,
+          textVarIndices.length & 0xff,
+          ...varBytes,
+          ...textBytes,
+          0,
+        ],
       });
       textBytes = [];
       textVarIndices = [];
@@ -861,7 +1040,8 @@ export function parseGbvmAsm(
     const kinds: GbaOperandType[] = GBA_OPCODE_SPECS[op] ?? [];
     const args = splitArgs(argStr);
     const operands = kinds.map((kind, i) => {
-      if (args[i] === undefined) throw new Error(`${mnemonic}: missing operand ${i}`);
+      if (args[i] === undefined)
+        throw new Error(`${mnemonic}: missing operand ${i}`);
       if (kind === "ptr") return { label: args[i].replace(/:+$/, "") };
       return ev(args[i]);
     });

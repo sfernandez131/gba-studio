@@ -43,7 +43,9 @@ describe("linkGbaProgram", () => {
         ],
       },
     ]);
-    expect(unresolved).toEqual([{ fromProc: "_s", symbol: "_native_fn", at: 2 }]);
+    expect(unresolved).toEqual([
+      { fromProc: "_s", symbol: "_native_fn", at: 2 },
+    ]);
     expect(procs[0].symRelocs).toEqual([]);
   });
 
@@ -53,7 +55,11 @@ describe("linkGbaProgram", () => {
         symbol: "_s",
         items: [
           // VM_INVOKE bank=0, fn->_wait_frames, nparams=0, idx=.ARG0(-1).
-          { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 0, -1] },
+          {
+            kind: "op",
+            op: 0x0d,
+            operands: [0, { label: "_wait_frames" }, 0, -1],
+          },
           { kind: "stop" },
         ],
       },
@@ -201,7 +207,9 @@ describe("linkGbaProgram", () => {
       ],
       0,
     );
-    expect(c).toContain("static unsigned char * const scene0_updates[] = { 0 };");
+    expect(c).toContain(
+      "static unsigned char * const scene0_updates[] = { 0 };",
+    );
     expect(c).toContain(
       "static const unsigned char scene0_update_actors[] = { 0 };",
     );

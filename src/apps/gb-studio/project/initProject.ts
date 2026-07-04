@@ -376,8 +376,7 @@ API.events.menu.zoom.subscribe((_, zoomType) => {
 API.events.menu.run.subscribe((_, debugEnabled) => {
   // GBA projects run in the embedded mGBA-wasm play window (buildType "gba");
   // GB projects keep the binjgb web build. Debugger is GB-only for now.
-  const isGBA =
-    store.getState().project.present.settings.platform === "gba";
+  const isGBA = store.getState().project.present.settings.platform === "gba";
   store.dispatch(
     buildGameActions.buildGame({
       buildType: isGBA ? "gba" : "web",

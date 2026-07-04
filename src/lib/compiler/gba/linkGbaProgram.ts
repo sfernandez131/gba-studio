@@ -116,7 +116,12 @@ export function linkGbaProgram(procs: GbaProc[]): LinkResult {
         unresolved.push({ fromProc: p.symbol, symbol: sr.symbol, at: sr.at });
       }
     }
-    linked.push({ symbol: p.symbol, cName: cNameOf(p.symbol), program, symRelocs });
+    linked.push({
+      symbol: p.symbol,
+      cName: cNameOf(p.symbol),
+      program,
+      symRelocs,
+    });
   }
 
   const engineVarList = [...engineVars].sort();
@@ -148,7 +153,9 @@ export function formatLinkedC(
   // 16-bit storage (covers both 8- and 16-bit writes); engine systems that consume
   // them extern these symbols.
   if (engineVars.length > 0) {
-    out.push("// Engine RAM variables (written by scripts; consumed by engine systems).");
+    out.push(
+      "// Engine RAM variables (written by scripts; consumed by engine systems).",
+    );
     for (const v of engineVars) out.push(`short ${v} = 0;`);
     out.push("");
   }
@@ -217,7 +224,13 @@ export interface GbaSceneEntry {
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
   collisions: number[]; // one byte per tile (row-major); empty = no collision grid
   // Trigger zones (M6b): a tile rect { x, y, w, h } + the enter-script's C name.
-  triggers: { x: number; y: number; w: number; h: number; scriptCName: string }[];
+  triggers: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    scriptCName: string;
+  }[];
 }
 
 /**
@@ -232,7 +245,8 @@ export function formatGbaScenesC(
   for (const s of scenes) {
     externs.add(s.initCName);
     for (const u of s.actorUpdates) externs.add(u.cName);
-    for (const a of s.actorsInit) if (a.interact !== "0") externs.add(a.interact);
+    for (const a of s.actorsInit)
+      if (a.interact !== "0") externs.add(a.interact);
     for (const t of s.triggers) externs.add(t.scriptCName);
   }
   const out: string[] = [
@@ -250,7 +264,9 @@ export function formatGbaScenesC(
     const indices = s.actorUpdates.length
       ? s.actorUpdates.map((u) => u.index).join(", ")
       : "0";
-    out.push(`static unsigned char * const scene${i}_updates[] = { ${updates} };`);
+    out.push(
+      `static unsigned char * const scene${i}_updates[] = { ${updates} };`,
+    );
     out.push(
       `static const unsigned char scene${i}_update_actors[] = { ${indices} };`,
     );
@@ -264,7 +280,9 @@ export function formatGbaScenesC(
           )
           .join(", ")
       : "{ 0, 0, 0, 0, 0, 0 }";
-    out.push(`static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`);
+    out.push(
+      `static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`,
+    );
     // Collision grid (one byte/tile). Emit the array only when some tile is solid;
     // otherwise the scene gets a null grid and only its bounds block movement.
     if (s.collisions.some((v) => v & 0x0f)) {

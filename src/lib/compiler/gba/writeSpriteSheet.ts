@@ -13,10 +13,7 @@
 // sprite_item BMP (index 0 stays transparent, as GBA sprites require) and emits
 // the ranges so the engine can pick a frame by the actor's facing direction.
 
-import {
-  IndexedImage,
-  makeIndexedImage,
-} from "shared/lib/tiles/indexedImage";
+import { IndexedImage, makeIndexedImage } from "shared/lib/tiles/indexedImage";
 import {
   animationMapBySpriteType,
   toEngineOrder,
@@ -166,10 +163,7 @@ export function buildSpriteSheet(
   frames.forEach((frame, i) => {
     const oy = i * fh;
     for (let y = 0; y < fh; y++) {
-      sheet.data.set(
-        frame.data.subarray(y * fw, y * fw + fw),
-        (oy + y) * fw,
-      );
+      sheet.data.set(frame.data.subarray(y * fw, y * fw + fw), (oy + y) * fw);
     }
   });
 

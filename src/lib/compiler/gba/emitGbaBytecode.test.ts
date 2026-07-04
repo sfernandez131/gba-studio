@@ -8,8 +8,16 @@ describe("emitGbaBytecode", () => {
       { kind: "stop" },
     ]);
     expect(bytes).toEqual([
-      0x14, 0x01, 0x00, 0x00, 0x00, // idx=1 (LE), val=0x0000 (LE)
-      0x14, 0x02, 0x00, 0x80, 0x07, // idx=2 (LE), val=0x0780 (LE)
+      0x14,
+      0x01,
+      0x00,
+      0x00,
+      0x00, // idx=1 (LE), val=0x0000 (LE)
+      0x14,
+      0x02,
+      0x00,
+      0x80,
+      0x07, // idx=2 (LE), val=0x0780 (LE)
       0x00, // STOP
     ]);
     expect(relocations).toEqual([]);
@@ -47,8 +55,8 @@ describe("emitGbaBytecode", () => {
   });
 
   test("throws clearly on an unsupported opcode", () => {
-    expect(() =>
-      emitGbaBytecode([{ kind: "op", op: 0xff, operands: [0] }]), // unassigned opcode
+    expect(
+      () => emitGbaBytecode([{ kind: "op", op: 0xff, operands: [0] }]), // unassigned opcode
     ).toThrow(/No GBA encoding for opcode 0xff/);
   });
 
@@ -121,16 +129,24 @@ describe("emitGbaBytecode", () => {
     // it, so the emitter records a symReloc at the 4-byte ptr field (op + bank u8
     // => offset 2) and leaves a placeholder, exactly like a local relocation.
     const { bytes, relocations, symRelocs } = emitGbaBytecode([
-      { kind: "op", op: 0x0e, operands: [0, { label: "_other_script" }, -1, 0] },
+      {
+        kind: "op",
+        op: 0x0e,
+        operands: [0, { label: "_other_script" }, -1, 0],
+      },
     ]);
     expect(relocations).toEqual([]);
-    expect(symRelocs).toEqual([{ at: 2, symbol: "_other_script", kind: "code" }]);
+    expect(symRelocs).toEqual([
+      { at: 2, symbol: "_other_script", kind: "code" },
+    ]);
     expect(bytes.slice(2, 6)).toEqual([0, 0, 0, 0]); // placeholder, patched at load
   });
 
   test("still throws on a non-external unknown label (a real codegen bug)", () => {
     expect(() =>
-      emitGbaBytecode([{ kind: "op", op: 0x09, operands: [{ label: "missing" }] }]),
+      emitGbaBytecode([
+        { kind: "op", op: 0x09, operands: [{ label: "missing" }] },
+      ]),
     ).toThrow(/Unknown label "missing"/);
   });
 });

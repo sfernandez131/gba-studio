@@ -51,10 +51,18 @@ describe("parseGbvmAsm", () => {
       {
         kind: "rpn",
         bytes: [
-          0xfe, 0x00, 0x0f, // INT16 3840
-          0xfb, 0xfd, 0xff, // REF_SET (-4+1 = -3)
-          0xfe, 0x00, 0x0a, // INT16 2560
-          0xfb, 0xfe, 0xff, // REF_SET (-4+2 = -2)
+          0xfe,
+          0x00,
+          0x0f, // INT16 3840
+          0xfb,
+          0xfd,
+          0xff, // REF_SET (-4+1 = -3)
+          0xfe,
+          0x00,
+          0x0a, // INT16 2560
+          0xfb,
+          0xfe,
+          0xff, // REF_SET (-4+2 = -2)
           0x00, // STOP
         ],
       },
@@ -169,9 +177,9 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(
       parseGbvmAsm("        VM_ACTOR_SET_MOVE_SPEED .ARG0, 64\n").items,
     ).toEqual([{ kind: "op", op: 0x3e, operands: [-1, 64] }]);
-    expect(parseGbvmAsm("        VM_ACTOR_SET_HIDDEN .ARG0, 1\n").items).toEqual(
-      [{ kind: "op", op: 0x3f, operands: [-1, 1] }],
-    );
+    expect(
+      parseGbvmAsm("        VM_ACTOR_SET_HIDDEN .ARG0, 1\n").items,
+    ).toEqual([{ kind: "op", op: 0x3f, operands: [-1, 1] }]);
     expect(
       parseGbvmAsm("        VM_ACTOR_GET_DIR .ARG1, .ARG0\n").items,
     ).toEqual([{ kind: "op", op: 0x40, operands: [-2, -1] }]);
@@ -251,12 +259,17 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     // VM_DISPLAY_TEXT emits op 0x90 + the captured text + a null terminator; the
     // overlay window ops bracket it (M4d), and VM_OVERLAY_WAIT is bridged to op 0x94
     // with [modal, condition] (M4q: the A-wait now lives here, not in the text op).
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     expect(raw.bytes[0]).toBe(0x90);
     expect(raw.bytes[1]).toBe(0xff); // avatar byte (none)
     expect(raw.bytes[2]).toBe(0); // var count (no interpolation)
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
-    expect(String.fromCharCode(...raw.bytes.slice(3, -1))).toBe("Hello, GBA Studio!");
+    expect(String.fromCharCode(...raw.bytes.slice(3, -1))).toBe(
+      "Hello, GBA Studio!",
+    );
     const wait = items.find((i) => i.kind === "op" && i.op === 0x94) as
       | { kind: "op"; op: number; operands: number[] }
       | undefined;
@@ -274,7 +287,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "",
       ].join("\n"),
     );
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     expect(raw.bytes[0]).toBe(0x95);
     expect(raw.bytes[1]).toBe(1); // .DISPLAY_PRESERVE_POS (append)
     expect(raw.bytes[2]).toBe(0xff); // avatar none
@@ -315,7 +331,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "",
       ].join("\n"),
     );
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     expect(raw.bytes[0]).toBe(0x90);
     const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
     expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, goto gone
@@ -332,10 +351,15 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "",
       ].join("\n"),
     );
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
     // Both the speed code and the font code survive inline with their params (M4p).
-    expect(Array.from(text)).toEqual([0x01, 0x06, 0x48, 0x69, 0x02, 0x01, 0x21]);
+    expect(Array.from(text)).toEqual([
+      0x01, 0x06, 0x48, 0x69, 0x02, 0x01, 0x21,
+    ]);
   });
 
   test("M4h: parseGameGlobals reads VAR_ = index defines (ignoring comments/junk)", () => {
@@ -344,7 +368,7 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "VAR_SCORE = 0",
         "VAR_LIVES = 1 ; a comment",
         "MAX_GLOBAL_VARS = 2",
-        ".include \"foo.i\"", // not a define
+        '.include "foo.i"', // not a define
         "",
       ].join("\n"),
     );
@@ -379,7 +403,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       ].join("\n"),
       { globals: { VAR_SCORE: 5 } },
     );
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     // [0x90, avatar=0xff, nVars=1, idxLo=5, idxHi=0, "Score: %d!", 0]
     expect(raw.bytes.slice(0, 5)).toEqual([0x90, 0xff, 1, 5, 0]);
     expect(raw.bytes[raw.bytes.length - 1]).toBe(0);
@@ -398,7 +425,10 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "",
       ].join("\n"),
     );
-    const raw = items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    const raw = items.find((i) => i.kind === "raw") as {
+      kind: "raw";
+      bytes: number[];
+    };
     // [0x90, avatar=0, nVars=0, "Hi", 0] - the avatar code (incl. its @ABC glyph
     // chars) is gone, and the avatar index (0) rides in the payload's avatar byte.
     expect(raw.bytes[1]).toBe(0); // avatar 0
@@ -463,14 +493,23 @@ describe("parseGbvmAsm — P0 opcodes", () => {
   });
 
   test("bridges VM_INVOKE / VM_CALL_NATIVE / VM_GET_FAR encodings", () => {
-    expect(parseGbvmAsm("        VM_INVOKE ___bank_wait, _wait_frames, 1, .ARG0\n").items).toEqual([
+    expect(
+      parseGbvmAsm("        VM_INVOKE ___bank_wait, _wait_frames, 1, .ARG0\n")
+        .items,
+    ).toEqual([
       { kind: "op", op: 0x0d, operands: [0, { label: "_wait_frames" }, 1, -1] },
     ]);
-    expect(parseGbvmAsm("        VM_CALL_NATIVE ___bank_fn, _native_fn\n").items).toEqual([
+    expect(
+      parseGbvmAsm("        VM_CALL_NATIVE ___bank_fn, _native_fn\n").items,
+    ).toEqual([
       { kind: "op", op: 0x2d, operands: [0, { label: "_native_fn" }] },
     ]);
     // VM_GET_FAR IDX, SIZE, BANK, ADDR
-    expect(parseGbvmAsm("        VM_GET_FAR .ARG0, .GET_WORD, ___bank_data, _far_data\n").items).toEqual([
+    expect(
+      parseGbvmAsm(
+        "        VM_GET_FAR .ARG0, .GET_WORD, ___bank_data, _far_data\n",
+      ).items,
+    ).toEqual([
       { kind: "op", op: 0x06, operands: [-1, 1, 0, { label: "_far_data" }] },
     ]);
   });
