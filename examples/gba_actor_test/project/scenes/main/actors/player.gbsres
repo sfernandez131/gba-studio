@@ -68,5 +68,13 @@
   "updateScript": [],
   "hit1Script": [],
   "hit2Script": [],
-  "hit3Script": []
+  "hit3Script": [
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000c1",
+      "command": "EVENT_ACTOR_HIDE",
+      "args": {
+        "actorId": "$self$"
+      }
+    }
+  ]
 }

@@ -436,6 +436,14 @@ const ejectGbaBuild = async ({
         queue.push(symbol);
       }
     });
+    // The scene's combined player-hit script (M10g): `_<symbol>_p_hit1` exists
+    // when any player On Hit tab is authored; run when a projectile hits actor 0.
+    const playerHitSymbol = `_${scene.symbol}_p_hit1`;
+    let playerHit = "0";
+    if (scriptForSymbol(playerHitSymbol) !== undefined) {
+      playerHit = cNameOf(playerHitSymbol);
+      queue.push(playerHitSymbol);
+    }
     sceneEntries.push({
       initCName: cNameOf(initSymbol),
       actorUpdates,
@@ -447,6 +455,7 @@ const ejectGbaBuild = async ({
       triggers,
       // Projectile defs in slot order (M10f), preloaded on scene load.
       projectiles: (sceneProjectiles[scene.id] ?? []).map(toProjectileDefEntry),
+      playerHit,
     });
     queue.push(initSymbol);
   }
