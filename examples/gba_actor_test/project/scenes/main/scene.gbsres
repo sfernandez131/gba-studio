@@ -95,17 +95,23 @@
         ],
         "direction": "down"
       }
-    },
+    }
+  ],
+  "playerHit1Script": [
     {
-      "id": "abcdef01-0000-4000-8000-000000000060",
-      "command": "EVENT_TEXT",
+      "id": "abcdef01-0000-4000-8000-0000000000c2",
+      "command": "EVENT_CAMERA_SHAKE",
       "args": {
-        "text": "Emote + attack + projectiles.",
-        "avatarId": ""
+        "time": 0.5,
+        "units": "time",
+        "shakeDirection": "horizontal",
+        "magnitude": {
+          "type": "number",
+          "value": 5
+        }
       }
     }
   ],
-  "playerHit1Script": [],
   "playerHit2Script": [],
   "playerHit3Script": []
 }
