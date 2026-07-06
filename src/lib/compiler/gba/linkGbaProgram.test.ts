@@ -154,12 +154,27 @@ describe("linkGbaProgram", () => {
               y: 2048,
               interact: "actor_npc_interact",
               moveSpeed: 32,
+              collisionGroup: 2,
             },
           ],
           playerMove: 1,
           collisions: [0, 15, 0, 0],
           triggers: [
             { x: 3, y: 4, w: 2, h: 1, scriptCName: "trigger_door_interact" },
+          ],
+          projectiles: [
+            {
+              sprite: 0,
+              animState: 1,
+              moveSpeed: 64,
+              lifeTime: 60,
+              collisionGroup: 2,
+              collisionMask: 1,
+              strong: 0,
+              animTick: 15,
+              animNoLoop: 0,
+              initialOffset: 32,
+            },
           ],
         },
       ],
@@ -179,16 +194,27 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 1 };",
     );
     expect(c).toContain(
-      "static const GbaActorInit scene0_actors_init[] = { { 1, 2, 2304, 2048, actor_npc_interact, 32 } };",
+      "static const GbaActorInit scene0_actors_init[] = { { 1, 2, 2304, 2048, actor_npc_interact, 32, 2 } };",
     );
     expect(c).toContain(
       "static const unsigned char scene0_collisions[] = { 0, 15, 0, 0 };",
     );
+    // M10f: scene projectile defs (engine GbaProjectileDef field order).
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 1, 240, 160, scene0_actors_init, 1, 1, scene0_collisions, scene0_triggers, 1 },",
+      "static const GbaProjectileDef scene0_projectiles[] = { { 0, 1, 64, 60, 2, 1, 0, 15, 0, 32 } };",
+    );
+    expect(c).toContain(
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 1, 240, 160, scene0_actors_init, 1, 1, scene0_collisions, scene0_triggers, 1, scene0_projectiles, 1 },",
     );
     expect(c).toContain("const unsigned int gba_scenes_count = 1;");
     expect(c).toContain("const unsigned int gba_start_scene = 0;");
+    // No global tables passed: an empty (single zero row) flat array.
+    expect(c).toContain(
+      "const GbaProjectileDef gba_global_projectile_defs[] = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } };",
+    );
+    expect(c).toContain(
+      "const unsigned int gba_global_projectile_defs_count = 0;",
+    );
   });
 
   test("formatGbaScenesC guards the zero-actor-update case (no zero-size array)", () => {
@@ -203,6 +229,7 @@ describe("linkGbaProgram", () => {
           playerMove: 0,
           collisions: [],
           triggers: [],
+          projectiles: [],
         },
       ],
       0,
@@ -214,10 +241,49 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 0 };",
     );
     expect(c).toContain(
-      "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0, 0, 0 } };",
+      "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0, 0, 0, 0 } };",
     );
     expect(c).toContain(
-      "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160, scene0_actors_init, 0, 0, 0, 0, 0 },",
+      "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160, scene0_actors_init, 0, 0, 0, 0, 0, 0, 0 },",
+    );
+  });
+
+  test("formatGbaScenesC flattens global projectile tables (M10f)", () => {
+    const def = {
+      sprite: 1,
+      animState: 0,
+      moveSpeed: 32,
+      lifeTime: 120,
+      collisionGroup: 2,
+      collisionMask: 1,
+      strong: 1,
+      animTick: 7,
+      animNoLoop: 1,
+      initialOffset: 0,
+    };
+    const c = formatGbaScenesC(
+      [
+        {
+          initCName: "scene_main_init",
+          actorUpdates: [],
+          widthPx: 240,
+          heightPx: 160,
+          actorsInit: [],
+          playerMove: 0,
+          collisions: [],
+          triggers: [],
+          projectiles: [],
+        },
+      ],
+      0,
+      [def, { ...def, sprite: 2, strong: 0 }],
+    );
+    expect(c).toContain(
+      "const GbaProjectileDef gba_global_projectile_defs[] = { " +
+        "{ 1, 0, 32, 120, 2, 1, 1, 7, 1, 0 }, { 2, 0, 32, 120, 2, 1, 0, 7, 1, 0 } };",
+    );
+    expect(c).toContain(
+      "const unsigned int gba_global_projectile_defs_count = 2;",
     );
   });
 

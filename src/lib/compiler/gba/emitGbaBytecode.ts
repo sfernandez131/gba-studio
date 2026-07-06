@@ -81,6 +81,9 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
   0x5d: ["u8"], // SET_SPRITE_MODE mode (gbavm: no-op stub)
+  // projectiles (M10f). LAUNCH's idx resolves to the {x, y, angle} stack block.
+  0x80: ["u8", "i16"], // PROJECTILE_LAUNCH slot, idx
+  0x81: ["u8", "u8", "u8"], // PROJECTILE_LOAD_TYPE dest, src, global-table base index
   0x86: ["i16", "i16"], // ACTOR_GET_ANGLE idx, dest
   0x89: ["i16", "i16", "u8"], // SIN_SCALE idx, idxAngle, scale
   0x8a: ["i16", "i16", "u8"], // COS_SCALE idx, idxAngle, scale

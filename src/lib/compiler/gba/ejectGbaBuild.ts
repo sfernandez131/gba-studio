@@ -33,7 +33,9 @@ import {
   cNameOf,
   GbaProc,
   GbaSceneEntry,
+  GbaProjectileDefEntry,
 } from "./linkGbaProgram";
+import type { ProjectileData } from "../generateGBVMData";
 import { indexedImageToBmp, hexToRgb } from "./writeIndexedBmp";
 import type { Rgb } from "./writeIndexedBmp";
 import { buildSpriteSheet, SpriteSheetInput } from "./writeSpriteSheet";
@@ -49,6 +51,10 @@ type EjectGbaOptions = {
     // Global animation-state order (indices that STATE_* / VM_ACTOR_SET_ANIM_SET
     // refer to); [""] = just the default state (M10c).
     statesOrder?: string[];
+    // Per-scene projectile defs in slot order (M10f), keyed by scene id.
+    sceneProjectiles?: Record<string, ProjectileData[]>;
+    // Global projectile tables (VM_PROJECTILE_LOAD_TYPE sources), in emit order.
+    globalProjectiles?: { symbol: string; projectiles: ProjectileData[] }[];
   };
   progress: (msg: string) => void;
   warnings: (msg: string) => void;
@@ -261,6 +267,60 @@ const ejectGbaBuild = async ({
     dataSymbols[`_${projectData.emotes[e].symbol}`] = e;
   }
 
+  // Projectiles (M10f): each scene's defs (in slot order, preloaded by the engine
+  // on scene load) + the global tables VM_PROJECTILE_LOAD_TYPE draws from. A def's
+  // sprite is an index into the projectile sprite table emitted with the scene
+  // sprites below; unique sheet ids are collected here so the def rows can be
+  // built before the graphics section runs.
+  const sceneProjectiles = compiledData.sceneProjectiles ?? {};
+  const globalProjectileTables = compiledData.globalProjectiles ?? [];
+  const projSpriteIds: string[] = [];
+  const projSpriteIndex = (spriteSheetId: string): number => {
+    let idx = projSpriteIds.indexOf(spriteSheetId);
+    if (idx < 0) {
+      idx = projSpriteIds.length;
+      projSpriteIds.push(spriteSheetId);
+    }
+    return idx;
+  };
+  // GB collision group encoding (gbs_types.h): player 0x01, "1" 0x02, "2" 0x04, "3" 0x08.
+  const collisionGroupBit = (group: string): number =>
+    (
+      ({ player: 0x01, "1": 0x02, "2": 0x04, "3": 0x08 }) as Record<
+        string,
+        number
+      >
+    )[group] ?? 0;
+  const toProjectileDefEntry = (p: ProjectileData): GbaProjectileDefEntry => {
+    const stateIndex = statesOrder.indexOf(p.spriteStateId);
+    return {
+      sprite: projSpriteIndex(p.spriteSheetId),
+      animState: stateIndex > 0 ? stateIndex : 0,
+      // Authored speed -> subpixels/frame (GB Studio speed 1 = 1px = 32).
+      moveSpeed: Math.max(1, Math.round(p.speed * 32)),
+      lifeTime: Math.max(1, Math.round(p.lifeTime * 60)),
+      collisionGroup: collisionGroupBit(p.collisionGroup),
+      collisionMask: (p.collisionMask ?? []).reduce(
+        (mask, g) => mask | collisionGroupBit(g),
+        0,
+      ),
+      strong: p.destroyOnHit ? 0 : 1,
+      animTick: p.animSpeed ?? 15,
+      animNoLoop: p.loopAnim ? 0 : 1,
+      initialOffset: Math.round((p.initialOffset || 0) * 32),
+    };
+  };
+  // Flatten the global tables and register each `_global_projectiles_<n>` symbol
+  // as its table's base index BEFORE the scripts parse (VM_PROJECTILE_LOAD_TYPE
+  // resolves it like SFX/emote data symbols).
+  const globalProjectileDefs: GbaProjectileDefEntry[] = [];
+  for (const table of globalProjectileTables) {
+    dataSymbols[`_${table.symbol}`] = globalProjectileDefs.length;
+    for (const p of table.projectiles) {
+      globalProjectileDefs.push(toProjectileDefEntry(p));
+    }
+  }
+
   // A scene change targets a scene by its far-ptr symbol ("_<scene.symbol>"); map
   // those to gba_scenes[] indices (the table below is built in this same order).
   const sceneIndex = (sym: string): number | undefined => {
@@ -320,6 +380,8 @@ const ejectGbaBuild = async ({
         interact,
         // M10a: authored speed -> subpixels/frame (GB Studio speed 1 = 1px = 32).
         moveSpeed: Math.max(1, Math.round((actor.moveSpeed ?? 1) * 32)),
+        // M10f: authored collision group -> the GB group bit (projectile hits).
+        collisionGroup: collisionGroupBit(actor.collisionGroup ?? ""),
       };
     });
     // Player (actor 0): if the scene has a player sprite, place it at the project
@@ -332,6 +394,7 @@ const ejectGbaBuild = async ({
         y: Math.round(settings.startY * 256),
         interact: "0",
         moveSpeed: Math.max(1, Math.round((settings.startMoveSpeed ?? 1) * 32)),
+        collisionGroup: 0x01, // the player group (M10f)
       });
     }
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and
@@ -382,6 +445,8 @@ const ejectGbaBuild = async ({
       playerMove,
       collisions,
       triggers,
+      // Projectile defs in slot order (M10f), preloaded on scene load.
+      projectiles: (sceneProjectiles[scene.id] ?? []).map(toProjectileDefEntry),
     });
     queue.push(initSymbol);
   }
@@ -442,7 +507,7 @@ const ejectGbaBuild = async ({
   );
   await writeFile(
     Path.join(gbaEngineRoot, "src", "gba_scenes.c"),
-    formatGbaScenesC(sceneEntries, startSceneIndex),
+    formatGbaScenesC(sceneEntries, startSceneIndex, globalProjectileDefs),
   );
 
   // --- Colour handling -------------------------------------------------------
@@ -663,6 +728,69 @@ const ejectGbaBuild = async ({
     );
   }
 
+  // Projectile sprites (M10f): each unique sheet referenced by a projectile def
+  // (scene or global), emitted ONCE through the same pipeline as actor sprites;
+  // GbaProjectileDef.sprite indexes this table. Butano manages sprite VRAM
+  // dynamically, so no per-scene allocation is needed.
+  const projCases: string[] = [];
+  for (let pi = 0; pi < projSpriteIds.length; pi++) {
+    const sprite = projectData.sprites.find(
+      (sp) => sp.id === projSpriteIds[pi],
+    );
+    if (!sprite || !sprite.states || sprite.states.length === 0) {
+      warnings(
+        `GBA: projectile sprite ${projSpriteIds[pi]} not found - skipped`,
+      );
+      continue;
+    }
+    let img: { width: number; height: number; data: Uint8Array };
+    let palette = spritePalette;
+    try {
+      if (isColor) {
+        ({ img, palette } = await readTrueColor(
+          assetFilename(projectRoot, "sprites", sprite),
+          true,
+        ));
+      } else {
+        img = await readFileToIndexedImage(
+          assetFilename(projectRoot, "sprites", sprite),
+          tileDataIndexFn,
+        );
+      }
+    } catch (e) {
+      warnings(`GBA: could not read projectile sprite "${sprite.filename}"`);
+      continue;
+    }
+    const sheet = buildSpriteSheet(
+      sprite as unknown as SpriteSheetInput,
+      img,
+      spriteMode,
+      statesOrder,
+    );
+    const name = `proj_sprite_${pi}`;
+    await writeFile(
+      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
+    );
+    await writeFile(
+      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      JSON.stringify({ type: "sprite", height: sheet.frameHeight }) + "\n",
+    );
+    spriteIncludes.push(`#include "bn_sprite_items_${name}.h"`);
+    const starts = sheet.animRanges.map((r) => r.start).join(", ");
+    const lens = sheet.animRanges.map((r) => r.len).join(", ");
+    spriteTables.push(
+      `static const unsigned char ${name}_anim_start[] = { ${starts} };`,
+      `static const unsigned char ${name}_anim_len[] = { ${lens} };`,
+      `static const GbaActorSprite ${name}_def = ` +
+        `{ &bn::sprite_items::${name}, ${name}_anim_start, ${name}_anim_len };`,
+    );
+    projCases.push(`        case ${pi}: return &${name}_def;`);
+    progress(
+      `Converting projectile sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
+    );
+  }
+
   // Generate src/gba_scene_assets.h: per-scene bg + actor->sprite lookups (engine
   // frame order: Down, Right, Up, Left, then the moving set).
   const assetsHeader = [
@@ -692,6 +820,14 @@ const ejectGbaBuild = async ({
     "inline const GbaActorSprite* gba_actor_sprite(int sceneIdx, int actorIdx) {",
     "    switch(sceneIdx) {",
     ...spriteCases,
+    "    default: break;",
+    "    }",
+    "    return nullptr;",
+    "}",
+    "// M10f: projectile sprite lookup (GbaProjectileDef.sprite indexes this).",
+    "inline const GbaActorSprite* gba_projectile_sprite(int idx) {",
+    "    switch(idx) {",
+    ...projCases,
     "    default: break;",
     "    }",
     "    return nullptr;",
