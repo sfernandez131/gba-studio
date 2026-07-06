@@ -95,6 +95,13 @@
         ],
         "direction": "down"
       }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000d1",
+      "command": "EVENT_PLAYER_SET_SPRITE",
+      "args": {
+        "spriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2"
+      }
     }
   ],
   "playerHit1Script": [
