@@ -215,6 +215,30 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("M10f: bridges VM_PROJECTILE_LAUNCH to op 0x80 (slot + stack-args ref)", () => {
+    expect(
+      parseGbvmAsm("        VM_PROJECTILE_LAUNCH 1, .ARG2\n").items,
+    ).toEqual([{ kind: "op", op: 0x80, operands: [1, -3] }]);
+  });
+
+  test("M10f: expands VM_PROJECTILE_LOAD_TYPE to op 0x81 resolving the table symbol", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_PROJECTILE_LOAD_TYPE 2, 1, ___bank_global_projectiles_0, _global_projectiles_0\n",
+      { dataSymbols: { ["_global_projectiles_0"]: 5 } },
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x81, operands: [2, 1, 5] }]);
+  });
+
+  test("M10f: drops VM_PROJECTILE_LOAD_TYPE when the table symbol is unknown", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_PROJECTILE_LOAD_TYPE 0, 0, ___bank_global_projectiles_9, _global_projectiles_9\n",
+    );
+    expect(items).toEqual([]);
+    expect(skipped).toContain(
+      "VM_PROJECTILE_LOAD_TYPE 0, 0, ___bank_global_projectiles_9, _global_projectiles_9",
+    );
+  });
+
   test("M6f: bridges VM_TIMER_SET / STOP / RESET to ops 0x71 / 0x72 / 0x73", () => {
     expect(parseGbvmAsm("        VM_TIMER_SET 1, 8\n").items).toEqual([
       { kind: "op", op: 0x71, operands: [1, 8] },

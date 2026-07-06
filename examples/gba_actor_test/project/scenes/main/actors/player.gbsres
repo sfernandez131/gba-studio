@@ -15,10 +15,33 @@
   "frame": 0,
   "isPinned": false,
   "persistent": false,
-  "collisionGroup": "",
+  "collisionGroup": "1",
   "prefabId": "",
   "prefabScriptOverrides": {},
   "script": [
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b3",
+      "command": "EVENT_LAUNCH_PROJECTILE",
+      "args": {
+        "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+        "spriteStateId": "",
+        "actorId": "player",
+        "x": 0,
+        "y": 0,
+        "directionType": "direction",
+        "speed": 1,
+        "animSpeed": 15,
+        "lifeTime": 2,
+        "initialOffset": 8,
+        "loopAnim": true,
+        "destroyOnHit": false,
+        "collisionGroup": "3",
+        "collisionMask": [
+          "1"
+        ],
+        "direction": "down"
+      }
+    },
     {
       "id": "abcdef01-0000-4000-8000-0000000000a1",
       "command": "EVENT_CAMERA_SHAKE",
@@ -26,13 +49,19 @@
         "time": 1.5,
         "units": "time",
         "shakeDirection": "horizontal",
-        "magnitude": { "type": "number", "value": 5 }
+        "magnitude": {
+          "type": "number",
+          "value": 5
+        }
       }
     },
     {
       "id": "abcdef01-0000-4000-8000-0000000000a0",
       "command": "EVENT_TEXT",
-      "args": { "text": "Shaken!", "avatarId": "" }
+      "args": {
+        "text": "Shaken!",
+        "avatarId": ""
+      }
     }
   ],
   "startScript": [],

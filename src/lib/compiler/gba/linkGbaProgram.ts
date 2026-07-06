@@ -220,6 +220,7 @@ export interface GbaSceneEntry {
     y: number;
     interact: string;
     moveSpeed: number; // M10a: subpixels/frame (32 = 1px); 0 = engine default
+    collisionGroup: number; // M10f: GB group bit (player 0x01, "1" 0x02, "2" 0x04, "3" 0x08)
   }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
   collisions: number[]; // one byte per tile (row-major); empty = no collision grid
@@ -231,7 +232,29 @@ export interface GbaSceneEntry {
     h: number;
     scriptCName: string;
   }[];
+  // Projectile defs (M10f), preloaded into the engine's runtime slots on scene
+  // load; the row order is the slot index Launch Projectile scripts pass.
+  projectiles: GbaProjectileDefEntry[];
 }
+
+// One GbaProjectileDef row (engine struct field order; see gbavm gba_link.h).
+export interface GbaProjectileDefEntry {
+  sprite: number; // index into the generated gba_projectile_sprite() table
+  animState: number; // animation-state row (statesOrder index)
+  moveSpeed: number; // subpixels/frame (32 = 1px)
+  lifeTime: number; // frames
+  collisionGroup: number;
+  collisionMask: number;
+  strong: number; // 1 = survives hits (!destroyOnHit)
+  animTick: number; // frame-advance mask
+  animNoLoop: number;
+  initialOffset: number; // subpixels
+}
+
+const formatProjectileDef = (p: GbaProjectileDefEntry): string =>
+  `{ ${p.sprite}, ${p.animState}, ${p.moveSpeed}, ${p.lifeTime}, ` +
+  `${p.collisionGroup}, ${p.collisionMask}, ${p.strong}, ${p.animTick}, ` +
+  `${p.animNoLoop}, ${p.initialOffset} }`;
 
 /**
  * Emit the scene table (src/gba_scene.c): every scene's init + actor updates, and
@@ -240,6 +263,9 @@ export interface GbaSceneEntry {
 export function formatGbaScenesC(
   scenes: GbaSceneEntry[],
   startScene: number,
+  // Global projectile-def tables (M10f), flattened in emit order; the bridge
+  // resolves each _global_projectiles_<n> symbol to its table's base index.
+  globalProjectiles: GbaProjectileDefEntry[] = [],
 ): string {
   const externs = new Set<string>();
   for (const s of scenes) {
@@ -276,13 +302,20 @@ export function formatGbaScenesC(
       ? s.actorsInit
           .map(
             (a) =>
-              `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact}, ${a.moveSpeed} }`,
+              `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact}, ${a.moveSpeed}, ${a.collisionGroup} }`,
           )
           .join(", ")
-      : "{ 0, 0, 0, 0, 0, 0 }";
+      : "{ 0, 0, 0, 0, 0, 0, 0 }";
     out.push(
       `static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`,
     );
+    // Projectile defs (M10f): emitted only when the scene launches projectiles.
+    if (s.projectiles.length) {
+      const rows = s.projectiles.map(formatProjectileDef).join(", ");
+      out.push(
+        `static const GbaProjectileDef scene${i}_projectiles[] = { ${rows} };`,
+      );
+    }
     // Collision grid (one byte/tile). Emit the array only when some tile is solid;
     // otherwise the scene gets a null grid and only its bounds block movement.
     if (s.collisions.some((v) => v & 0x0f)) {
@@ -307,15 +340,27 @@ export function formatGbaScenesC(
       ? `scene${i}_collisions`
       : "0";
     const trigPtr = s.triggers.length ? `scene${i}_triggers` : "0";
+    const projPtr = s.projectiles.length ? `scene${i}_projectiles` : "0";
     out.push(
       `    { ${s.initCName}, scene${i}_updates, scene${i}_update_actors, ` +
         `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx}, ` +
         `scene${i}_actors_init, ${s.actorsInit.length}, ${s.playerMove}, ${collPtr}, ` +
-        `${trigPtr}, ${s.triggers.length} },`,
+        `${trigPtr}, ${s.triggers.length}, ${projPtr}, ${s.projectiles.length} },`,
     );
   });
   out.push("};");
   out.push(`const unsigned int gba_scenes_count = ${scenes.length};`);
   out.push(`const unsigned int gba_start_scene = ${startScene};`);
+  // Global projectile-def tables (M10f), flattened; a single zero row when empty
+  // (C forbids zero-size arrays; the engine bounds-checks by the count).
+  const globalRows = globalProjectiles.length
+    ? globalProjectiles.map(formatProjectileDef).join(", ")
+    : "{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }";
+  out.push(
+    `const GbaProjectileDef gba_global_projectile_defs[] = { ${globalRows} };`,
+  );
+  out.push(
+    `const unsigned int gba_global_projectile_defs_count = ${globalProjectiles.length};`,
+  );
   return out.join("\n") + "\n";
 }

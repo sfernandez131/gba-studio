@@ -1356,6 +1356,10 @@ const compile = async (
   // GBA eject needs the global animation-state order so sprite state-table rows
   // line up with the STATE_* indices scripts pass (M10c).
   statesOrder: string[];
+  // GBA eject needs the per-scene projectile defs (slot order) + global tables
+  // to emit GbaProjectileDef data + projectile sprites (M10f).
+  sceneProjectiles: Record<string, PrecompiledProjectile[]>;
+  globalProjectiles: GlobalProjectiles[];
 }> => {
   const output: Record<string, string> = {};
   const symbols: Record<string, string> = {};
@@ -2107,6 +2111,14 @@ const compile = async (
     // table rows line up with the STATE_* indices scripts pass to
     // VM_ACTOR_SET_ANIM_SET (M10c).
     statesOrder: precompiled.statesOrder,
+    // GBA eject needs each scene's projectile defs (slot order = the indices
+    // Launch Projectile passes to VM_PROJECTILE_LAUNCH) and the global tables
+    // (VM_PROJECTILE_LOAD_TYPE's _global_projectiles_<n> symbols) to emit
+    // GbaProjectileDef data + projectile sprites (M10f).
+    sceneProjectiles: Object.fromEntries(
+      precompiled.sceneData.map((scene) => [scene.id, scene.projectiles]),
+    ),
+    globalProjectiles,
   };
 };
 

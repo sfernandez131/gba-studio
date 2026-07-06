@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 80 |
-| Expanded to equivalent gbavm sequences | 18 |
+| Encoded directly to a gbavm opcode | 81 |
+| Expanded to equivalent gbavm sequences | 19 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **99 / 156 (63%)** |
+| **Supported total** | **101 / 156 (65%)** |
 | Skipped with a warning (safe no-op) | 10 |
-| Unbridged (build fails on use) | 47 |
+| Unbridged (build fails on use) | 45 |
 
 ## Unbridged — the honest to-do list
 
@@ -52,8 +52,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_OVERLAY_SET_SUBMAP` |
 | `VM_POLL` |
 | `VM_PRINT_OVERLAY` |
-| `VM_PROJECTILE_LAUNCH` |
-| `VM_PROJECTILE_LOAD_TYPE` |
 | `VM_REPLACE_TILE` |
 | `VM_REPLACE_TILE_XY` |
 | `VM_RTC_GET` |
@@ -142,6 +140,7 @@ One-to-one macro → gbavm opcode.
 | `VM_OVERLAY_WAIT` |
 | `VM_POLL_LOADED` |
 | `VM_POP` |
+| `VM_PROJECTILE_LAUNCH` |
 | `VM_PUSH_CONST` |
 | `VM_PUSH_REFERENCE` |
 | `VM_PUSH_VALUE` |
@@ -185,6 +184,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 | `VM_GET_UINT8` |
 | `VM_MUSIC_PLAY` |
 | `VM_MUSIC_STOP` |
+| `VM_PROJECTILE_LOAD_TYPE` |
 | `VM_RET` |
 | `VM_RET_FAR` |
 | `VM_RET_FAR_N` |

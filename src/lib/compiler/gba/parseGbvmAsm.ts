@@ -94,6 +94,9 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_ACTOR_GET_ANGLE: 0x86,
   VM_SIN_SCALE: 0x89,
   VM_COS_SCALE: 0x8a,
+  // Projectiles (M10f): TYPE is the runtime def slot, IDX resolves to the
+  // {x, y, angle} block Launch Projectile pushes on the VM stack.
+  VM_PROJECTILE_LAUNCH: 0x80,
   VM_MEMSET: 0x76,
   VM_MEMCPY: 0x77,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
@@ -183,6 +186,24 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
       return null;
     }
     return [{ kind: "op", op: 0x66, operands: [sfx] }];
+  },
+  // Projectiles (M10f): VM_PROJECTILE_LOAD_TYPE <dest>, <src>, <bank>,
+  // _global_projectiles_<n> -> op 0x81 [dest, src, base]; the table symbol
+  // resolves to its base index in the engine's flattened
+  // gba_global_projectile_defs[] via dataSymbols (bank dropped - GBA is flat).
+  // Drop the op if the table wasn't emitted so the project still builds.
+  VM_PROJECTILE_LOAD_TYPE: (a, ev) => {
+    let dest: number;
+    let src: number;
+    let base: number;
+    try {
+      dest = ev(a[0]) & 0xff;
+      src = ev(a[1]) & 0xff;
+      base = ev(a[3]) & 0xff;
+    } catch {
+      return null;
+    }
+    return [{ kind: "op", op: 0x81, operands: [dest, src, base] }];
   },
   // Emotes (M10d): VM_ACTOR_EMOTE <actor-ref>, <bank>, _<emote.symbol> -> op 0x42
   // [ref, emote]; the emote symbol resolves to the emitted sprite index via

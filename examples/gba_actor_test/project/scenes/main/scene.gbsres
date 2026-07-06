@@ -51,10 +51,56 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000b1",
+      "command": "EVENT_LAUNCH_PROJECTILE",
+      "args": {
+        "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+        "spriteStateId": "",
+        "actorId": "player",
+        "x": 0,
+        "y": 16,
+        "directionType": "direction",
+        "speed": 2,
+        "animSpeed": 15,
+        "lifeTime": 1,
+        "initialOffset": 8,
+        "loopAnim": true,
+        "destroyOnHit": true,
+        "collisionGroup": "3",
+        "collisionMask": [
+          "1"
+        ],
+        "direction": "right"
+      }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b2",
+      "command": "EVENT_LAUNCH_PROJECTILE",
+      "args": {
+        "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+        "spriteStateId": "",
+        "actorId": "player",
+        "x": 0,
+        "y": 0,
+        "directionType": "direction",
+        "speed": 2,
+        "animSpeed": 15,
+        "lifeTime": 1,
+        "initialOffset": 8,
+        "loopAnim": true,
+        "destroyOnHit": true,
+        "collisionGroup": "3",
+        "collisionMask": [
+          "1"
+        ],
+        "direction": "down"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-000000000060",
       "command": "EVENT_TEXT",
       "args": {
-        "text": "Emote + attack state.",
+        "text": "Emote + attack + projectiles.",
         "avatarId": ""
       }
     }
