@@ -102,6 +102,15 @@
       "args": {
         "spriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2"
       }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000e1",
+      "command": "EVENT_CHOICE",
+      "args": {
+        "variable": "0",
+        "trueText": "Fight",
+        "falseText": "Flee"
+      }
     }
   ],
   "playerHit1Script": [
