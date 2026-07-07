@@ -26,6 +26,7 @@ import { ProjectResources } from "shared/lib/resources/types";
 import { assetFilename } from "shared/lib/helpers/assets";
 import { tileDataIndexFn } from "shared/lib/tiles/tileData";
 import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
+import { walkScenesScripts } from "shared/lib/scripts/walk";
 import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import {
   linkGbaProgram,
@@ -274,15 +275,44 @@ const ejectGbaBuild = async ({
   // built before the graphics section runs.
   const sceneProjectiles = compiledData.sceneProjectiles ?? {};
   const globalProjectileTables = compiledData.globalProjectiles ?? [];
-  const projSpriteIds: string[] = [];
-  const projSpriteIndex = (spriteSheetId: string): number => {
-    let idx = projSpriteIds.indexOf(spriteSheetId);
+  const globalSpriteIds: string[] = [];
+  const globalSpriteIndex = (spriteSheetId: string): number => {
+    let idx = globalSpriteIds.indexOf(spriteSheetId);
     if (idx < 0) {
-      idx = projSpriteIds.length;
-      projSpriteIds.push(spriteSheetId);
+      idx = globalSpriteIds.length;
+      globalSpriteIds.push(spriteSheetId);
     }
     return idx;
   };
+  // Runtime spritesheet swaps (M10h): every sheet a Set Sprite event can switch
+  // to joins the global sprite table, and its `_<symbol>` data symbol resolves
+  // to that index so VM_ACTOR_SET_SPRITESHEET bridges like emotes/music.
+  walkScenesScripts(
+    scenes,
+    {
+      customEvents: {
+        lookup: Object.fromEntries(
+          (projectData.scripts ?? []).map((sc) => [sc.id, sc]),
+        ),
+        maxDepth: 5,
+      },
+    },
+    (event) => {
+      if (
+        (event.command === "EVENT_ACTOR_SET_SPRITE" ||
+          event.command === "EVENT_PLAYER_SET_SPRITE") &&
+        event.args &&
+        typeof event.args.spriteSheetId === "string"
+      ) {
+        const sprite = projectData.sprites.find(
+          (sp) => sp.id === event.args?.spriteSheetId,
+        );
+        if (sprite) {
+          dataSymbols[`_${sprite.symbol}`] = globalSpriteIndex(sprite.id);
+        }
+      }
+    },
+  );
   // GB collision group encoding (gbs_types.h): player 0x01, "1" 0x02, "2" 0x04, "3" 0x08.
   const collisionGroupBit = (group: string): number =>
     (
@@ -294,7 +324,7 @@ const ejectGbaBuild = async ({
   const toProjectileDefEntry = (p: ProjectileData): GbaProjectileDefEntry => {
     const stateIndex = statesOrder.indexOf(p.spriteStateId);
     return {
-      sprite: projSpriteIndex(p.spriteSheetId),
+      sprite: globalSpriteIndex(p.spriteSheetId),
       animState: stateIndex > 0 ? stateIndex : 0,
       // Authored speed -> subpixels/frame (GB Studio speed 1 = 1px = 32).
       moveSpeed: Math.max(1, Math.round(p.speed * 32)),
@@ -737,19 +767,18 @@ const ejectGbaBuild = async ({
     );
   }
 
-  // Projectile sprites (M10f): each unique sheet referenced by a projectile def
-  // (scene or global), emitted ONCE through the same pipeline as actor sprites;
-  // GbaProjectileDef.sprite indexes this table. Butano manages sprite VRAM
-  // dynamically, so no per-scene allocation is needed.
+  // Global sprites (M10f/M10h): each unique sheet referenced by a projectile
+  // def or a Set Sprite event, emitted ONCE through the same pipeline as actor
+  // sprites; GbaProjectileDef.sprite and VM_ACTOR_SET_SPRITESHEET both index
+  // this table. Butano manages sprite VRAM dynamically, so no per-scene
+  // allocation is needed.
   const projCases: string[] = [];
-  for (let pi = 0; pi < projSpriteIds.length; pi++) {
+  for (let pi = 0; pi < globalSpriteIds.length; pi++) {
     const sprite = projectData.sprites.find(
-      (sp) => sp.id === projSpriteIds[pi],
+      (sp) => sp.id === globalSpriteIds[pi],
     );
     if (!sprite || !sprite.states || sprite.states.length === 0) {
-      warnings(
-        `GBA: projectile sprite ${projSpriteIds[pi]} not found - skipped`,
-      );
+      warnings(`GBA: global sprite ${globalSpriteIds[pi]} not found - skipped`);
       continue;
     }
     let img: { width: number; height: number; data: Uint8Array };
@@ -776,7 +805,7 @@ const ejectGbaBuild = async ({
       spriteMode,
       statesOrder,
     );
-    const name = `proj_sprite_${pi}`;
+    const name = `global_sprite_${pi}`;
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
       indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
@@ -796,7 +825,7 @@ const ejectGbaBuild = async ({
     );
     projCases.push(`        case ${pi}: return &${name}_def;`);
     progress(
-      `Converting projectile sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
+      `Converting global sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
     );
   }
 
@@ -833,8 +862,9 @@ const ejectGbaBuild = async ({
     "    }",
     "    return nullptr;",
     "}",
-    "// M10f: projectile sprite lookup (GbaProjectileDef.sprite indexes this).",
-    "inline const GbaActorSprite* gba_projectile_sprite(int idx) {",
+    "// M10f/M10h: global sprite lookup - projectile defs and runtime",
+    "// spritesheet swaps both index this table.",
+    "inline const GbaActorSprite* gba_global_sprite(int idx) {",
     "    switch(idx) {",
     ...projCases,
     "    default: break;",

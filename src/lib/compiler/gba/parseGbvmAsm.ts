@@ -205,6 +205,21 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     }
     return [{ kind: "op", op: 0x81, operands: [dest, src, base] }];
   },
+  // Spritesheet swap (M10h): VM_ACTOR_SET_SPRITESHEET <actor-ref>, <bank>,
+  // _<sprite.symbol> -> op 0x47 [ref, sheet]; the sprite symbol resolves to its
+  // global-sprite index via dataSymbols (bank dropped - GBA is flat). Drop the
+  // op if the sheet wasn't emitted so the project still builds.
+  VM_ACTOR_SET_SPRITESHEET: (a, ev) => {
+    let refVal: number;
+    let sheet: number;
+    try {
+      refVal = ev(a[0]);
+      sheet = ev(a[2]) & 0xff;
+    } catch {
+      return null;
+    }
+    return [{ kind: "op", op: 0x47, operands: [refVal, sheet] }];
+  },
   // Emotes (M10d): VM_ACTOR_EMOTE <actor-ref>, <bank>, _<emote.symbol> -> op 0x42
   // [ref, emote]; the emote symbol resolves to the emitted sprite index via
   // dataSymbols (bank dropped - GBA is flat). Drop the op if the emote wasn't

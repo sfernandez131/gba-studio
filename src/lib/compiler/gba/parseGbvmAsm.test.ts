@@ -215,6 +215,24 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("M10h: expands VM_ACTOR_SET_SPRITESHEET to op 0x47 resolving the sprite symbol", () => {
+    const { items } = parseGbvmAsm(
+      "        VM_ACTOR_SET_SPRITESHEET .ARG0, ___bank_sprite_static, _sprite_static\n",
+      { dataSymbols: { ["_sprite_static"]: 3 } },
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x47, operands: [-1, 3] }]);
+  });
+
+  test("M10h: drops VM_ACTOR_SET_SPRITESHEET when the sheet wasn't emitted", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_ACTOR_SET_SPRITESHEET .ARG0, ___bank_sprite_x, _sprite_x\n",
+    );
+    expect(items).toEqual([]);
+    expect(skipped).toContain(
+      "VM_ACTOR_SET_SPRITESHEET .ARG0, ___bank_sprite_x, _sprite_x",
+    );
+  });
+
   test("M10f: bridges VM_PROJECTILE_LAUNCH to op 0x80 (slot + stack-args ref)", () => {
     expect(
       parseGbvmAsm("        VM_PROJECTILE_LAUNCH 1, .ARG2\n").items,
