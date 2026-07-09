@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 81 |
+| Encoded directly to a gbavm opcode | 82 |
 | Expanded to equivalent gbavm sequences | 20 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **102 / 156 (65%)** |
+| **Supported total** | **103 / 156 (66%)** |
 | Skipped with a warning (safe no-op) | 10 |
-| Unbridged (build fails on use) | 44 |
+| Unbridged (build fails on use) | 43 |
 
 ## Unbridged — the honest to-do list
 
@@ -32,7 +32,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ASM` |
 | `VM_CAMERA_MOVE_TO` |
 | `VM_CAMERA_SET_POS` |
-| `VM_CHOICE` |
 | `VM_CONTEXT_PREPARE` |
 | `VM_ENDASM` |
 | `VM_GET_INT16` |
@@ -113,6 +112,7 @@ One-to-one macro → gbavm opcode.
 | `VM_CALL` |
 | `VM_CALL_FAR` |
 | `VM_CALL_NATIVE` |
+| `VM_CHOICE` |
 | `VM_COS_SCALE` |
 | `VM_DISPLAY_TEXT` |
 | `VM_DISPLAY_TEXT_EX` |

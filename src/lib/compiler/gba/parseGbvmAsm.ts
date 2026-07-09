@@ -99,6 +99,9 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_PROJECTILE_LAUNCH: 0x80,
   VM_MEMSET: 0x76,
   VM_MEMCPY: 0x77,
+  // Choice / menu (M11a): IDX receives the result; followed by COUNT .MENUITEM
+  // rows (captured in the parse loop as a raw 6-byte-per-item table).
+  VM_CHOICE: 0x48,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
@@ -357,6 +360,11 @@ const BASE_CONSTS: Record<string, number> = {
   ".ACTOR_FLAG_ANIM_NOLOOP": 0x04,
   ".ACTOR_FLAG_COLLISION": 0x08,
   ".ACTOR_FLAG_PERSISTENT": 0x10,
+  // VM_CHOICE menu options (M11a).
+  ".UI_MENU_STANDARD": 0,
+  ".UI_MENU_LAST_0": 1,
+  ".UI_MENU_CANCEL_B": 2,
+  ".UI_MENU_SET_START": 4,
   ".UI_COLOR_BLACK": 0,
   ".UI_COLOR_WHITE": 1,
   ".UI_DRAW_FRAME": 1,
@@ -645,6 +653,13 @@ const parseAsciz = (line: string, avatarOut?: { index: number }): number[] => {
       // leading avatar code (with its own \002) is already stripped above.
       out.push(0x02);
       if (i + 1 < bytes.length) out.push(bytes[++i]);
+    } else if (code === 0x03) {
+      // goto x,y: keep inline (code + 2 param bytes) so the engine can indent
+      // choice/menu lines to the authored column (M11a); the y param rides on
+      // the \n line breaks.
+      out.push(0x03);
+      if (i + 1 < bytes.length) out.push(bytes[++i]);
+      if (i + 1 < bytes.length) out.push(bytes[++i]);
     } else if (code in TEXT_CODE_PARAMS) i += TEXT_CODE_PARAMS[code]; // skip code + params
     // other unknown control bytes (e.g. 0x0D scroll) are dropped for now
   }
@@ -819,6 +834,9 @@ export function parseGbvmAsm(
   // VM_RAISE EXCEPTION_CHANGE_SCENE is followed by an IMPORT_FAR_PTR_DATA scene
   // pointer; this flag bridges that pair into a 2-byte scene index.
   let pendingSceneChange = false;
+  // VM_CHOICE is followed by COUNT `.MENUITEM x, y, iL, iR, iU, iD` rows; each
+  // becomes 6 raw bytes the engine reads as the menu-item table (M11a).
+  let pendingMenuItems = 0;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
   // M4 dialogue: VM_LOAD_TEXT sets captureText so the next .asciz line is captured as
   // the string to render with the following VM_DISPLAY_TEXT (op 0x90 + inline text).
@@ -1056,6 +1074,20 @@ export function parseGbvmAsm(
       continue;
     }
 
+    // The COUNT `.MENUITEM x, y, iL, iR, iU, iD` rows after VM_CHOICE become the
+    // raw menu-item table the engine's choice handler reads (M11a).
+    if (pendingMenuItems > 0 && mnemonic === ".MENUITEM") {
+      const vals = splitArgs(argStr).map((v) => ev(v) & 0xff);
+      if (vals.length !== 6) {
+        throw new Error(
+          `.MENUITEM expected 6 values but got "${argStr.trim()}"`,
+        );
+      }
+      items.push({ kind: "raw", bytes: vals });
+      pendingMenuItems--;
+      continue;
+    }
+
     if (SKIP_MACROS.has(mnemonic)) {
       skipped.push(`${mnemonic} ${argStr.trim()}`.trim());
       continue;
@@ -1082,6 +1114,10 @@ export function parseGbvmAsm(
       return ev(args[i]);
     });
     items.push({ kind: "op", op, operands });
+    // VM_CHOICE: arm capture of the trailing .MENUITEM table (COUNT = operand 2).
+    if (op === 0x48 && typeof operands[2] === "number") {
+      pendingMenuItems = operands[2];
+    }
   }
 
   if (inRpn) throw new Error("Unterminated VM_RPN block (no .R_STOP)");

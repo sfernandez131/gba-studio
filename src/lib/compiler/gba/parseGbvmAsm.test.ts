@@ -215,6 +215,40 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
+    const asm = [
+      "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",
+      "        .MENUITEM               1, 1, 0, 0, 0, 2",
+      "        .MENUITEM               1, 2, 0, 0, 1, 0",
+    ].join("\n");
+    const { items } = parseGbvmAsm(asm, { globals: { VAR_RESULT: 7 } });
+    expect(items).toEqual([
+      { kind: "op", op: 0x48, operands: [7, 3, 2] },
+      { kind: "raw", bytes: [1, 1, 0, 0, 0, 2] },
+      { kind: "raw", bytes: [1, 2, 0, 0, 1, 0] },
+    ]);
+  });
+
+  test("M11a: keeps the goto text code (\\003 x y) inline for choice-line indenting", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        '        .asciz "\\001\\001\\003\\003\\002Yes\\n\\003\\003\\003No"',
+        "        VM_DISPLAY_TEXT",
+      ].join("\n"),
+    );
+    const display = items.find((i) => i.kind === "raw");
+    // op 0x90, no avatar (0xff), 0 vars, then: speed code, goto(3,2), "Yes",
+    // newline, goto(3,3), "No", terminator.
+    expect(display).toEqual({
+      kind: "raw",
+      bytes: [
+        0x90, 0xff, 0, 0x01, 0x01, 0x03, 0x03, 0x02, 0x59, 0x65, 0x73, 0x0a,
+        0x03, 0x03, 0x03, 0x4e, 0x6f, 0,
+      ],
+    });
+  });
+
   test("M10h: expands VM_ACTOR_SET_SPRITESHEET to op 0x47 resolving the sprite symbol", () => {
     const { items } = parseGbvmAsm(
       "        VM_ACTOR_SET_SPRITESHEET .ARG0, ___bank_sprite_static, _sprite_static\n",
@@ -362,12 +396,13 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(bytes.slice(0, 4)).toEqual([0x91, 0x00, 0x12, 0xfd]);
   });
 
-  test("M4f: VM_DISPLAY_TEXT keeps newlines (multi-line) and skips control-code params", () => {
+  test("M4f: VM_DISPLAY_TEXT keeps newlines (multi-line) and control-code params intact", () => {
     const { items } = parseGbvmAsm(
       [
         "        VM_LOAD_TEXT 0",
-        // \012 = newline, \003\041\041 = goto with two printable-range params (must
-        // be skipped with the code, not leak as "!!").
+        // \012 = newline, \003\041\041 = goto with two printable-range params. The
+        // goto is kept INLINE since M11a (the engine indents the line); its param
+        // bytes must travel with the code, not leak as "!!" glyphs.
         '        .asciz "Line one\\012\\003\\041\\041Line two"',
         "        VM_DISPLAY_TEXT",
         "",
@@ -379,8 +414,20 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     };
     expect(raw.bytes[0]).toBe(0x90);
     const text = raw.bytes.slice(3, -1); // strip op + avatar + var-count + null
-    expect(String.fromCharCode(...text)).toBe("Line one\nLine two"); // newline kept, goto gone
+    expect(String.fromCharCode(...text)).toBe(
+      "Line one\n\x03\x21\x21Line two", // newline kept, goto inline w/ params
+    );
     expect(text).toContain(0x0a); // the newline byte survives
+    // \004 goto-rel is still dropped with its params.
+    const rel = parseGbvmAsm(
+      [
+        "        VM_LOAD_TEXT 0",
+        '        .asciz "A\\004\\041\\041B"',
+        "        VM_DISPLAY_TEXT",
+        "",
+      ].join("\n"),
+    ).items.find((i) => i.kind === "raw") as { kind: "raw"; bytes: number[] };
+    expect(String.fromCharCode(...rel.bytes.slice(3, -1))).toBe("AB");
   });
 
   test("M4g/M4p: VM_DISPLAY_TEXT keeps the set-speed (\\001) and set-font (\\002) codes inline", () => {
