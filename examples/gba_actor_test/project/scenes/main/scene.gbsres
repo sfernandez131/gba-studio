@@ -111,6 +111,23 @@
         "trueText": "Fight",
         "falseText": "Flee"
       }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000e2",
+      "command": "EVENT_MENU",
+      "args": {
+        "variable": "1",
+        "items": 6,
+        "option1": "Sword",
+        "option2": "Shield",
+        "option3": "Potion",
+        "option4": "Bomb",
+        "option5": "Key",
+        "option6": "Rope",
+        "layout": "dialogue",
+        "cancelOnLastOption": false,
+        "cancelOnB": true
+      }
     }
   ],
   "playerHit1Script": [
