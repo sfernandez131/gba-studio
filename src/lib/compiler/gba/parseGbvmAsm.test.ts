@@ -215,6 +215,16 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  test("M11c: bridges VM_OVERLAY_CLEAR to op 0x96 (box geometry)", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_OVERLAY_CLEAR 0, 0, 10, 6, .UI_COLOR_WHITE, ^/(.UI_DRAW_FRAME | .UI_AUTO_SCROLL)/\n",
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x96, operands: [0, 0, 10, 6, 1, 3] },
+    ]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
     const asm = [
       "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",

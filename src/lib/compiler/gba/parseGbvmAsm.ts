@@ -117,6 +117,9 @@ const MACRO_TO_OP: Record<string, number> = {
   // text revealed / button); the dialogue A-wait now lives here (the display op only
   // reveals). VM_DISPLAY_TEXT_EX (0x95) is handled specially in the parse loop.
   VM_OVERLAY_WAIT: 0x94,
+  // M11c: the box width (GB window tiles); x comes from MOVE_TO, height from the
+  // text sizing. Color/frame options accepted + ignored by the engine for now.
+  VM_OVERLAY_CLEAR: 0x96,
   // Audio master volume (M5c): VM_SOUND_MASTERVOL <vol> -> op 0x63 [vol].
   VM_SOUND_MASTERVOL: 0x63,
   // SRAM save (M6a): SAVE_PEEK (check/read a save) + SAVE_CLEAR. Save/load themselves
@@ -302,7 +305,6 @@ const SKIP_MACROS = new Set<string>([
   // from the inline .asciz and rendered via op 0x90/0x95); VM_OVERLAY_SHOW/MOVE_TO/HIDE
   // /WAIT are bridged (M4d box + M4q wait). The remaining overlay/window ops are
   // dropped so projects build/run (clear/scroll/submap/printer come later).
-  "VM_OVERLAY_CLEAR",
   "VM_OVERLAY_SCROLL",
   "VM_OVERLAY_SET_SCROLL",
   "VM_OVERLAY_SET_SUBMAP_EX",

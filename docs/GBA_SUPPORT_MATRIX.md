@@ -7,11 +7,11 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 82 |
+| Encoded directly to a gbavm opcode | 83 |
 | Expanded to equivalent gbavm sequences | 20 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **103 / 156 (66%)** |
-| Skipped with a warning (safe no-op) | 10 |
+| **Supported total** | **104 / 156 (67%)** |
+| Skipped with a warning (safe no-op) | 9 |
 | Unbridged (build fails on use) | 43 |
 
 ## Unbridged — the honest to-do list
@@ -71,7 +71,6 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 | Macro |
 |---|
 | `VM_MUSIC_MUTE` |
-| `VM_OVERLAY_CLEAR` |
 | `VM_OVERLAY_SCROLL` |
 | `VM_OVERLAY_SET_SCROLL` |
 | `VM_OVERLAY_SET_SUBMAP_EX` |
@@ -133,6 +132,7 @@ One-to-one macro → gbavm opcode.
 | `VM_LOOP` |
 | `VM_MEMCPY` |
 | `VM_MEMSET` |
+| `VM_OVERLAY_CLEAR` |
 | `VM_OVERLAY_HIDE` |
 | `VM_OVERLAY_MOVE_TO` |
 | `VM_OVERLAY_SHOW` |
