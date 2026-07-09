@@ -124,7 +124,7 @@
         "option4": "Bomb",
         "option5": "Key",
         "option6": "Rope",
-        "layout": "dialogue",
+        "layout": "menu",
         "cancelOnLastOption": false,
         "cancelOnB": true
       }
