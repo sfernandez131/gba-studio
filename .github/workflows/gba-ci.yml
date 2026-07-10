@@ -141,3 +141,26 @@ jobs:
           test "$size" -ge 150000
           # The Maxmod mixer must be in the link map (audio actually linked).
           grep -q "mixer_asm" ci-engine/gbavm/build/gbavm.map
+
+      # --- Runtime tests (quality program part 2b) -----------------------------
+      # Build the parity fixture and boot it headlessly under mGBA's GDB stub;
+      # gdb-multiarch asserts engine behavior (projectile launch angles, the
+      # choice/menu flow, result variables). The automated form of the manual
+      # GDB-stub verification recipe used for every M10/M11 slice.
+      - name: Build the gba_actor_test fixture to a GBA ROM
+        env:
+          GBAVM_ROOT: ${{ github.workspace }}/ci-engine/gbavm
+          GBA_TOOLCHAIN: wonderful
+          WONDERFUL_TOOLCHAIN: /opt/wonderful
+        run: |
+          export PATH=/opt/wonderful/bin:$PATH
+          node out/cli/gb-studio-cli.js make:gba \
+            examples/gba_actor_test/project.gbsproj out-ci/actor_test.gba
+
+      - name: Install mGBA + gdb for the runtime tests
+        run: sudo apt-get -y install mgba-sdl gdb-multiarch
+
+      - name: Run the mGBA runtime tests
+        run: |
+          bash scripts/gba-runtime-test.sh \
+            out-ci/actor_test.gba ci-engine/gbavm/gbavm.elf
