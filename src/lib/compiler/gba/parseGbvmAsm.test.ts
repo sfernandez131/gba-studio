@@ -406,6 +406,25 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(bytes.slice(0, 4)).toEqual([0x91, 0x00, 0x12, 0xfd]);
   });
 
+  test("M11d: overlay colour + frame options ride SHOW/CLEAR (black cover = color 0, options 0)", () => {
+    // The "Show Overlay" event's black screen cover: color .UI_COLOR_BLACK,
+    // options literal 0 (the compiler never draws a frame on a cover).
+    const { items, skipped } = parseGbvmAsm(
+      [
+        "        VM_OVERLAY_SHOW 0, 0, .UI_COLOR_BLACK, 0",
+        "        VM_OVERLAY_CLEAR 0, 0, 20, 4, .UI_COLOR_WHITE, .UI_AUTO_SCROLL | .UI_DRAW_FRAME",
+        "        VM_OVERLAY_CLEAR 0, 0, 20, 4, .UI_COLOR_WHITE, .UI_AUTO_SCROLL",
+        "",
+      ].join("\n"),
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x92, operands: [0, 0, 0, 0] }, // full-screen black, no frame
+      { kind: "op", op: 0x96, operands: [0, 0, 20, 4, 1, 3] }, // white framed box
+      { kind: "op", op: 0x96, operands: [0, 0, 20, 4, 1, 2] }, // white frameless box
+    ]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M4f: VM_DISPLAY_TEXT keeps newlines (multi-line) and control-code params intact", () => {
     const { items } = parseGbvmAsm(
       [
