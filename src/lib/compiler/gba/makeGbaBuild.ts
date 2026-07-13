@@ -20,7 +20,14 @@
 
 import os from "os";
 import Path from "path";
-import { copyFile, ensureDir, pathExists, readdir } from "fs-extra";
+import {
+  copyFile,
+  ensureDir,
+  pathExists,
+  readdir,
+  readFile,
+  stat,
+} from "fs-extra";
 import type { SpawnOptions } from "child_process";
 import spawn, { ChildProcess } from "lib/helpers/cli/spawn";
 import { envWith } from "lib/helpers/cli/env";
@@ -65,6 +72,46 @@ const findWonderful = async (): Promise<
     return { root };
   }
   return null;
+};
+
+// GBA ROM stats (M7 follow-up): the GB path prints GBDK romusage; give the GBA
+// path an equivalent one-line summary. ROM = the .gba file size; IWRAM (32KB)
+// and EWRAM (256KB) usage summed from the link map's top-level output sections
+// (lines at column 0; input sections are indented and skipped).
+const reportRomStats = async (
+  romPath: string,
+  progress: (msg: string) => void,
+) => {
+  const size = (await stat(romPath)).size;
+  let iwram = 0;
+  let ewram = 0;
+  try {
+    const mapPath = Path.join(
+      gbaEngineRoot,
+      "build",
+      `${Path.basename(gbaEngineRoot)}.map`,
+    );
+    const map = await readFile(mapPath, "utf8");
+    for (const m of map.matchAll(
+      /^(\.\S+)\s+0x([0-9a-f]{8,})\s+0x([0-9a-f]+)/gim,
+    )) {
+      const addr = parseInt(m[2], 16);
+      const len = parseInt(m[3], 16);
+      if (addr >= 0x03000000 && addr < 0x03008000) iwram += len;
+      else if (addr >= 0x02000000 && addr < 0x02040000) ewram += len;
+    }
+  } catch (e) {
+    // No/unreadable map: report the ROM size alone.
+  }
+  const kb = (n: number) => `${(n / 1024).toFixed(1)}KB`;
+  const pct = (n: number, total: number) => `${Math.round((n / total) * 100)}%`;
+  progress(
+    `GBA ROM stats: ${kb(size)} ROM` +
+      (iwram || ewram
+        ? `, IWRAM ${kb(iwram)}/32KB (${pct(iwram, 32768)})` +
+          `, EWRAM ${kb(ewram)}/256KB (${pct(ewram, 262144)})`
+        : ""),
+  );
 };
 
 const makeGbaBuild = async ({
@@ -194,6 +241,7 @@ const makeGbaBuild = async ({
   const outDir = Path.join(buildRoot, "build", "gba");
   await ensureDir(outDir);
   await copyFile(romPath, Path.join(outDir, romFilename));
+  await reportRomStats(romPath, progress);
   progress(`GBA ROM built: ${romFilename}`);
 };
 
