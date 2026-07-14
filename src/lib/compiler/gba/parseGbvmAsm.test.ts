@@ -406,6 +406,27 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(bytes.slice(0, 4)).toEqual([0x91, 0x00, 0x12, 0xfd]);
   });
 
+  test("M12c: VM_LOAD_PALETTE bridges mask/options + inline CGB_PAL rows as RGB555", () => {
+    const { items, skipped } = parseGbvmAsm(
+      [
+        "        VM_LOAD_PALETTE 5, .PALETTE_COMMIT | .PALETTE_BKG",
+        "        .CGB_PAL 31,0,0 0,31,0 0,0,31 31,31,31",
+        "        .CGB_PAL 1,2,3 4,5,6 7,8,9 10,11,12",
+        "",
+      ].join("\n"),
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x7c, operands: [5, 3] }, // banks 0+2, commit|bkg
+      // red, green, blue, white as little-endian RGB555 words
+      { kind: "raw", bytes: [0x1f, 0x00, 0xe0, 0x03, 0x00, 0x7c, 0xff, 0x7f] },
+      {
+        kind: "raw",
+        bytes: [0x41, 0x0c, 0xa4, 0x18, 0x07, 0x25, 0x6a, 0x31],
+      },
+    ]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M11d: overlay colour + frame options ride SHOW/CLEAR (black cover = color 0, options 0)", () => {
     // The "Show Overlay" event's black screen cover: color .UI_COLOR_BLACK,
     // options literal 0 (the compiler never draws a frame on a cover).

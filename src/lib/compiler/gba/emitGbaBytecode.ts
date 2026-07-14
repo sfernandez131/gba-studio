@@ -81,6 +81,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   // CHOICE idx, options, count (M11a) + a trailing count x 6-byte raw menu-item
   // table (captured from the .MENUITEM rows by the parser).
   0x48: ["i16", "u8", "u8"],
+  0x7c: ["u8", "u8"], // LOAD_PALETTE mask, options (+ inline 8-byte rows) -- M12c
   0x51: ["u8"], // SET_SPRITES_VISIBLE mode
   0x54: ["u8", "i16"], // INPUT_GET joyid, idx
   0x57: ["u8"], // FADE flags (gbavm: no-op stub - screen always shown)
