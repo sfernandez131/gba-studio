@@ -17,11 +17,6 @@ on:
         description: "Upstream merge-base commit to build"
         required: true
         default: "a18666b4593ca89814e14aecf30e00b7a8d90010"
-  # TEMPORARY bootstrap trigger: GitHub can't dispatch a workflow that isn't on
-  # the default branch yet. Remove once this file lands on develop.
-  push:
-    branches:
-      - gba-qp-golden-rom
 
 env:
   MERGE_BASE: ${{ inputs.merge_base || 'a18666b4593ca89814e14aecf30e00b7a8d90010' }}
