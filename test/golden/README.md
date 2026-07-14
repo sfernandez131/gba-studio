@@ -2,8 +2,13 @@
 
 `gbs2-upstream-a18666b45.gb` is the stock `appData/templates/gbs2` project built to a
 GB ROM by **pure upstream GB Studio** (chrismaltby/gb-studio) at the fork's merge-base
-commit `a18666b4593ca89814e14aecf30e00b7a8d90010` (an ancestor of `develop`), on Linux
-via the `Golden ROM` workflow (`.github/workflows/golden-rom.yml`).
+commit `a18666b4593ca89814e14aecf30e00b7a8d90010` (an ancestor of `develop`). This
+copy was built locally on Windows from a worktree at that exact commit (the only
+local edit was upstream's Windows CLI path-resolution bug in `src/consts.ts`, which
+cannot affect ROM bytes); the per-PR check building on Linux CI against it doubles as
+proof that GBDK output is host-OS independent. Future regenerations should use the
+`Golden ROM` workflow (`.github/workflows/golden-rom.yml`) once it exists on the
+default branch (GitHub can't dispatch a workflow that isn't there yet).
 
 The `gb-non-regression` CI job builds the same project with the fork's compiler on
 every PR and asserts byte-identity against this file via `scripts/gb-rom-parity.py`.
