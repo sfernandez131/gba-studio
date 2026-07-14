@@ -26,6 +26,7 @@ interface SpriteTile {
   sliceY: number;
   flipX: boolean;
   flipY: boolean;
+  paletteIndex?: number; // GBC OBJ palette slot 0-7 (M12b)
 }
 interface SpriteFrame {
   tiles: SpriteTile[];
@@ -63,6 +64,36 @@ export interface SpriteSheet {
 }
 
 // Assemble one frame's canvasW x canvasH indexed image from its metasprite tiles.
+/**
+ * The GBC OBJ palette slot a sheet is recoloured with on GBA (M12b): one GBA
+ * sprite item carries one palette, so pick the MODAL metasprite-tile
+ * paletteIndex across all states/animations/frames (ties -> lowest slot;
+ * no tiles -> slot 0). Per-tile palette mixing within a sheet is a parity gap.
+ */
+export function dominantPaletteIndex(input: {
+  states?: {
+    animations?: { frames?: { tiles?: { paletteIndex?: number }[] }[] }[];
+  }[];
+}): number {
+  const counts = new Map<number, number>();
+  for (const state of input.states ?? [])
+    for (const anim of state.animations ?? [])
+      for (const frame of anim.frames ?? [])
+        for (const tile of frame.tiles ?? []) {
+          const p = (tile.paletteIndex ?? 0) & 0x07;
+          counts.set(p, (counts.get(p) ?? 0) + 1);
+        }
+  let slot = 0;
+  let best = -1;
+  for (const [p, n] of [...counts.entries()].sort((a, b) => a[0] - b[0])) {
+    if (n > best) {
+      best = n;
+      slot = p;
+    }
+  }
+  return slot;
+}
+
 const assembleFrame = (
   frame: SpriteFrame,
   src: IndexedImage,

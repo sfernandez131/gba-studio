@@ -22,7 +22,9 @@
     "",
     ""
   ],
-  "spritePaletteIds": [],
+  "spritePaletteIds": [
+    "default-bg-2"
+  ],
   "autoFadeSpeed": 1,
   "script": [
     {
