@@ -26,6 +26,8 @@ import { ProjectResources } from "shared/lib/resources/types";
 import { assetFilename } from "shared/lib/helpers/assets";
 import { tileDataIndexFn } from "shared/lib/tiles/tileData";
 import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
+import { readFileToPalettes } from "lib/tiles/readFileToPalettes";
+import { getPalette } from "lib/compiler/scriptBuilder/helpers";
 import { walkScenesScripts } from "shared/lib/scripts/walk";
 import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import {
@@ -37,7 +39,11 @@ import {
   GbaProjectileDefEntry,
 } from "./linkGbaProgram";
 import type { ProjectileData } from "../generateGBVMData";
-import { indexedImageToBmp, hexToRgb } from "./writeIndexedBmp";
+import {
+  indexedImageToBmp,
+  hexToRgb,
+  composeBankedImage,
+} from "./writeIndexedBmp";
 import type { Rgb } from "./writeIndexedBmp";
 import { buildSpriteSheet, SpriteSheetInput } from "./writeSpriteSheet";
 
@@ -622,25 +628,67 @@ const ejectGbaBuild = async ({
   const spriteMode = settings.spriteMode || "8x16";
 
   // Convert a scene's background to a 256-aligned indexed BMP (solid backdrop if
-  // the scene has none).
+  // the scene has none). Colour scenes return multiBank=true: the BMP palette is
+  // laid out as 16-colour banks (GBC palette i -> bank i, colours 1..4) and the
+  // item json must say bpp_4_manual so Butano keeps per-tile bank attribution
+  // (M12a; layout + quantizer behaviour verified by spike 2026-07-14).
   const convertBackground = async (
     scene: (typeof scenes)[number],
-  ): Promise<Buffer> => {
+  ): Promise<{ bmp: Buffer; multiBank: boolean }> => {
     const bg = projectData.backgrounds.find((b) => b.id === scene.backgroundId);
     if (!bg) {
-      return indexedImageToBmp(
-        { width: 8, height: 8, data: new Uint8Array(64) },
-        [hexToRgb(settings.customColorsBlack || "202850")],
-        { align: 256 },
-      );
+      return {
+        bmp: indexedImageToBmp(
+          { width: 8, height: 8, data: new Uint8Array(64) },
+          [hexToRgb(settings.customColorsBlack || "202850")],
+          { align: 256 },
+        ),
+        multiBank: false,
+      };
     }
     if (isColor) {
+      // GBC palette model (M12a): per-pixel GB shade (0..3) + per-tile palette
+      // (0..7), composed as bank*16 + 1 + shade. Auto-colour backgrounds get
+      // both from upstream's extractor; manual ones pair the 4-shade art with
+      // scene.paletteIds + the background's painted tileColors.
       progress(`Converting background ${bg.filename} (colour)...`);
-      const { img, palette } = await readTrueColor(
-        assetFilename(projectRoot, "backgrounds", bg),
-        false,
+      const file = assetFilename(projectRoot, "backgrounds", bg);
+      let shades: { width: number; height: number; data: Uint8Array };
+      let tileBanks: number[];
+      let bankPalettes: string[][];
+      if (bg.autoColor) {
+        // uiPalette is only relevant to UI-tagged tiles - M12d territory.
+        const auto = await readFileToPalettes(
+          file,
+          settings.colorCorrection,
+          undefined,
+        );
+        shades = auto.indexedImage;
+        tileBanks = auto.map;
+        bankPalettes = auto.palettes;
+      } else {
+        shades = await readFileToIndexedImage(file, tileDataIndexFn);
+        tileBanks = bg.tileColors ?? [];
+        bankPalettes = [];
+        for (let i = 0; i < 8; i++) {
+          bankPalettes.push(
+            getPalette(
+              projectData.palettes,
+              scene.paletteIds?.[i] ?? "",
+              settings.defaultBackgroundPaletteIds?.[i] ?? "",
+            ).colors,
+          );
+        }
+      }
+      const { img, palette } = composeBankedImage(
+        shades,
+        tileBanks,
+        bankPalettes,
       );
-      return indexedImageToBmp(img, palette, { align: 256 });
+      return {
+        bmp: indexedImageToBmp(img, palette, { align: 256 }),
+        multiBank: true,
+      };
     }
     progress(`Converting background ${bg.filename}...`);
     // GBA bg colour 0 is transparent, so map the 4 GB shades to indices 1..4.
@@ -657,11 +705,14 @@ const ejectGbaBuild = async ({
     );
     const data = new Uint8Array(src.data.length);
     for (let i = 0; i < data.length; i++) data[i] = (src.data[i] & 0x03) + 1;
-    return indexedImageToBmp(
-      { width: src.width, height: src.height, data },
-      palette,
-      { align: 256 },
-    );
+    return {
+      bmp: indexedImageToBmp(
+        { width: src.width, height: src.height, data },
+        palette,
+        { align: 256 },
+      ),
+      multiBank: false,
+    };
   };
 
   const bgIncludes: string[] = [];
@@ -674,13 +725,18 @@ const ejectGbaBuild = async ({
     const scene = scenes[s];
     // Background -> graphics/scene<s>_bg.bmp (Butano regular_bg).
     const bgName = `scene${s}_bg`;
+    const converted = await convertBackground(scene);
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${bgName}.bmp`),
-      await convertBackground(scene),
+      converted.bmp,
     );
     await writeFile(
       Path.join(gbaEngineRoot, "graphics", `${bgName}.json`),
-      JSON.stringify({ type: "regular_bg" }) + "\n",
+      JSON.stringify(
+        converted.multiBank
+          ? { type: "regular_bg", ["bpp_mode"]: "bpp_4_manual" }
+          : { type: "regular_bg" },
+      ) + "\n",
     );
     bgIncludes.push(`#include "bn_regular_bg_items_${bgName}.h"`);
     bgCases.push(
