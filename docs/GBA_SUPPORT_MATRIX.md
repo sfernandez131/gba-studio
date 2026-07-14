@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 83 |
+| Encoded directly to a gbavm opcode | 84 |
 | Expanded to equivalent gbavm sequences | 20 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **104 / 156 (67%)** |
+| **Supported total** | **105 / 156 (67%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 43 |
+| Unbridged (build fails on use) | 42 |
 
 ## Unbridged — the honest to-do list
 
@@ -40,7 +40,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_INPUT_ATTACH` |
 | `VM_INPUT_DETACH` |
 | `VM_INPUT_WAIT` |
-| `VM_LOAD_PALETTE` |
 | `VM_LOAD_TEXT_EX` |
 | `VM_LOAD_TILESET` |
 | `VM_MUSIC_ROUTINE` |
@@ -127,6 +126,7 @@ One-to-one macro → gbavm opcode.
 | `VM_INVOKE` |
 | `VM_JOIN` |
 | `VM_JUMP` |
+| `VM_LOAD_PALETTE` |
 | `VM_LOAD_TEXT` |
 | `VM_LOCK` |
 | `VM_LOOP` |

@@ -758,7 +758,13 @@ const ejectGbaBuild = async ({
       Path.join(gbaEngineRoot, "graphics", `${bgName}.json`),
       JSON.stringify(
         converted.multiBank
-          ? { type: "regular_bg", ["bpp_mode"]: "bpp_4_manual" }
+          ? // colors_count 128 pads the palette item to all 8 GBC banks so
+            // VM_LOAD_PALETTE can recolor any bank at runtime (M12c).
+            {
+              type: "regular_bg",
+              ["bpp_mode"]: "bpp_4_manual",
+              ["colors_count"]: 128,
+            }
           : { type: "regular_bg" },
       ) + "\n",
     );

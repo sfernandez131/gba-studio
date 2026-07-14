@@ -102,6 +102,8 @@ const MACRO_TO_OP: Record<string, number> = {
   // Choice / menu (M11a): IDX receives the result; followed by COUNT .MENUITEM
   // rows (captured in the parse loop as a raw 6-byte-per-item table).
   VM_CHOICE: 0x48,
+  // M12c: mask + options, then one inline 8-byte row (4 RGB555 words) per mask bit.
+  VM_LOAD_PALETTE: 0x7c,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
@@ -362,6 +364,10 @@ const BASE_CONSTS: Record<string, number> = {
   ".ACTOR_FLAG_ANIM_NOLOOP": 0x04,
   ".ACTOR_FLAG_COLLISION": 0x08,
   ".ACTOR_FLAG_PERSISTENT": 0x10,
+  // VM_LOAD_PALETTE flags (M12c).
+  ".PALETTE_COMMIT": 1,
+  ".PALETTE_BKG": 2,
+  ".PALETTE_SPRITE": 4,
   // VM_CHOICE menu options (M11a).
   ".UI_MENU_STANDARD": 0,
   ".UI_MENU_LAST_0": 1,
@@ -839,6 +845,10 @@ export function parseGbvmAsm(
   // VM_CHOICE is followed by COUNT `.MENUITEM x, y, iL, iR, iU, iD` rows; each
   // becomes 6 raw bytes the engine reads as the menu-item table (M11a).
   let pendingMenuItems = 0;
+  // VM_LOAD_PALETTE is followed by one .CGB_PAL/.DMG_PAL row per set mask bit;
+  // each becomes 8 raw bytes (4 little-endian RGB555 words) the engine applies
+  // to the bg palette banks (M12c).
+  let pendingPalRows = 0;
   let active = entrySymbol === undefined; // when scoping to an entry, wait for it
   // M4 dialogue: VM_LOAD_TEXT sets captureText so the next .asciz line is captured as
   // the string to render with the following VM_DISPLAY_TEXT (op 0x90 + inline text).
@@ -1090,6 +1100,45 @@ export function parseGbvmAsm(
       continue;
     }
 
+    // Palette rows after VM_LOAD_PALETTE (M12c): .CGB_PAL carries 12 5-bit
+    // channels (4 colours); .DMG_PAL carries 4 shade indices packed into one
+    // word + 3 zero words (GB's shape) - kept verbatim for stream sync, the
+    // engine only meaningfully applies CGB rows (DMG semantics are M12d).
+    if (pendingPalRows > 0 && mnemonic === ".CGB_PAL") {
+      // Channels are comma-separated triples with SPACES between colours
+      // (".CGB_PAL r,g,b r,g,b r,g,b r,g,b") - split on both.
+      const v = argStr
+        .trim()
+        .split(/[\s,]+/)
+        .map((x) => ev(x) & 0x1f);
+      if (v.length !== 12) {
+        throw new Error(
+          `.CGB_PAL expected 12 values but got "${argStr.trim()}"`,
+        );
+      }
+      const bytes: number[] = [];
+      for (let c = 0; c < 4; c++) {
+        const word = v[c * 3] | (v[c * 3 + 1] << 5) | (v[c * 3 + 2] << 10);
+        bytes.push(word & 0xff, (word >> 8) & 0xff);
+      }
+      items.push({ kind: "raw", bytes });
+      pendingPalRows--;
+      continue;
+    }
+    if (pendingPalRows > 0 && mnemonic === ".DMG_PAL") {
+      const v = argStr
+        .trim()
+        .split(/[\s,]+/)
+        .map((x) => ev(x) & 0x03);
+      const word = (v[0] | (v[1] << 2) | (v[2] << 4) | (v[3] << 6)) & 0xffff;
+      items.push({
+        kind: "raw",
+        bytes: [word & 0xff, word >> 8, 0, 0, 0, 0, 0, 0],
+      });
+      pendingPalRows--;
+      continue;
+    }
+
     if (SKIP_MACROS.has(mnemonic)) {
       skipped.push(`${mnemonic} ${argStr.trim()}`.trim());
       continue;
@@ -1119,6 +1168,12 @@ export function parseGbvmAsm(
     // VM_CHOICE: arm capture of the trailing .MENUITEM table (COUNT = operand 2).
     if (op === 0x48 && typeof operands[2] === "number") {
       pendingMenuItems = operands[2];
+    }
+    // VM_LOAD_PALETTE: arm capture of one palette row per set mask bit (M12c).
+    if (op === 0x7c && typeof operands[0] === "number") {
+      let n = 0;
+      for (let b = 0; b < 8; b++) if (operands[0] & (1 << b)) n++;
+      pendingPalRows = n;
     }
   }
 
