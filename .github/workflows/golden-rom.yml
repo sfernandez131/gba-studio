@@ -17,6 +17,14 @@ on:
         description: "Upstream merge-base commit to build"
         required: true
         default: "a18666b4593ca89814e14aecf30e00b7a8d90010"
+  # TEMPORARY bootstrap trigger: GitHub can't dispatch a workflow that isn't on
+  # the default branch yet. Remove once this file lands on develop.
+  push:
+    branches:
+      - gba-qp-golden-rom
+
+env:
+  MERGE_BASE: ${{ inputs.merge_base || 'a18666b4593ca89814e14aecf30e00b7a8d90010' }}
 
 jobs:
   build-golden:
@@ -24,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.merge_base }}
+          ref: ${{ env.MERGE_BASE }}
           submodules: true
 
       - uses: actions/setup-node@v4
@@ -55,5 +63,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: gbs2-golden-${{ inputs.merge_base }}
+          name: gbs2-golden-${{ env.MERGE_BASE }}
           path: out-golden/gbs2.gb
