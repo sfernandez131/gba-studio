@@ -1,0 +1,59 @@
+# Regenerates the golden GB ROM for the byte-parity check (test/golden/).
+#
+# Builds the stock gbs2 template with PURE UPSTREAM GB Studio at the fork's
+# merge-base commit (an ancestor of develop, so it exists in this repo) and
+# uploads the ROM as an artifact. Download it, commit it to test/golden/, and
+# update the merge-base note in test/golden/README.md whenever the fork is
+# rebased onto a newer upstream.
+#
+# Manual only - the per-PR parity check in gba-ci.yml compares against the
+# committed golden and never rebuilds upstream.
+name: Golden ROM
+
+on:
+  workflow_dispatch:
+    inputs:
+      merge_base:
+        description: "Upstream merge-base commit to build"
+        required: true
+        default: "a18666b4593ca89814e14aecf30e00b7a8d90010"
+
+jobs:
+  build-golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.merge_base }}
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "21.7.1"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn
+
+      - name: Fetch GBDK build tools
+        run: yarn fetch-deps
+
+      - name: Build CLI
+        run: NO_TYPE_CHECKING=1 npm run make:cli
+
+      - name: Build the stock gbs2 sample as a GB ROM (upstream compiler)
+        run: |
+          node out/cli/gb-studio-cli.js make:rom \
+            appData/templates/gbs2/project.gbsproj out-golden/gbs2.gb
+
+      - name: Report hash
+        run: |
+          ls -la out-golden/
+          sha256sum out-golden/gbs2.gb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gbs2-golden-${{ inputs.merge_base }}
+          path: out-golden/gbs2.gb
