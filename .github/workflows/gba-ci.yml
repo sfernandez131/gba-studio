@@ -1,7 +1,8 @@
 # GBA Studio quality gate (see GBA_STUDIO_ROADMAP.md "quality program").
 # Three ledgers per change:
 #   1. editor-checks     - types + lint + full jest suite (upstream GB tests included)
-#   2. gb-non-regression - the stock GB pipeline still builds a GB ROM (superset promise)
+#   2. gb-non-regression - the stock GB pipeline still builds a GB ROM, byte-identical
+#                          to upstream's at the merge-base (the superset promise)
 #   3. gba-integration   - editor CLI + gbavm engine + Wonderful Toolchain build the
 #                          Lost Gem example to a .gba on a clean runner, with the
 #                          Maxmod audio backend verifiably linked
@@ -76,6 +77,14 @@ jobs:
           size=$(stat -c%s out-ci/gbs2.gb)
           echo "GB ROM size: $size"
           test "$size" -ge 32768
+
+      # Golden-ROM byte-parity: the fork's GB output must be byte-identical to
+      # pure upstream's at the merge-base (modulo the nondeterministic
+      # save_signature + header checksum - see test/golden/README.md).
+      - name: Golden-ROM byte-parity vs upstream
+        run: |
+          python3 scripts/gb-rom-parity.py out-ci/gbs2.gb \
+            test/golden/gbs2-upstream-a18666b45.gb
 
   gba-integration:
     runs-on: ubuntu-latest
