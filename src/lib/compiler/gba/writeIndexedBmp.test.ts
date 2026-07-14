@@ -2,6 +2,7 @@ import {
   composeBankedImage,
   indexedImageToBmp,
 } from "lib/compiler/gba/writeIndexedBmp";
+import { dominantPaletteIndex } from "lib/compiler/gba/writeSpriteSheet";
 
 describe("composeBankedImage (M12a GBC palette banks)", () => {
   // Two 8x8 tiles side by side: left tile shades 0..3, right tile all shade 1.
@@ -57,5 +58,35 @@ describe("indexedImageToBmp multi-bank passthrough", () => {
     expect(bmp[pixelOffset]).toBe(50);
     // >16-colour palette emits the full 256-entry table.
     expect(bmp.readUInt32LE(46)).toBe(256);
+  });
+});
+
+describe("dominantPaletteIndex (M12b sprite palettes)", () => {
+  const sheet = (indices: number[]) => ({
+    states: [
+      {
+        animations: [
+          {
+            frames: [
+              { tiles: indices.map((paletteIndex) => ({ paletteIndex })) },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  test("picks the modal slot, lowest wins ties", () => {
+    expect(dominantPaletteIndex(sheet([2, 2, 5]))).toBe(2);
+    expect(dominantPaletteIndex(sheet([5, 2]))).toBe(2); // tie -> lowest
+  });
+
+  test("empty sheets and missing indices default to slot 0", () => {
+    expect(dominantPaletteIndex({ states: [] })).toBe(0);
+    expect(
+      dominantPaletteIndex({
+        states: [{ animations: [{ frames: [{ tiles: [{}] }] }] }],
+      }),
+    ).toBe(0);
   });
 });

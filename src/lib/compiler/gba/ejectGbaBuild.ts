@@ -45,7 +45,11 @@ import {
   composeBankedImage,
 } from "./writeIndexedBmp";
 import type { Rgb } from "./writeIndexedBmp";
-import { buildSpriteSheet, SpriteSheetInput } from "./writeSpriteSheet";
+import {
+  buildSpriteSheet,
+  dominantPaletteIndex,
+  SpriteSheetInput,
+} from "./writeSpriteSheet";
 
 type EjectGbaOptions = {
   projectData: ProjectResources;
@@ -627,6 +631,26 @@ const ejectGbaBuild = async ({
   ];
   const spriteMode = settings.spriteMode || "8x16";
 
+  // M12b: GBC sprite palettes. One GBA sprite item carries ONE 16-colour
+  // palette, so each sheet is recoloured with its DOMINANT GBC OBJ palette
+  // slot (the modal metasprite-tile paletteIndex; ties -> lowest slot).
+  // Per-tile palette mixing within one sheet is a noted parity gap. Sprite
+  // shade s maps to the palette's colour s; index 0 stays transparent.
+  const spriteSheetPalette = (
+    sprite: unknown,
+    spritePaletteIds: string[] | undefined,
+  ): Rgb[] => {
+    const slot = dominantPaletteIndex(
+      sprite as Parameters<typeof dominantPaletteIndex>[0],
+    );
+    const colors = getPalette(
+      projectData.palettes,
+      spritePaletteIds?.[slot] ?? "",
+      settings.defaultSpritePaletteIds?.[slot] ?? "",
+    ).colors;
+    return colors.map(hexToRgb) as Rgb[];
+  };
+
   // Convert a scene's background to a 256-aligned indexed BMP (solid backdrop if
   // the scene has none). Colour scenes return multiBank=true: the BMP palette is
   // laid out as 16-colour banks (GBC palette i -> bank i, colours 1..4) and the
@@ -752,16 +776,14 @@ const ejectGbaBuild = async ({
       let img: { width: number; height: number; data: Uint8Array };
       let palette = spritePalette;
       try {
+        // Colour and mono both read 4-shade art; colour swaps in the sheet's
+        // dominant GBC sprite palette (M12b) instead of the DMG shades.
+        img = await readFileToIndexedImage(
+          assetFilename(projectRoot, "sprites", sprite),
+          tileDataIndexFn,
+        );
         if (isColor) {
-          ({ img, palette } = await readTrueColor(
-            assetFilename(projectRoot, "sprites", sprite),
-            true,
-          ));
-        } else {
-          img = await readFileToIndexedImage(
-            assetFilename(projectRoot, "sprites", sprite),
-            tileDataIndexFn,
-          );
+          palette = spriteSheetPalette(sprite, scene.spritePaletteIds);
         }
       } catch (e) {
         warnings(`GBA: could not read sprite "${sprite.filename}"`);
@@ -840,16 +862,14 @@ const ejectGbaBuild = async ({
     let img: { width: number; height: number; data: Uint8Array };
     let palette = spritePalette;
     try {
+      // Global sprites have no scene context - resolve their dominant GBC
+      // palette against the project defaults (M12b).
+      img = await readFileToIndexedImage(
+        assetFilename(projectRoot, "sprites", sprite),
+        tileDataIndexFn,
+      );
       if (isColor) {
-        ({ img, palette } = await readTrueColor(
-          assetFilename(projectRoot, "sprites", sprite),
-          true,
-        ));
-      } else {
-        img = await readFileToIndexedImage(
-          assetFilename(projectRoot, "sprites", sprite),
-          tileDataIndexFn,
-        );
+        palette = spriteSheetPalette(sprite, undefined);
       }
     } catch (e) {
       warnings(`GBA: could not read projectile sprite "${sprite.filename}"`);
