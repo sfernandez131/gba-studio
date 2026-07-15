@@ -565,6 +565,14 @@ const ejectGbaBuild = async ({
   // quantizes >16-colour images into per-tile 4bpp palettes. Index 0 is reserved
   // for the transparent backdrop (bg) / sprite transparency.
   const isColor = (settings.colorMode ?? "mono") !== "mono";
+  // M12d2: scenes can override the project colour mode ("none" = inherit).
+  const sceneIsColor = (scene: { colorModeOverride?: string }): boolean => {
+    const mode =
+      scene.colorModeOverride && scene.colorModeOverride !== "none"
+        ? scene.colorModeOverride
+        : (settings.colorMode ?? "mono");
+    return mode !== "mono";
+  };
   const readTrueColor = async (
     file: string,
     transparentFromAlpha: boolean,
@@ -673,7 +681,7 @@ const ejectGbaBuild = async ({
         multiBank: false,
       };
     }
-    if (isColor) {
+    if (sceneIsColor(scene)) {
       // GBC palette model (M12a): per-pixel GB shade (0..3) + per-tile palette
       // (0..7), composed as bank*16 + 1 + shade. Auto-colour backgrounds get
       // both from upstream's extractor; manual ones pair the 4-shade art with
@@ -791,7 +799,7 @@ const ejectGbaBuild = async ({
           assetFilename(projectRoot, "sprites", sprite),
           tileDataIndexFn,
         );
-        if (isColor) {
+        if (sceneIsColor(scene)) {
           palette = spriteSheetPalette(sprite, scene.spritePaletteIds);
         }
       } catch (e) {
