@@ -56,6 +56,20 @@
       "id": "m12c0001-0000-0000-0000-000000000001"
     },
     {
+      "command": "EVENT_PALETTE_SET_SPRITE",
+      "args": {
+        "palette0": "default-bg-3",
+        "palette1": "keep",
+        "palette2": "keep",
+        "palette3": "keep",
+        "palette4": "keep",
+        "palette5": "keep",
+        "palette6": "keep",
+        "palette7": "keep"
+      },
+      "id": "m12d0001-0000-0000-0000-000000000001"
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000a1",
       "command": "EVENT_ACTOR_SET_MOVEMENT_SPEED",
       "args": {

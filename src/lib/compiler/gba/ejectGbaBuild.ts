@@ -648,7 +648,10 @@ const ejectGbaBuild = async ({
       spritePaletteIds?.[slot] ?? "",
       settings.defaultSpritePaletteIds?.[slot] ?? "",
     ).colors;
-    return colors.map(hexToRgb) as Rgb[];
+    // GB sprite convention (paletteSetSprite emits the same trio at runtime):
+    // sprite pixels 1..3 render palette colors [0], [1], [3]; colors[2] is
+    // unused for sprites. Index 0 stays transparent.
+    return [colors[0], colors[0], colors[1], colors[3]].map(hexToRgb) as Rgb[];
   };
 
   // Convert a scene's background to a 256-aligned indexed BMP (solid backdrop if
@@ -801,6 +804,9 @@ const ejectGbaBuild = async ({
         spriteMode,
         statesOrder,
       );
+      const palSlot = dominantPaletteIndex(
+        sprite as Parameters<typeof dominantPaletteIndex>[0],
+      );
       const name = `scene${s}_sprite_${idx}`;
       await writeFile(
         Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
@@ -820,7 +826,7 @@ const ejectGbaBuild = async ({
       );
       rowByIndex.set(
         idx,
-        `    { &bn::sprite_items::${name}, ${name}_anim_start, ${name}_anim_len },`,
+        `    { &bn::sprite_items::${name}, ${name}_anim_start, ${name}_anim_len, ${palSlot} },`,
       );
       progress(
         `Converting sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
@@ -837,7 +843,7 @@ const ejectGbaBuild = async ({
     const maxIndex = Math.max(0, ...rowByIndex.keys());
     const rows: string[] = [];
     for (let idx = 0; idx <= maxIndex; idx++) {
-      rows.push(rowByIndex.get(idx) ?? `    { nullptr, nullptr, nullptr },`);
+      rows.push(rowByIndex.get(idx) ?? `    { nullptr, nullptr, nullptr, 0 },`);
     }
     spriteTables.push(`static const GbaActorSprite scene${s}_sprites[] = {`);
     spriteTables.push(...rows);
@@ -902,8 +908,9 @@ const ejectGbaBuild = async ({
     spriteTables.push(
       `static const unsigned char ${name}_anim_start[] = { ${starts} };`,
       `static const unsigned char ${name}_anim_len[] = { ${lens} };`,
-      `static const GbaActorSprite ${name}_def = ` +
-        `{ &bn::sprite_items::${name}, ${name}_anim_start, ${name}_anim_len };`,
+      `static const GbaActorSprite ${name}_def = { &bn::sprite_items::${name}, ` +
+        `${name}_anim_start, ${name}_anim_len, ` +
+        `${dominantPaletteIndex(sprite as Parameters<typeof dominantPaletteIndex>[0])} };`,
     );
     projCases.push(`        case ${pi}: return &${name}_def;`);
     progress(
@@ -928,6 +935,9 @@ const ejectGbaBuild = async ({
     "    const bn::sprite_item* item;",
     "    const unsigned char* anim_start; // [GBA_ANIM_STATES][8]",
     "    const unsigned char* anim_len;",
+    "    // M12d: the GBC OBJ palette slot the sheet was baked with",
+    "    // (VM_LOAD_PALETTE .PALETTE_SPRITE recolors matching actors).",
+    "    unsigned char pal_slot;",
     "};",
     ...spriteTables,
     "inline bn::regular_bg_ptr gba_create_scene_bg(int sceneIdx) {",
