@@ -68,8 +68,18 @@ Sprites: each actor's assigned sprite palette recolors its sheet at eject
 **Runtime (M12c)**: bridge `VM_LOAD_PALETTE` + trailing `.CGB_PAL`/`.DMG_PAL` rows
 (inline-data pattern, like VM_CHOICE). Engine op takes (mask, flags) + 8-byte
 packed RGB555 rows and `set_color`s the masked banks of the scene bg palette /
-the sprite palette banks. `.PALETTE_COMMIT` while faded: Butano fades via its own
-palette layer, so committing under fade is naturally safe — verify, don't assume.
+the sprite palette banks. `.PALETTE_COMMIT` while faded: **verified 2026-07-15** —
+the fixture's palette events run during the scene-init fade-in and every GDB
+PALRAM dump shows the final colours correct post-fade (Butano's fade layer blends
+from the palette's current colours, so commits under fade survive by design).
+
+**Status (2026-07-15)**: M12a–d merged (incl. sprite runtime swaps with the
+creation latch, Set UI Palette → panel, colorModeOverride). Learned along the way:
+GB's sprite colour trio is palette colors [0], [1], [3] (colors[2] unused for
+sprites); palette events in scene init run before actors' sprites exist (lazy
+creation), hence the engine-side slot latches. Remaining: DMG_PAL semantics,
+mixed-mode fallback rules (read compileData's branches first), emote palettes,
+GBC sample project end-to-end.
 
 ## Slices
 

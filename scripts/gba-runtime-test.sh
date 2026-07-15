@@ -10,10 +10,13 @@
 #
 # The fixture script under test (examples/gba_actor_test, main scene init):
 #   1. shows a full-screen BLACK overlay cover, then hides it (M11d box colors),
-#   2. launches a projectile RIGHT (angle 64) then DOWN (angle 128),
-#   3. swaps the player spritesheet,
-#   4. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#   5. opens a six-item Menu (count=6).
+#   2. sets background palette 0, sprite palette 0, and the UI palette (M12c/d;
+#      these run while the scene is still fading in, so they double as the
+#      commit-under-fade check),
+#   3. launches a projectile RIGHT (angle 64) then DOWN (angle 128),
+#   4. swaps the player spritesheet,
+#   5. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
+#   6. opens a six-item Menu (count=6).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -80,6 +83,16 @@ fail() { echo "RUNTIME TEST FAILED: $1"; exit 1; }
 val_after "@OVERLAY" "^r2" | grep -q " 0$" || fail "overlay show color != 0 (black)"
 val_after "@OVERLAY" "^r3" | grep -q " 0$" || fail "overlay show options != 0 (no frame)"
 
+# Palette loads (M12c/d): mask (r0) + options (r1) per fixture event, in order -
+# Set Background Palette slot 0 (mask 1, COMMIT|BKG = 3), Set Sprite Palette
+# slot 0 (mask 1, COMMIT|SPRITE = 5), Set UI Palette (mask 128, COMMIT|BKG = 3).
+val_after "@PAL_BG" "^r0" | grep -q " 1$" || fail "bg palette mask != 1"
+val_after "@PAL_BG" "^r1" | grep -q " 3$" || fail "bg palette options != 3"
+val_after "@PAL_SPRITE" "^r0" | grep -q " 1$" || fail "sprite palette mask != 1"
+val_after "@PAL_SPRITE" "^r1" | grep -q " 5$" || fail "sprite palette options != 5"
+val_after "@PAL_UI" "^r0" | grep -q " 128$" || fail "ui palette mask != 128"
+val_after "@PAL_UI" "^r1" | grep -q " 3$" || fail "ui palette options != 3"
+
 # Projectile launches: angle (r3) 64 = right, then 128 = down.
 val_after "@LAUNCH1" "^r3" | grep -q " 64$"  || fail "launch 1 angle != 64 (right)"
 val_after "@LAUNCH2" "^r3" | grep -q " 128$" || fail "launch 2 angle != 128 (down)"
@@ -95,4 +108,4 @@ val_after "@MENU" "^r1" | grep -q " 6$" || fail "menu count != 6"
 val_after "@VARS" '^\$1' | grep -q "= 1$" || fail "choice result var != 1"
 val_after "@VARS" '^\$2' | grep -q "= 2$" || fail "menu result var != 2"
 
-echo "RUNTIME TESTS PASSED (overlay cover, projectiles, choice, menu, result vars)"
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars)"
