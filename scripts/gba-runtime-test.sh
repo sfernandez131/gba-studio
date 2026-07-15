@@ -41,6 +41,14 @@ gdb-multiarch -batch \
   -ex "continue" \
   -ex "echo \n@OVERLAY\n" -ex "info registers r0 r1 r2 r3" \
   -ex "delete" \
+  -ex "break hw_load_palette" \
+  -ex "continue" \
+  -ex "echo \n@PAL_BG\n" -ex "info registers r0 r1" \
+  -ex "continue" \
+  -ex "echo \n@PAL_SPRITE\n" -ex "info registers r0 r1" \
+  -ex "continue" \
+  -ex "echo \n@PAL_UI\n" -ex "info registers r0 r1" \
+  -ex "delete" \
   -ex "break hw_projectile_launch" \
   -ex "continue" \
   -ex "echo \n@LAUNCH1\n" -ex "info registers r3" \
@@ -58,7 +66,7 @@ gdb-multiarch -batch \
   -ex "return (int)2" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 4 8" \
+  -ex "ignore 5 8" \
   -ex "continue" \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
