@@ -1048,16 +1048,21 @@ const ejectGbaBuild = async ({
     let img: { width: number; height: number; data: Uint8Array };
     let palette = spritePalette;
     try {
+      // GB renders emotes with OBJ palette slot 7 (paletteSetEmote rewrites it
+      // at runtime with the [c0, c0, c1, c3] trio) - bake the same (M12e).
+      img = await readFileToIndexedImage(
+        assetFilename(projectRoot, "emotes", emote),
+        tileDataIndexFn,
+      );
       if (isColor) {
-        ({ img, palette } = await readTrueColor(
-          assetFilename(projectRoot, "emotes", emote),
-          true,
-        ));
-      } else {
-        img = await readFileToIndexedImage(
-          assetFilename(projectRoot, "emotes", emote),
-          tileDataIndexFn,
-        );
+        const colors = getPalette(
+          projectData.palettes,
+          "",
+          settings.defaultSpritePaletteIds?.[7] ?? "",
+        ).colors;
+        palette = [colors[0], colors[0], colors[1], colors[3]].map(
+          hexToRgb,
+        ) as Rgb[];
       }
     } catch (err) {
       warnings(`GBA: could not read emote "${emote.filename}"`);
