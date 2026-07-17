@@ -9,7 +9,7 @@
   "y": 100,
   "width": 48,
   "height": 32,
-  "collisions": "",
+  "collisions": "003c0+00a+01a+001c+001b0+0f30+0030+",
   "backgroundId": "1e5f9d6a-bdbc-43e6-8c34-22f5bb5dea05",
   "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
   "tilesetId": "",
