@@ -223,6 +223,7 @@ export interface GbaSceneEntry {
     collisionGroup: number; // M10f: GB group bit (player 0x01, "1" 0x02, "2" 0x04, "3" 0x08)
   }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
+  sceneType: number; // M13a: GBA_SCENE_* (0 TOPDOWN, 1 PLATFORM, 2 ADVENTURE, 3 SHMUP, 4 POINTNCLICK, 5 LOGO)
   collisions: number[]; // one byte per tile (row-major); empty = no collision grid
   // Trigger zones (M6b): a tile rect { x, y, w, h } + the enter-script's C name.
   triggers: {
@@ -351,7 +352,7 @@ export function formatGbaScenesC(
         `${s.actorUpdates.length}, ${s.widthPx}, ${s.heightPx}, ` +
         `scene${i}_actors_init, ${s.actorsInit.length}, ${s.playerMove}, ${collPtr}, ` +
         `${trigPtr}, ${s.triggers.length}, ${projPtr}, ${s.projectiles.length}, ` +
-        `${s.playerHit} },`,
+        `${s.playerHit}, ${s.sceneType ?? 0} },`,
     );
   });
   out.push("};");

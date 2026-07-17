@@ -439,7 +439,19 @@ const ejectGbaBuild = async ({
     }
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and
     // platformer physics are later milestones).
-    const playerMove = scene.type === "TOPDOWN" ? 1 : 0;
+    // M13a: scene type drives the engine's controller dispatch. Every moving
+    // type gets the built-in controller (top-down until PLATFORM lands in
+    // M13b / SHMUP+ADVENTURE in M13f); POINTNCLICK and LOGO don't move.
+    const GBA_SCENE_TYPES: Record<string, number> = {
+      TOPDOWN: 0,
+      PLATFORM: 1,
+      ADVENTURE: 2,
+      SHMUP: 3,
+      POINTNCLICK: 4,
+      LOGO: 5,
+    };
+    const sceneType = GBA_SCENE_TYPES[scene.type] ?? 0;
+    const playerMove = sceneType <= 3 ? 1 : 0;
     // Collision grid sized to the engine's tile dims (widthPx/8 x heightPx/8),
     // copied from the scene's per-tile collision bytes. Empty when nothing is solid.
     const sceneColl: number[] = scene.collisions ?? [];
@@ -491,6 +503,7 @@ const ejectGbaBuild = async ({
       heightPx,
       actorsInit,
       playerMove,
+      sceneType,
       collisions,
       triggers,
       // Projectile defs in slot order (M10f), preloaded on scene load.
