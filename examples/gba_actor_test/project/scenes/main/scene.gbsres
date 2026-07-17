@@ -77,6 +77,13 @@
       "id": "m12d0002-0000-0000-0000-000000000001"
     },
     {
+      "command": "EVENT_PALETTE_SET_EMOTE",
+      "args": {
+        "palette": "default-bg-6"
+      },
+      "id": "m12e0001-0000-0000-0000-000000000001"
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000a1",
       "command": "EVENT_ACTOR_SET_MOVEMENT_SPEED",
       "args": {
