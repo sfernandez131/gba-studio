@@ -78,6 +78,8 @@ gdb-multiarch -batch \
   -ex "print/d plat_climb_vel" \
   -ex "print/d plat_coyote_frames" \
   -ex "print/d plat_extra_jumps" \
+  -ex "echo \n@SHMUP\n" \
+  -ex "print/d shooter_scroll_speed" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -133,4 +135,8 @@ val_after "@PLATFORM" '= 20000$' | grep -q "= 20000$" || fail "plat_max_fall_vel
 val_after "@PLATFORM" '= 4000$'  | grep -q "= 4000$"  || fail "plat_climb_vel != 4000"
 val_after "@PLATFORM" '= 2$'     | grep -q "= 2$"     || fail "plat_coyote_frames != 2"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform tunables)"
+# SHMUP auto-scroll speed (M13f): the shooter_scroll_speed engine field must
+# link with GB's default (32 GB-subpx/frame = 2px/frame).
+val_after "@SHMUP" '= 32$' | grep -q "= 32$" || fail "shooter_scroll_speed != 32"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables)"
