@@ -71,6 +71,13 @@ gdb-multiarch -batch \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
   -ex "print script_memory[1]" \
+  -ex "echo \n@PLATFORM\n" \
+  -ex "print/d plat_grav" \
+  -ex "print/d plat_jump_vel" \
+  -ex "print/d plat_max_fall_vel" \
+  -ex "print/d plat_climb_vel" \
+  -ex "print/d plat_coyote_frames" \
+  -ex "print/d plat_extra_jumps" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -116,4 +123,14 @@ val_after "@MENU" "^r1" | grep -q " 6$" || fail "menu count != 6"
 val_after "@VARS" '^\$1' | grep -q "= 1$" || fail "choice result var != 1"
 val_after "@VARS" '^\$2' | grep -q "= 2$" || fail "menu result var != 2"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars)"
+# Platform physics tunables (M13b-d): the plat_* engine-field globals must link
+# with GB's engine.json defaults - a rename/drop/mis-default silently breaks
+# every PLATFORM project. Values are the exported globals (dispatch reads them).
+# gdb prints these as "$N = <value>"; match on the trailing value.
+val_after "@PLATFORM" '= 1792$'  | grep -q "= 1792$"  || fail "plat_grav != 1792"
+val_after "@PLATFORM" '= 16384$' | grep -q "= 16384$" || fail "plat_jump_vel != 16384"
+val_after "@PLATFORM" '= 20000$' | grep -q "= 20000$" || fail "plat_max_fall_vel != 20000"
+val_after "@PLATFORM" '= 4000$'  | grep -q "= 4000$"  || fail "plat_climb_vel != 4000"
+val_after "@PLATFORM" '= 2$'     | grep -q "= 2$"     || fail "plat_coyote_frames != 2"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform tunables)"
