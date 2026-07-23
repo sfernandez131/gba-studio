@@ -4118,11 +4118,17 @@ class ScriptBuilder extends ScriptBuilderBase {
     const endLabel = this.getNextLabel();
     this._addComment(`If Input`);
     this._getMemInt8(inputRef, "^/(_joypads + 1)/");
-    this._rpn() //
-      .ref(inputRef)
-      .int8(inputDec(input))
-      .operator(".B_AND")
-      .stop();
+    // M8a: GBA L/R live in the mask's high byte (>0xff). GB masks are always
+    // <=0xff, so this stays int8 there (byte-identical output); a GBA mask that
+    // includes L/R widens to int16 so the shoulder bits survive the .B_AND.
+    const inputMask = inputDec(input);
+    const rpn = this._rpn().ref(inputRef);
+    if (inputMask > 0xff) {
+      rpn.int16(inputMask);
+    } else {
+      rpn.int8(inputMask);
+    }
+    rpn.operator(".B_AND").stop();
     this._ifConst(".NE", ".ARG0", 0, trueLabel, 1);
     this._addNL();
     this._compilePath(falsePath);
