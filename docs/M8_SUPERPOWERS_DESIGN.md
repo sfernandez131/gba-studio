@@ -49,6 +49,31 @@ own asset pipeline slice. The escape hatch (M8e) and link cable (M8f) are the
 design-heavy tail — each deserves its own scoping pass before coding (M8f especially:
 protocol + 2-instance test harness).
 
+## M8d affine spike result (2026-07-23)
+
+**The affine asset pipeline is de-risked.** A generated 256x256 8bpp BMP with a
+256-colour palette + `{"type": "affine_bg"}` json imports cleanly through Butano's
+graphics tool (`bn_affine_bg_items_<name>.h` generated, ~5KB tiles+map). Confirmed
+constraints: affine bgs are **8bpp, square, side in {128, 256, 512, 1024}** (non-`big`),
+with 8-bit `affine_bg_map_cell`s (vs regular_bg's 16-bit). The `bn::affine_bg_ptr` API
+(`create_bg`, `set_rotation_angle`, `set_scale`, `set_camera`) is standard Butano.
+
+**M8d implementation plan (next):**
+
+1. **Scene opt-in** — a GBA-only scene flag (or a distinct affine scene setting) gates
+   the affine path; regular scenes are untouched.
+2. **Eject** — for an affine scene, emit the bg as an 8bpp square BMP (pad the scene
+   image onto a 256x256 canvas, index 0 backdrop) + affine json, and generate a
+   `gba_create_scene_affine_bg(idx)` switch beside `gba_create_scene_bg`.
+3. **Engine** — `hw_load_scene` creates a `bn::affine_bg_ptr` for affine scenes (store
+   it alongside the regular `scene_bg`); a new op **VM_SET_BG_TRANSFORM** (rotate/scale)
+   from script vars drives `set_rotation_angle`/`set_scale`. Export the angle for GDB.
+4. **Editor** — a GBA-gated "Rotate/Scale Background (Mode-7)" event bridged to the op.
+5. **Verify** — GDB reads the exported rotation angle advancing per frame; eyes-on for
+   the visual. Fixture: an affine scene rotating slowly.
+
+Deferred within M8d: affine sprites, per-scanline Mode-7 (HDMA) perspective.
+
 ## Cross-cutting rules
 
 - **Additive + GBA-gated**: no M8 feature may change GB/GBC output. Editor UI gates on
