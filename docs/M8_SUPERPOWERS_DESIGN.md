@@ -70,4 +70,9 @@ protocol + 2-instance test harness).
 3. **Escape hatch safety** — arbitrary C++ can break the build or the VM; constrain to
    a documented, reviewed API and mark projects using it as non-portable.
 4. **Sprite budget vs VRAM** — 128 OAM entries is HW; Butano sprite VRAM/tiles are the
-   real limit. Raise MAX_ACTORS conservatively and watch the link-map sprite budget.
+   real limit. **Measured (M8b, 2026-07-23): 6/10/12 total actors run at a full 60fps
+   alongside the fixture's dialogue text + projectile sprites, but 14 trips Butano's
+   sprite budget (60fps -> a hard ~0.6fps cliff, i.e. an assert). MAX_ACTORS was raised
+   8 -> 12 (conservative, GDB-verified); going higher needs sprite-VRAM budgeting -
+   shared actor tiles for same-sprite actors and/or a larger Butano sprite pool
+   (BN_CFG). That budgeting is its own follow-up slice.**
