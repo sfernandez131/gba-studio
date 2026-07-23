@@ -16,6 +16,10 @@ const KEY_BITS: Record<string, number> = {
   b: 0x20,
   select: 0x40,
   start: 0x80,
+  // M8a: GBA-exclusive L/R shoulder buttons (high byte). Only selectable via
+  // the platform-gated GBA input UI, so GB masks never exceed 0xff.
+  l: 0x100,
+  r: 0x200,
 } as const;
 
 export const inputDec = (input: string | string[]) => {
