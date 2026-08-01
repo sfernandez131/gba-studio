@@ -98,6 +98,10 @@ export interface ScriptEventDef {
   groups?: string[] | string;
   subGroups?: Record<string, string>;
   sceneTypes?: string[];
+  // M8d: restrict an event to a single target platform. GBA-only superpowers
+  // (e.g. affine Mode-7 backgrounds) set "gba"; the Add Event menu hides events
+  // whose platform doesn't match the project's settings.platform.
+  platform?: "gb" | "gba";
   deprecated?: boolean;
   isConditional?: boolean;
   editableSymbol?: boolean;

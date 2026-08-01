@@ -28,7 +28,7 @@ import { tileDataIndexFn } from "shared/lib/tiles/tileData";
 import { readFileToIndexedImage } from "lib/tiles/readFileToTiles";
 import { readFileToPalettes } from "lib/tiles/readFileToPalettes";
 import { getPalette } from "lib/compiler/scriptBuilder/helpers";
-import { walkScenesScripts } from "shared/lib/scripts/walk";
+import { walkScenesScripts, walkSceneScripts } from "shared/lib/scripts/walk";
 import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import {
   linkGbaProgram,
@@ -768,6 +768,73 @@ const ejectGbaBuild = async ({
   const spriteIncludes: string[] = [];
   const spriteTables: string[] = [];
   const spriteCases: string[] = [];
+  const affineIncludes: string[] = [];
+  const affineCases: string[] = [];
+
+  // M8d: a scene becomes an affine (Mode-7) background when its scripts use the
+  // Rotate/Scale Background event (opt-in by event presence; the M10f
+  // projectile-detection pattern). Such scenes eject an 8bpp SQUARE affine BMP
+  // and a gba_create_scene_affine_bg case; the engine swaps its regular bg for a
+  // bn::affine_bg_ptr and VM_SET_BG_TRANSFORM (op 0x97) rotates/scales it.
+  const customEventsLookup = Object.fromEntries(
+    (projectData.scripts ?? []).map((sc) => [sc.id, sc]),
+  );
+  const sceneIsAffine = (scene: (typeof scenes)[number]): boolean => {
+    let affine = false;
+    walkSceneScripts(
+      scene,
+      { customEvents: { lookup: customEventsLookup, maxDepth: 5 } },
+      (event) => {
+        if (event.command === "EVENT_SET_BACKGROUND_TRANSFORM") affine = true;
+      },
+    );
+    return affine;
+  };
+
+  // Butano affine backgrounds must be square with a power-of-two side; pick the
+  // smallest that contains the scene bg (clamped to the 1024 hardware maximum).
+  const affineSide = (maxDim: number): number => {
+    for (const s of [128, 256, 512, 1024]) if (s >= maxDim) return s;
+    return 1024;
+  };
+
+  // Convert a scene bg to an 8bpp square affine BMP. Affine bgs are a single
+  // 256-colour palette (no M12 banks) - kept simple: index 0 backdrop + the 4 GB
+  // shades of the scene's background palette slot 0 at indices 1..4.
+  const convertAffineBackground = async (
+    scene: (typeof scenes)[number],
+  ): Promise<Buffer> => {
+    const shadeHex = getPalette(
+      projectData.palettes,
+      scene.paletteIds?.[0] ?? "",
+      settings.defaultBackgroundPaletteIds?.[0] ?? "",
+    ).colors;
+    // 256-entry palette (>16 -> the BMP is written with a full 256-colour table,
+    // matching the affine spike); only 0..4 are used.
+    const palette: Rgb[] = new Array(256).fill([0, 0, 0] as Rgb);
+    palette[0] = hexToRgb(shadeHex[0]); // backdrop = lightest shade
+    palette[1] = hexToRgb(shadeHex[0]);
+    palette[2] = hexToRgb(shadeHex[1]);
+    palette[3] = hexToRgb(shadeHex[2]);
+    palette[4] = hexToRgb(shadeHex[3]);
+    const bg = projectData.backgrounds.find((b) => b.id === scene.backgroundId);
+    let src: { width: number; height: number; data: Uint8Array };
+    if (bg) {
+      progress(`Converting affine background ${bg.filename}...`);
+      const raw = await readFileToIndexedImage(
+        assetFilename(projectRoot, "backgrounds", bg),
+        tileDataIndexFn,
+      );
+      const data = new Uint8Array(raw.data.length);
+      // GB shade 0..3 -> palette index 1..4 (0 stays backdrop).
+      for (let i = 0; i < data.length; i++) data[i] = (raw.data[i] & 0x03) + 1;
+      src = { width: raw.width, height: raw.height, data };
+    } else {
+      src = { width: 8, height: 8, data: new Uint8Array(64) };
+    }
+    const side = affineSide(Math.max(src.width, src.height));
+    return indexedImageToBmp(src, palette, { square: side });
+  };
 
   for (let s = 0; s < scenes.length; s++) {
     const scene = scenes[s];
@@ -796,6 +863,25 @@ const ejectGbaBuild = async ({
     bgCases.push(
       `        case ${s}: return bn::regular_bg_items::${bgName}.create_bg(0, 0);`,
     );
+
+    // M8d: affine (Mode-7) scenes additionally emit an 8bpp square affine BMP.
+    // The regular bg above stays (it's the gba_create_scene_bg fallback), but the
+    // engine uses this affine bg at runtime (gba_create_scene_affine_bg wins).
+    if (sceneIsAffine(scene)) {
+      const affName = `scene${s}_affine_bg`;
+      await writeFile(
+        Path.join(gbaEngineRoot, "graphics", `${affName}.bmp`),
+        await convertAffineBackground(scene),
+      );
+      await writeFile(
+        Path.join(gbaEngineRoot, "graphics", `${affName}.json`),
+        JSON.stringify({ type: "affine_bg" }) + "\n",
+      );
+      affineIncludes.push(`#include "bn_affine_bg_items_${affName}.h"`);
+      affineCases.push(
+        `        case ${s}: return bn::affine_bg_items::${affName}.create_bg(0, 0);`,
+      );
+    }
 
     // Sprites -> graphics/scene<s>_sprite_<idx>.bmp. Index 0 is the player (the
     // scene's playerSpriteSheetId); placed actors are their runtime index i + 1.
@@ -948,8 +1034,12 @@ const ejectGbaBuild = async ({
     "#ifndef GBA_SCENE_ASSETS_H",
     "#define GBA_SCENE_ASSETS_H",
     '#include "bn_regular_bg_ptr.h"',
+    // M8d: affine (Mode-7) scene backgrounds.
+    '#include "bn_affine_bg_ptr.h"',
+    '#include "bn_optional.h"',
     '#include "bn_sprite_item.h"',
     ...bgIncludes,
+    ...affineIncludes,
     ...spriteIncludes,
     `static const int GBA_ANIM_STATES = ${statesOrder.length};`,
     "struct GbaActorSprite {",
@@ -967,6 +1057,16 @@ const ejectGbaBuild = async ({
     "    default: break;",
     "    }",
     "    return bn::regular_bg_items::scene0_bg.create_bg(0, 0);",
+    "}",
+    "// M8d: affine (Mode-7) scene bg. Non-affine scenes return nullopt so the",
+    "// loader keeps the regular bg; affine scenes swap in a bn::affine_bg_ptr",
+    "// (VM_SET_BG_TRANSFORM then rotates/scales it).",
+    "inline bn::optional<bn::affine_bg_ptr> gba_create_scene_affine_bg(int sceneIdx) {",
+    "    switch(sceneIdx) {",
+    ...affineCases,
+    "    default: break;",
+    "    }",
+    "    return bn::optional<bn::affine_bg_ptr>();",
     "}",
     "inline const GbaActorSprite* gba_actor_sprite(int sceneIdx, int actorIdx) {",
     "    switch(sceneIdx) {",

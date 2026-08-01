@@ -225,6 +225,14 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toEqual([]);
   });
 
+  test("M8d: bridges VM_SET_BG_TRANSFORM to op 0x97 (affine angle, scale)", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_SET_BG_TRANSFORM 45, 512\n",
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x97, operands: [45, 512] }]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
     const asm = [
       "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",

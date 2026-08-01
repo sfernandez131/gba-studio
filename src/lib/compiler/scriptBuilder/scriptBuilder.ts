@@ -3259,6 +3259,29 @@ class ScriptBuilder extends ScriptBuilderBase {
   };
 
   // --------------------------------------------------------------------------
+  // GBA affine / Mode-7 background (M8d)
+
+  // Rotate / scale the affine (Mode-7) scene background. GBA-only: emits
+  // VM_SET_BG_TRANSFORM (bridged to gbavm op 0x97) with the angle in whole
+  // degrees and the scale as a x256 fixed-point multiplier (256 = 1.0, i.e. the
+  // authored size). Both are compile-time constants (immediate i16 operands).
+  // No-op on GB/GBC targets so the shared GB output stays byte-identical even if
+  // the (GBA-gated) event is left in a project that is later built for GB.
+  setBackgroundTransform = (angleDegrees: number, scalePercent: number) => {
+    const { settings } = this.options;
+    if (settings.platform !== "gba") {
+      return;
+    }
+    const wrapped = Math.round(angleDegrees) % 360;
+    const angle = wrapped < 0 ? wrapped + 360 : wrapped;
+    // x256 fixed point; clamp above 0 (the engine treats scale <= 0 as 1.0).
+    const scale256 = Math.max(1, Math.round((scalePercent / 100) * 256));
+    this._addComment("Rotate / Scale Background (Mode-7)");
+    this._addCmd("VM_SET_BG_TRANSFORM", angle, scale256);
+    this._addNL();
+  };
+
+  // --------------------------------------------------------------------------
   // Palettes
 
   paletteSetBackground = (paletteIds: string[]) => {

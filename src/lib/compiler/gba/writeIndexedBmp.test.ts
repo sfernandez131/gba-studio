@@ -61,6 +61,40 @@ describe("indexedImageToBmp multi-bank passthrough", () => {
   });
 });
 
+describe("indexedImageToBmp square affine canvas (M8d)", () => {
+  test("forces a square SxS 8bpp canvas and centres the source", () => {
+    // 16x8 source (index 7) padded onto a 256x256 affine canvas.
+    const bmp = indexedImageToBmp(
+      { width: 16, height: 8, data: new Uint8Array(16 * 8).fill(7) },
+      new Array(256).fill([0, 0, 0]),
+      { square: 256 },
+    );
+    // BITMAPINFOHEADER: width/height both 256, 8bpp.
+    expect(bmp.readInt32LE(18)).toBe(256); // canvas width
+    expect(bmp.readInt32LE(22)).toBe(256); // canvas height
+    expect(bmp.readUInt16LE(28)).toBe(8); // bits per pixel
+    const pixelOffset = bmp.readUInt32LE(10);
+    // Rows are stored bottom-up; the 16x8 block is centred at
+    // offX=(256-16)/2=120, offY=(256-8)/2=124. Probe its centre pixel.
+    const cx = 120 + 8;
+    const cy = 124 + 4;
+    const bottomUpRow = 256 - 1 - cy;
+    expect(bmp[pixelOffset + bottomUpRow * 256 + cx]).toBe(7);
+    // A corner stays backdrop (index 0).
+    expect(bmp[pixelOffset]).toBe(0);
+  });
+
+  test("square side overrides align and stays power-of-two divisible by 4", () => {
+    const bmp = indexedImageToBmp(
+      { width: 8, height: 8, data: new Uint8Array(64).fill(1) },
+      new Array(256).fill([0, 0, 0]),
+      { square: 128 },
+    );
+    expect(bmp.readInt32LE(18)).toBe(128);
+    expect(bmp.readInt32LE(22)).toBe(128);
+  });
+});
+
 describe("dominantPaletteIndex (M12b sprite palettes)", () => {
   const sheet = (indices: number[]) => ({
     states: [

@@ -101,6 +101,14 @@ describe("emitGbaBytecode", () => {
     expect(bytes.slice(5, 11)).toEqual([0x89, 0xff, 0xff, 0xfe, 0xff, 0x05]);
   });
 
+  test("M8d: encodes VM_SET_BG_TRANSFORM (0x97) as two i16 operands LE", () => {
+    const { bytes } = emitGbaBytecode([
+      { kind: "op", op: 0x97, operands: [45, 512] }, // angle 45, scale x256 = 2.0
+    ]);
+    // op + angle(45 = 0x2d, LE) + scale(512 = 0x0200, LE)
+    expect(bytes).toEqual([0x97, 0x2d, 0x00, 0x00, 0x02]);
+  });
+
   test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
     // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
     const items: GbaItem[] = [

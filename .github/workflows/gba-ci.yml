@@ -167,7 +167,13 @@ jobs:
             examples/gba_actor_test/project.gbsproj out-ci/actor_test.gba
 
       - name: Install mGBA + gdb for the runtime tests
-        run: sudo apt-get -y install mgba-sdl gdb-multiarch
+        # Refresh the package lists first: the runner image's cached apt metadata
+        # can pin a point-release (e.g. libc6-dbg, a gdb-multiarch dep) that the
+        # mirror has already superseded, giving a 404 on install. `apt-get update`
+        # realigns to what the mirror currently serves.
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install mgba-sdl gdb-multiarch
 
       - name: Run the mGBA runtime tests
         run: |

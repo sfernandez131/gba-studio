@@ -597,6 +597,11 @@ const AddScriptEventMenu = ({
   const disabledSceneTypeIds = useAppSelector(
     (state) => state.project.present.settings.disabledSceneTypeIds,
   );
+  // M8d: platform-specific events (e.g. GBA affine Mode-7) are hidden when they
+  // don't match the project's target platform.
+  const platform = useAppSelector(
+    (state) => state.project.present.settings.platform,
+  );
 
   useEffect(() => {
     if (selectedCategoryIndex === -1) {
@@ -616,7 +621,9 @@ const AddScriptEventMenu = ({
             (t) => !disabledSceneTypeIds.includes(t),
           );
         }) as ScriptEventDef[]
-    ).filter(notDeprecated);
+    )
+      .filter(notDeprecated)
+      .filter((event) => !event.platform || event.platform === platform);
 
     const allEvents = ([] as EventOption[]).concat(
       eventList.map(eventToOption(favoriteEvents)),
@@ -713,6 +720,7 @@ const AddScriptEventMenu = ({
     disabledSceneTypeIds,
     favoriteEvents,
     favoritesCache,
+    platform,
     scriptEventDefs,
   ]);
 

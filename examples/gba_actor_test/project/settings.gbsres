@@ -1,5 +1,6 @@
 {
   "_resourceType": "settings",
+  "platform": "gba",
   "startSceneId": "aaaaaaaa-0000-4000-8000-000000000001",
   "startX": 24,
   "startY": 16,

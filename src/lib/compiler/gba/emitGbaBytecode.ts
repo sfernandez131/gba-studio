@@ -112,6 +112,9 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x93: [], // OVERLAY_HIDE
   0x94: ["u8", "u8"], // OVERLAY_WAIT modal, condition (UI_WAIT_* bitfield) -- M4q
   0x96: ["u8", "u8", "u8", "u8", "u8", "u8"], // OVERLAY_CLEAR x, y, w, h, color, options (M11c)
+  // M8d: affine (Mode-7) scene bg transform. angle = whole degrees, scale x256
+  // (256 = 1.0). Both immediate i16 constants (the engine op reads A_I16(0/1)).
+  0x97: ["i16", "i16"], // SET_BG_TRANSFORM angle, scale
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)
