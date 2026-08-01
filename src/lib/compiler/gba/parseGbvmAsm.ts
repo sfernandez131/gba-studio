@@ -104,6 +104,10 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_CHOICE: 0x48,
   // M12c: mask + options, then one inline 8-byte row (4 RGB555 words) per mask bit.
   VM_LOAD_PALETTE: 0x7c,
+  // M8d: rotate/scale the affine (Mode-7) scene background. angle (whole degrees)
+  // + scale (x256) are immediate i16 constants -> hw_bg_transform. GBA-only op;
+  // the event that emits it is gated on platform === "gba".
+  VM_SET_BG_TRANSFORM: 0x97,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,

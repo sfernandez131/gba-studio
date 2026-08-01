@@ -26,6 +26,15 @@
   "autoFadeSpeed": 1,
   "script": [
     {
+      "id": "abcdef01-0000-4000-8000-0000000000b2",
+      "command": "EVENT_SET_BACKGROUND_TRANSFORM",
+      "args": {
+        "angle": 45,
+        "angleUnits": "degrees",
+        "scale": 100
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000b1",
       "command": "EVENT_SAVE_DATA",
       "args": {

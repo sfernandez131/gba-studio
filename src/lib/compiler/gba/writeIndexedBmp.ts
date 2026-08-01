@@ -58,15 +58,20 @@ export function composeBankedImage(
  * Encode an indexed image as an 8bpp BMP (16-colour palette), centred on a
  * canvas whose dimensions are rounded up to a multiple of `align` (256 for
  * regular backgrounds). Returns the BMP file bytes.
+ *
+ * M8d: pass `square` to force a SxS canvas instead (S must be a power-of-two in
+ * {128,256,512,1024} - Butano's affine/Mode-7 backgrounds require square,
+ * power-of-two, 8bpp maps). The source image is centred and the surround filled
+ * with palette index 0 (the backdrop), same as the regular-bg path.
  */
 export function indexedImageToBmp(
   src: IndexedSource,
   palette: Rgb[],
-  opts: { align?: number } = {},
+  opts: { align?: number; square?: number } = {},
 ): Buffer {
   const align = opts.align ?? 256;
-  const canvasW = ceilTo(src.width, align);
-  const canvasH = ceilTo(src.height, align);
+  const canvasW = opts.square ?? ceilTo(src.width, align);
+  const canvasH = opts.square ?? ceilTo(src.height, align);
   const offX = Math.floor((canvasW - src.width) / 2);
   const offY = Math.floor((canvasH - src.height) / 2);
 
@@ -75,9 +80,12 @@ export function indexedImageToBmp(
   // bank*16 + colour (the old & 0x0f mask silently folded banks together).
   const canvas = new Uint8Array(canvasW * canvasH);
   for (let y = 0; y < src.height; y++) {
+    const cy = offY + y;
+    if (cy < 0 || cy >= canvasH) continue;
     for (let x = 0; x < src.width; x++) {
-      canvas[(offY + y) * canvasW + (offX + x)] =
-        src.data[y * src.width + x] & 0xff;
+      const cx = offX + x;
+      if (cx < 0 || cx >= canvasW) continue;
+      canvas[cy * canvasW + cx] = src.data[y * src.width + x] & 0xff;
     }
   }
 
