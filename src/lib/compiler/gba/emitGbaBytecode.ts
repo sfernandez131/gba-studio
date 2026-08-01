@@ -115,6 +115,8 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   // M8d: affine (Mode-7) scene bg transform. angle = whole degrees, scale x256
   // (256 = 1.0). Both immediate i16 constants (the engine op reads A_I16(0/1)).
   0x97: ["i16", "i16"], // SET_BG_TRANSFORM angle, scale
+  // M8d: affine bg auto-spin velocity (deg/frame x256, signed immediate i16).
+  0x98: ["i16"], // SET_BG_SPIN velocity
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)

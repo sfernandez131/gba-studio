@@ -108,6 +108,8 @@ const MACRO_TO_OP: Record<string, number> = {
   // + scale (x256) are immediate i16 constants -> hw_bg_transform. GBA-only op;
   // the event that emits it is gated on platform === "gba".
   VM_SET_BG_TRANSFORM: 0x97,
+  // M8d: affine bg auto-spin velocity (deg/frame x256) -> hw_bg_spin. GBA-only.
+  VM_SET_BG_SPIN: 0x98,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,
