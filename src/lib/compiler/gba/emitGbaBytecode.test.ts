@@ -109,6 +109,17 @@ describe("emitGbaBytecode", () => {
     expect(bytes).toEqual([0x97, 0x2d, 0x00, 0x00, 0x02]);
   });
 
+  test("M8d: encodes VM_SET_BG_SPIN (0x98) as one signed i16 operand LE", () => {
+    // +512 (2 deg/frame x256)
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x98, operands: [512] }]).bytes,
+    ).toEqual([0x98, 0x00, 0x02]);
+    // -512 -> two's-complement 0xFE00 LE
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x98, operands: [-512] }]).bytes,
+    ).toEqual([0x98, 0x00, 0xfe]);
+  });
+
   test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
     // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
     const items: GbaItem[] = [

@@ -3281,6 +3281,23 @@ class ScriptBuilder extends ScriptBuilderBase {
     this._addNL();
   };
 
+  // Auto-spin the affine (Mode-7) scene background: the engine rotates it by
+  // `speedDegPerFrame` degrees every frame (signed; 0 stops it). GBA-only; emits
+  // VM_SET_BG_SPIN (bridged to gbavm op 0x98) with the velocity as x256 fixed
+  // point (256 = 1 deg/frame). No-op on GB/GBC so shared GB output is unchanged.
+  spinBackground = (speedDegPerFrame: number) => {
+    const { settings } = this.options;
+    if (settings.platform !== "gba") {
+      return;
+    }
+    const speed256 = Math.round(speedDegPerFrame * 256);
+    // Clamp to the i16 operand range the engine reads.
+    const clamped = Math.max(-32768, Math.min(32767, speed256));
+    this._addComment("Spin Background (Mode-7)");
+    this._addCmd("VM_SET_BG_SPIN", clamped);
+    this._addNL();
+  };
+
   // --------------------------------------------------------------------------
   // Palettes
 

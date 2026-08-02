@@ -35,6 +35,13 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000b3",
+      "command": "EVENT_SPIN_BACKGROUND",
+      "args": {
+        "speed": 2
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000b1",
       "command": "EVENT_SAVE_DATA",
       "args": {

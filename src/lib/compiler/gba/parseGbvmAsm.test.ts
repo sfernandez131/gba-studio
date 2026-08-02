@@ -233,6 +233,16 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toEqual([]);
   });
 
+  test("M8d: bridges VM_SET_BG_SPIN to op 0x98 (affine spin velocity)", () => {
+    const { items, skipped } = parseGbvmAsm("        VM_SET_BG_SPIN 512\n");
+    expect(items).toEqual([{ kind: "op", op: 0x98, operands: [512] }]);
+    expect(skipped).toEqual([]);
+    // Negative velocity (spin the other way) survives as a two's-complement i16.
+    expect(parseGbvmAsm("        VM_SET_BG_SPIN -512\n").items).toEqual([
+      { kind: "op", op: 0x98, operands: [-512] },
+    ]);
+  });
+
   test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
     const asm = [
       "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",
