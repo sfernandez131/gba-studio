@@ -42,6 +42,24 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000b4",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "10",
+        "value": {
+          "type": "number",
+          "value": 90
+        }
+      }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b5",
+      "command": "EVENT_SET_BACKGROUND_ANGLE",
+      "args": {
+        "angle": "10"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000b1",
       "command": "EVENT_SAVE_DATA",
       "args": {
