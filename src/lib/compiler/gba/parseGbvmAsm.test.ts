@@ -253,6 +253,15 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toEqual([]);
   });
 
+  test("M8d: bridges VM_SET_BG_SCALE_VAR to op 0x9a resolving the variable index", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_SET_BG_SCALE_VAR VAR_ZOOM\n",
+      { globals: { VAR_ZOOM: 4 } },
+    );
+    expect(items).toEqual([{ kind: "op", op: 0x9a, operands: [4] }]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
     const asm = [
       "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",

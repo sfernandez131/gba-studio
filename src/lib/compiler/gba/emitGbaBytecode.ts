@@ -120,6 +120,8 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   // M8d: set affine bg angle from a variable. The i16 operand is a variable index
   // (the engine reads the angle in degrees from script_memory / the stack).
   0x99: ["i16"], // SET_BG_ANGLE_VAR var-index
+  // M8d: set affine bg scale from a variable (the engine reads a percentage).
+  0x9a: ["i16"], // SET_BG_SCALE_VAR var-index
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)
