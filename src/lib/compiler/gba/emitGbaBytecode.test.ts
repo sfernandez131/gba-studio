@@ -120,6 +120,17 @@ describe("emitGbaBytecode", () => {
     ).toEqual([0x98, 0x00, 0xfe]);
   });
 
+  test("M8d: encodes VM_SET_BG_ANGLE_VAR (0x99) as one i16 var-index LE", () => {
+    // variable index 7 (global)
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x99, operands: [7] }]).bytes,
+    ).toEqual([0x99, 0x07, 0x00]);
+    // a stack-local index (-1) -> two's-complement 0xFFFF LE
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x99, operands: [-1] }]).bytes,
+    ).toEqual([0x99, 0xff, 0xff]);
+  });
+
   test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
     // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
     const items: GbaItem[] = [

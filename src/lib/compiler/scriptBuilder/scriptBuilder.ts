@@ -3298,6 +3298,22 @@ class ScriptBuilder extends ScriptBuilderBase {
     this._addNL();
   };
 
+  // Set the affine (Mode-7) scene background's rotation angle from a variable's
+  // value (whole degrees). GBA-only; emits VM_SET_BG_ANGLE_VAR (bridged to gbavm
+  // op 0x99) with the variable's index - the engine reads the angle at runtime,
+  // so a script can drive Mode-7 rotation from any computed value. Scale is left
+  // as set by the Rotate/Scale event. No-op on GB/GBC targets.
+  setBackgroundAngleToVariable = (variable: string) => {
+    const { settings } = this.options;
+    if (settings.platform !== "gba") {
+      return;
+    }
+    const variableAlias = this.getVariableAlias(variable);
+    this._addComment("Set Background Angle To Variable");
+    this._addCmd("VM_SET_BG_ANGLE_VAR", variableAlias);
+    this._addNL();
+  };
+
   // --------------------------------------------------------------------------
   // Palettes
 
