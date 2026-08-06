@@ -137,6 +137,12 @@ describe("emitGbaBytecode", () => {
     ).toEqual([0x9a, 0x04, 0x00]);
   });
 
+  test("M8e: encodes VM_USER_CODE (0x9b) as one i16 snippet-index LE", () => {
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x9b, operands: [2] }]).bytes,
+    ).toEqual([0x9b, 0x02, 0x00]);
+  });
+
   test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
     // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
     const items: GbaItem[] = [

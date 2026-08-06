@@ -262,6 +262,16 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(skipped).toEqual([]);
   });
 
+  test("M8e: bridges VM_USER_CODE to op 0x9b resolving the snippet symbol", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_USER_CODE _gba_user_abc123\n",
+      { dataSymbols: { _gba_user_abc123: 2 } },
+    );
+    // The operand resolves to the eject-assigned snippet index (2), not a literal.
+    expect(items).toEqual([{ kind: "op", op: 0x9b, operands: [2] }]);
+    expect(skipped).toEqual([]);
+  });
+
   test("M11a: bridges VM_CHOICE + the trailing .MENUITEM table (the Choice event shape)", () => {
     const asm = [
       "        VM_CHOICE               VAR_RESULT, ^/(.UI_MENU_LAST_0 | .UI_MENU_CANCEL_B)/, 2",

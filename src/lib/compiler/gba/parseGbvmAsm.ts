@@ -114,6 +114,9 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SET_BG_ANGLE_VAR: 0x99,
   // M8d: set the affine bg scale from a variable (percent) -> hw_bg_set_scale.
   VM_SET_BG_SCALE_VAR: 0x9a,
+  // M8e: run an author Custom Code (C++) snippet -> hw_user_code. The operand is a
+  // _gba_user_<eventId> symbol the eject resolves (via dataSymbols) to the index.
+  VM_USER_CODE: 0x9b,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,

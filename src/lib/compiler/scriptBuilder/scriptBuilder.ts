@@ -3330,6 +3330,22 @@ class ScriptBuilder extends ScriptBuilderBase {
     this._addNL();
   };
 
+  // M8e: run the author's Custom Code (C++) snippet for this event. GBA-only;
+  // emits VM_USER_CODE with a `_gba_user_<eventId>` symbol that the eject resolves
+  // (via dataSymbols) to the snippet's index - the eject also writes the snippet
+  // body into the generated gba_user_code.h. No-op on GB/GBC so GB output is
+  // unchanged. The sanitize regex here MUST match ejectGbaBuild's user-code key.
+  gbaCustomCode = (eventId: string) => {
+    const { settings } = this.options;
+    if (settings.platform !== "gba") {
+      return;
+    }
+    const sym = `_gba_user_${eventId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    this._addComment("Run Custom Code (C++)");
+    this._addCmd("VM_USER_CODE", sym);
+    this._addNL();
+  };
+
   // --------------------------------------------------------------------------
   // Palettes
 

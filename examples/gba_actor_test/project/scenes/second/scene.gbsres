@@ -78,6 +78,13 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000e0",
+      "command": "EVENT_GBA_CUSTOM_CODE",
+      "args": {
+        "code": "GBA_VAR(50) = 4242; // M8e: prove author C++ ran"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000b1",
       "command": "EVENT_SAVE_DATA",
       "args": {
