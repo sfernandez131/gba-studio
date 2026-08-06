@@ -38,7 +38,7 @@
       "id": "abcdef01-0000-4000-8000-0000000000b3",
       "command": "EVENT_SPIN_BACKGROUND",
       "args": {
-        "speed": 2
+        "speed": 0
       }
     },
     {
@@ -85,14 +85,6 @@
       },
       "children": {
         "true": []
-      }
-    },
-    {
-      "id": "abcdef01-0000-4000-8000-0000000000b0",
-      "command": "EVENT_TEXT",
-      "args": {
-        "text": "Scene 2 (slot 1).\nWalk DOWN.",
-        "avatarId": ""
       }
     }
   ],
