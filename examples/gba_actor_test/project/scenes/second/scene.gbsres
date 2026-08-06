@@ -60,6 +60,24 @@
       }
     },
     {
+      "id": "abcdef01-0000-4000-8000-0000000000b6",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "11",
+        "value": {
+          "type": "number",
+          "value": 200
+        }
+      }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000b7",
+      "command": "EVENT_SET_BACKGROUND_SCALE",
+      "args": {
+        "scale": "11"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000b1",
       "command": "EVENT_SAVE_DATA",
       "args": {

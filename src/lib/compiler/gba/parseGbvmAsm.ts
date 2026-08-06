@@ -112,6 +112,8 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SET_BG_SPIN: 0x98,
   // M8d: set the affine bg angle from a variable (i16 var index) -> hw_bg_set_angle.
   VM_SET_BG_ANGLE_VAR: 0x99,
+  // M8d: set the affine bg scale from a variable (percent) -> hw_bg_set_scale.
+  VM_SET_BG_SCALE_VAR: 0x9a,
   // scene stack (no operands): push current scene, pop back to it, pop to the base.
   VM_SCENE_PUSH: 0x68,
   VM_SCENE_POP: 0x69,

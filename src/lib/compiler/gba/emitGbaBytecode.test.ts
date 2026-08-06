@@ -131,6 +131,12 @@ describe("emitGbaBytecode", () => {
     ).toEqual([0x99, 0xff, 0xff]);
   });
 
+  test("M8d: encodes VM_SET_BG_SCALE_VAR (0x9a) as one i16 var-index LE", () => {
+    expect(
+      emitGbaBytecode([{ kind: "op", op: 0x9a, operands: [4] }]).bytes,
+    ).toEqual([0x9a, 0x04, 0x00]);
+  });
+
   test("encodes VM_BEGINTHREAD (0x0e) byte-for-byte: bank, proc ptr, handle, nargs", () => {
     // Thread proc resolvable as an in-blob label (the cross-blob case is P1).
     const items: GbaItem[] = [
