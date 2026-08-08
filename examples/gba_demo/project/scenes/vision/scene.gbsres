@@ -1,0 +1,79 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000005",
+  "_index": 4,
+  "type": "LOGO",
+  "name": "Gem Vision",
+  "symbol": "scene_vision",
+  "x": 1100,
+  "y": 60,
+  "width": 32,
+  "height": 32,
+  "collisions": "",
+  "backgroundId": "b6000000-0000-4000-8000-000000000005",
+  "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": [
+    "cave-cool",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [
+    {
+      "id": "ee000000-0000-4000-8000-000000000001",
+      "command": "EVENT_ACTOR_HIDE",
+      "args": {
+        "actorId": "player"
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000002",
+      "command": "EVENT_SET_BACKGROUND_TRANSFORM",
+      "args": {
+        "angle": 0,
+        "angleUnits": "degrees",
+        "scale": 100
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000003",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "30",
+        "value": {
+          "type": "number",
+          "value": 0
+        }
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000004",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "31",
+        "value": {
+          "type": "number",
+          "value": 150
+        }
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000005",
+      "command": "EVENT_SET_BACKGROUND_SCALE",
+      "args": {
+        "scale": "31"
+      }
+    }
+  ],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}

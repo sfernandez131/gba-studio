@@ -1,0 +1,41 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000050",
+  "_index": 1,
+  "name": "The Gem",
+  "symbol": "trigger_thegem",
+  "prefabId": "",
+  "x": 27,
+  "y": 54,
+  "width": 2,
+  "height": 2,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000051",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "The Gem blazes!\nThe shaft dissolves...",
+        "avatarId": ""
+      }
+    },
+    {
+      "id": "d00d0000-0000-4000-8000-000000000052",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000005",
+        "x": {
+          "type": "number",
+          "value": 15
+        },
+        "y": {
+          "type": "number",
+          "value": 15
+        },
+        "direction": "down",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}

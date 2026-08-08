@@ -1,0 +1,108 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000010",
+  "_index": 0,
+  "name": "Vision",
+  "symbol": "actor_vision",
+  "spriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "x": 15,
+  "y": 15,
+  "direction": "down",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "paletteId": "",
+  "animate": false,
+  "frame": 0,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "prefabId": "",
+  "prefabScriptOverrides": {},
+  "script": [],
+  "startScript": [],
+  "updateScript": [
+    {
+      "id": "ee000000-0000-4000-8000-000000000010",
+      "command": "EVENT_IF_INPUT",
+      "args": {
+        "input": [
+          "r"
+        ]
+      },
+      "children": {
+        "true": [
+          {
+            "id": "ee000000-0000-4000-8000-000000000011",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "30"
+            }
+          }
+        ],
+        "false": []
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000012",
+      "command": "EVENT_IF_INPUT",
+      "args": {
+        "input": [
+          "l"
+        ]
+      },
+      "children": {
+        "true": [
+          {
+            "id": "ee000000-0000-4000-8000-000000000013",
+            "command": "EVENT_DEC_VALUE",
+            "args": {
+              "variable": "30"
+            }
+          }
+        ],
+        "false": []
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000014",
+      "command": "EVENT_SET_BACKGROUND_ANGLE",
+      "args": {
+        "angle": "30"
+      }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000015",
+      "command": "EVENT_IF_INPUT",
+      "args": {
+        "input": [
+          "b"
+        ]
+      },
+      "children": {
+        "true": [
+          {
+            "id": "ee000000-0000-4000-8000-000000000016",
+            "command": "EVENT_SWITCH_SCENE",
+            "args": {
+              "sceneId": "aaaaaaaa-0000-4000-8000-000000000004",
+              "x": {
+                "type": "number",
+                "value": 6
+              },
+              "y": {
+                "type": "number",
+                "value": 55
+              },
+              "direction": "left",
+              "fadeSpeed": 2
+            }
+          }
+        ],
+        "false": []
+      }
+    }
+  ],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}
