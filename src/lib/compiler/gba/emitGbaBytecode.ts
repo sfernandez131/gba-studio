@@ -122,6 +122,9 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x99: ["i16"], // SET_BG_ANGLE_VAR var-index
   // M8d: set affine bg scale from a variable (the engine reads a percentage).
   0x9a: ["i16"], // SET_BG_SCALE_VAR var-index
+  // M8e: run an author Custom Code (C++) snippet. The i16 operand is the snippet
+  // index (the eject assigns it + resolves the _gba_user_<eventId> symbol).
+  0x9b: ["i16"], // USER_CODE snippet-index
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)
