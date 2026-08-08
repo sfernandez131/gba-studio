@@ -1,0 +1,35 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000016",
+  "_index": 2,
+  "name": "Rock 2",
+  "symbol": "actor_rock2",
+  "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+  "x": 18,
+  "y": 42,
+  "direction": "down",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "paletteId": "",
+  "animate": false,
+  "frame": 0,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "1",
+  "prefabId": "",
+  "prefabScriptOverrides": {},
+  "script": [],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": [
+    {
+      "id": "ff000000-0000-4000-8000-000000000101",
+      "command": "EVENT_ACTOR_HIDE",
+      "args": {
+        "actorId": "$self$"
+      }
+    }
+  ]
+}

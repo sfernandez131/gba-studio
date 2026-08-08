@@ -1,0 +1,33 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000006",
+  "_index": 5,
+  "type": "SHMUP",
+  "name": "Escape",
+  "symbol": "scene_escape",
+  "x": 1500,
+  "y": 60,
+  "width": 30,
+  "height": 64,
+  "collisions": "",
+  "backgroundId": "b6000000-0000-4000-8000-000000000006",
+  "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": [
+    "cave-cool",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}

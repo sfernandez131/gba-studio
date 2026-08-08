@@ -1,0 +1,65 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000014",
+  "_index": 0,
+  "name": "Gunner",
+  "symbol": "actor_gunner",
+  "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+  "x": 2,
+  "y": 62,
+  "direction": "down",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "paletteId": "",
+  "animate": false,
+  "frame": 0,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "prefabId": "",
+  "prefabScriptOverrides": {},
+  "script": [],
+  "startScript": [],
+  "updateScript": [
+    {
+      "id": "ff000000-0000-4000-8000-000000000001",
+      "command": "EVENT_IF_INPUT",
+      "args": {
+        "input": [
+          "a"
+        ]
+      },
+      "children": {
+        "true": [
+          {
+            "id": "ff000000-0000-4000-8000-000000000002",
+            "command": "EVENT_LAUNCH_PROJECTILE",
+            "args": {
+              "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+              "spriteStateId": "",
+              "actorId": "player",
+              "x": 0,
+              "y": 0,
+              "directionType": "direction",
+              "speed": 3,
+              "animSpeed": 15,
+              "lifeTime": 2,
+              "initialOffset": 8,
+              "loopAnim": true,
+              "destroyOnHit": true,
+              "collisionGroup": "3",
+              "collisionMask": [
+                "1"
+              ],
+              "direction": "up"
+            }
+          }
+        ],
+        "false": []
+      }
+    }
+  ],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}
