@@ -1,0 +1,13 @@
+{
+  "_resourceType": "background",
+  "id": "b6000000-0000-4000-8000-000000000005",
+  "name": "vision",
+  "symbol": "bg_vision",
+  "tileColors": "",
+  "filename": "vision.png",
+  "width": 32,
+  "height": 32,
+  "imageWidth": 256,
+  "imageHeight": 256,
+  "autoColor": false
+}
