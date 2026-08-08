@@ -1,0 +1,33 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000040",
+  "_index": 0,
+  "name": "To Cave",
+  "symbol": "trigger_minetocave",
+  "prefabId": "",
+  "x": 2,
+  "y": 4,
+  "width": 2,
+  "height": 2,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000041",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000002",
+        "x": {
+          "type": "number",
+          "value": 8
+        },
+        "y": {
+          "type": "number",
+          "value": 28
+        },
+        "direction": "down",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}

@@ -1,0 +1,13 @@
+{
+  "_resourceType": "background",
+  "id": "b6000000-0000-4000-8000-000000000004",
+  "name": "mine",
+  "symbol": "bg_mine",
+  "tileColors": "",
+  "filename": "mine.png",
+  "width": 32,
+  "height": 64,
+  "imageWidth": 256,
+  "imageHeight": 512,
+  "autoColor": false
+}

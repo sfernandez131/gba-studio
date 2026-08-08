@@ -1,0 +1,33 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000004",
+  "_index": 3,
+  "type": "PLATFORM",
+  "name": "Mine Shaft",
+  "symbol": "scene_mine",
+  "x": 700,
+  "y": 60,
+  "width": 32,
+  "height": 64,
+  "collisions": "0f2+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f17+009+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+002+01a+0010+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+0010+01b+00!0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+002+01c+00e+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+001c+0f4+00f+01c+00!0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f4+0017+10!004+0f102+",
+  "backgroundId": "b6000000-0000-4000-8000-000000000004",
+  "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": [
+    "cave-cool",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}
