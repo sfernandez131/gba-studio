@@ -1,0 +1,131 @@
+{
+  "_resourceType": "scene",
+  "id": "aaaaaaaa-0000-4000-8000-000000000003",
+  "_index": 2,
+  "type": "LOGO",
+  "name": "Title",
+  "symbol": "scene_title",
+  "x": 60,
+  "y": 400,
+  "width": 30,
+  "height": 20,
+  "collisions": "",
+  "backgroundId": "b6000000-0000-4000-8000-000000000003",
+  "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "tilesetId": "",
+  "colorModeOverride": "none",
+  "paletteIds": [
+    "cave-cool",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "spritePaletteIds": [],
+  "autoFadeSpeed": 1,
+  "script": [
+    {
+      "id": "cccccccc-0000-4000-8000-000000000001",
+      "command": "EVENT_ACTOR_HIDE",
+      "args": {
+        "actorId": "player"
+      }
+    },
+    {
+      "id": "cccccccc-0000-4000-8000-000000000002",
+      "command": "EVENT_IF_SAVED_DATA",
+      "args": {
+        "saveSlot": 0
+      },
+      "children": {
+        "true": [
+          {
+            "id": "cccccccc-0000-4000-8000-000000000003",
+            "command": "EVENT_MENU",
+            "args": {
+              "variable": "20",
+              "items": 2,
+              "option1": "New Game",
+              "option2": "Continue",
+              "layout": "dialogue",
+              "cancelOnLastOption": false,
+              "cancelOnB": false
+            }
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000004",
+            "command": "EVENT_IF_VALUE",
+            "args": {
+              "variable": "20",
+              "operator": "==",
+              "comparator": "2"
+            },
+            "children": {
+              "true": [
+                {
+                  "id": "cccccccc-0000-4000-8000-000000000005",
+                  "command": "EVENT_LOAD_DATA",
+                  "args": {
+                    "saveSlot": 0
+                  }
+                }
+              ],
+              "false": [
+                {
+                  "id": "cccccccc-0000-4000-8000-000000000006",
+                  "command": "EVENT_SWITCH_SCENE",
+                  "args": {
+                    "sceneId": "aaaaaaaa-0000-4000-8000-000000000001",
+                    "x": {
+                      "type": "number",
+                      "value": 24
+                    },
+                    "y": {
+                      "type": "number",
+                      "value": 13
+                    },
+                    "direction": "down",
+                    "fadeSpeed": 2
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "cccccccc-0000-4000-8000-000000000007",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "THE LOST GEM\n\nPress A to begin.",
+              "avatarId": ""
+            }
+          },
+          {
+            "id": "cccccccc-0000-4000-8000-000000000008",
+            "command": "EVENT_SWITCH_SCENE",
+            "args": {
+              "sceneId": "aaaaaaaa-0000-4000-8000-000000000001",
+              "x": {
+                "type": "number",
+                "value": 24
+              },
+              "y": {
+                "type": "number",
+                "value": 13
+              },
+              "direction": "down",
+              "fadeSpeed": 2
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "playerHit1Script": [],
+  "playerHit2Script": [],
+  "playerHit3Script": []
+}
