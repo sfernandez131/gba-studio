@@ -1,0 +1,41 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000042",
+  "_index": 2,
+  "name": "To Mine",
+  "symbol": "trigger_tomine",
+  "prefabId": "",
+  "x": 4,
+  "y": 24,
+  "width": 4,
+  "height": 3,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000043",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "An old mine shaft\ndrops into the dark.",
+        "avatarId": ""
+      }
+    },
+    {
+      "id": "d00d0000-0000-4000-8000-000000000044",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000004",
+        "x": {
+          "type": "number",
+          "value": 8
+        },
+        "y": {
+          "type": "number",
+          "value": 3
+        },
+        "direction": "down",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}
