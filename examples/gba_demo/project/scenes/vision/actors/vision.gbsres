@@ -100,6 +100,37 @@
         ],
         "false": []
       }
+    },
+    {
+      "id": "ee000000-0000-4000-8000-000000000020",
+      "command": "EVENT_IF_INPUT",
+      "args": {
+        "input": [
+          "a"
+        ]
+      },
+      "children": {
+        "true": [
+          {
+            "id": "ee000000-0000-4000-8000-000000000021",
+            "command": "EVENT_SWITCH_SCENE",
+            "args": {
+              "sceneId": "aaaaaaaa-0000-4000-8000-000000000006",
+              "x": {
+                "type": "number",
+                "value": 15
+              },
+              "y": {
+                "type": "number",
+                "value": 58
+              },
+              "direction": "up",
+              "fadeSpeed": 2
+            }
+          }
+        ],
+        "false": []
+      }
     }
   ],
   "hit1Script": [],

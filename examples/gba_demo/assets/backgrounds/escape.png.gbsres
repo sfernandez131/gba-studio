@@ -1,0 +1,13 @@
+{
+  "_resourceType": "background",
+  "id": "b6000000-0000-4000-8000-000000000006",
+  "name": "escape",
+  "symbol": "bg_escape",
+  "tileColors": "",
+  "filename": "escape.png",
+  "width": 30,
+  "height": 64,
+  "imageWidth": 240,
+  "imageHeight": 512,
+  "autoColor": false
+}

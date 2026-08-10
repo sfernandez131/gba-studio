@@ -1,0 +1,41 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000060",
+  "_index": 0,
+  "name": "Daylight",
+  "symbol": "trigger_daylight",
+  "prefabId": "",
+  "x": 10,
+  "y": 1,
+  "width": 10,
+  "height": 3,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000061",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "You burst into\ndaylight, Gem in hand!",
+        "avatarId": ""
+      }
+    },
+    {
+      "id": "d00d0000-0000-4000-8000-000000000062",
+      "command": "EVENT_SWITCH_SCENE",
+      "args": {
+        "sceneId": "aaaaaaaa-0000-4000-8000-000000000001",
+        "x": {
+          "type": "number",
+          "value": 24
+        },
+        "y": {
+          "type": "number",
+          "value": 13
+        },
+        "direction": "down",
+        "fadeSpeed": 2
+      }
+    }
+  ],
+  "leaveScript": []
+}
