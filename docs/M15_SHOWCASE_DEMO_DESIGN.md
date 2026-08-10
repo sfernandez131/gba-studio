@@ -67,14 +67,18 @@ gameplay beat, not a tech demo bolted on:
 
 ## Slice plan
 
-| Slice | Scope | Verify |
-| --- | --- | --- |
-| **M15a** | This design doc. | — |
-| **M15b** | **Title + menu**: a Title scene, `VM_CHOICE` menu (New Game / Continue), Continue gated on save-peek; wire the existing save. | GDB: the choice-result variable + the branch taken; ROM builds. |
-| **M15c** | **Mine Shaft** (`PLATFORM`): collision art with ledges + a ladder; the descent connects Cave → Gem. | GDB: `plat_state` / `plat_vel_y` during a fall+land. |
-| **M15d** | **Gem Vision** (affine): an affine scene; the Gem's vision rotates, L/R steer (angle-from-variable), scale pulses. | GDB: `gba_bg_angle` tracks the heading var; DISPCNT mode 1. |
-| **M15e** | **Escape** (`SHMUP`): auto-scroll flight out of the mine, projectiles vs falling rocks. | GDB: `shmup_cam_y` advancing; a projectile launch. |
-| **M15f** | **Polish + ending**: emotes, animation states, day→dusk palette swap, a timer, the Village crowd (>12 actors), a custom-C++ flourish, avatars, the ending. | GDB spot-asserts; eyes-on. |
+| Slice | Scope | Verify | Status |
+| --- | --- | --- | --- |
+| **M15a** | This design doc. | — | done |
+| **M15b** | **Title + menu**: a Title scene, `VM_CHOICE` menu (New Game / Continue), Continue gated on save-peek; wire the existing save. | GDB: the choice-result variable + the branch taken; ROM builds. | done |
+| **M15c** | **Mine Shaft** (`PLATFORM`): collision art with ledges + a ladder; the descent connects Cave → Gem. | GDB: `plat_state` / `plat_vel_y` during a fall+land. | done |
+| **M15d** | **Gem Vision** (affine): an affine scene; the Gem's vision rotates, L/R steer (angle-from-variable), scale pulses. | GDB: `gba_bg_angle` tracks the heading var; DISPCNT mode 1. | done |
+| **M15e** | **Escape** (`SHMUP`): auto-scroll flight out of the mine, projectiles vs falling rocks. | GDB: `shmup_cam_y` advancing; a projectile launch. | done |
+| **M15f** | **Polish + ending**: emotes, animation states, day→dusk palette swap, a timer, the Village crowd (>12 actors), a custom-C++ flourish, avatars, the ending. | GDB spot-asserts; eyes-on. | done |
+
+With M15f the demo plays the whole arc — Title → Village → Cave → Mine Shaft →
+Gem Vision → Escape → Village ending — and every row of the capability map above
+is visible in it.
 
 Each slice is a normal PR: build `examples/gba_demo` via the CLI, GDB-assert the
 capability it adds, ship an eyes-on ROM at the repos root, and keep the loose +

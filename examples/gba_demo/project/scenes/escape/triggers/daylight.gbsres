@@ -12,6 +12,13 @@
   "prefabScriptOverrides": {},
   "script": [
     {
+      "id": "15f00000-0000-4000-8000-000000000041",
+      "command": "EVENT_TIMER_DISABLE",
+      "args": {
+        "timer": 1
+      }
+    },
+    {
       "id": "d00d0000-0000-4000-8000-000000000061",
       "command": "EVENT_TEXT",
       "args": {

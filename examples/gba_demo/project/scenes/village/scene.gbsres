@@ -28,18 +28,127 @@
   "autoFadeSpeed": 1,
   "script": [
     {
-      "id": "e1000000-0000-4000-8000-000000000001",
+      "id": "15f00000-0000-4000-8000-000000000023",
       "command": "EVENT_MUSIC_PLAY",
       "args": {
         "musicId": "f50428ab-a084-4591-9bba-2ba10fe7b1c6"
       }
     },
     {
-      "id": "e1000000-0000-4000-8000-000000000002",
-      "command": "EVENT_TEXT",
+      "id": "15f00000-0000-4000-8000-000000000036",
+      "command": "EVENT_IF_TRUE",
       "args": {
-        "text": "The village square.\nTalk to the Elder.",
-        "avatarId": ""
+        "variable": "0"
+      },
+      "children": {
+        "true": [
+          {
+            "id": "15f00000-0000-4000-8000-000000000024",
+            "command": "EVENT_PALETTE_SET_BACKGROUND",
+            "args": {
+              "palette0": "village-dusk",
+              "palette1": "keep",
+              "palette2": "keep",
+              "palette3": "keep",
+              "palette4": "keep",
+              "palette5": "keep",
+              "palette6": "keep",
+              "palette7": "keep"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000025",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "Dusk falls as you\ncarry the Gem home.",
+              "avatarId": ""
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000026",
+            "command": "EVENT_ACTOR_SET_STATE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "spriteStateId": "Cheer",
+              "loopAnim": true
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000027",
+            "command": "EVENT_ACTOR_SET_STATE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000109",
+              "spriteStateId": "Cheer",
+              "loopAnim": true
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000028",
+            "command": "EVENT_ACTOR_EMOTE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "emoteId": "edf96d29-9a08-4813-b2d3-46e0996f89f2"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000029",
+            "command": "EVENT_SOUND_PLAY_EFFECT",
+            "args": {
+              "type": "b33b0000-0000-4000-8000-0000000000be",
+              "priority": "medium",
+              "wait": false
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000030",
+            "command": "EVENT_GBA_CUSTOM_CODE",
+            "args": {
+              "code": "// M15f ending flourish - author C++ compiled straight into the ROM.\n// Butano (bn::*) and the engine bridge (hw_*) are both in scope here.\nint a = 1, b = 1;\nfor(int i = 0; i < 10; ++i) { const int t = a + b; a = b; b = t; }\nconst bn::fixed resonance = bn::fixed(b) * 2;   // 144 * 2\nGBA_VAR(60) = resonance.integer();              // 288, a scratch VM slot\nhw_camera_shake(24);                            // the Gem flares"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000031",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "The whole village\nturns out to cheer.",
+              "avatarId": "face00000-0000-4000-8000-0000000000a1"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000032",
+            "command": "EVENT_ACTOR_EMOTE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000109",
+              "emoteId": "f1be2ac3-04ab-482a-8b83-99ffba1a89cd"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000033",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "THE END\n\nThanks for playing!",
+              "avatarId": ""
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "15f00000-0000-4000-8000-000000000034",
+            "command": "EVENT_TEXT",
+            "args": {
+              "text": "The village square.\nTalk to the Elder.",
+              "avatarId": ""
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000035",
+            "command": "EVENT_ACTOR_EMOTE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "emoteId": "70a4ce25-1fe4-4ab1-aee9-21255e70fb76"
+            }
+          }
+        ]
       }
     }
   ],

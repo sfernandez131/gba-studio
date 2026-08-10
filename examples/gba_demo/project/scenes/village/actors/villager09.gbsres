@@ -1,0 +1,46 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000109",
+  "_index": 9,
+  "symbol": "actor_villager_09",
+  "prefabId": "",
+  "name": "Bard",
+  "coordinateType": "tiles",
+  "x": 26,
+  "y": 12,
+  "frame": 0,
+  "animate": true,
+  "spriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "paletteId": "",
+  "direction": "left",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "collisionExtraFlags": [],
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "15f00000-0000-4000-8000-000000000007",
+      "command": "EVENT_ACTOR_EMOTE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000109",
+        "emoteId": "f1be2ac3-04ab-482a-8b83-99ffba1a89cd"
+      }
+    },
+    {
+      "id": "15f00000-0000-4000-8000-000000000008",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "I am composing the\nBallad of the Gem.",
+        "avatarId": ""
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}

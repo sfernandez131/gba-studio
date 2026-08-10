@@ -22,7 +22,7 @@
   "prefabScriptOverrides": {},
   "script": [
     {
-      "id": "el000000-0000-4000-8000-000000000001",
+      "id": "15f00000-0000-4000-8000-000000000022",
       "command": "EVENT_IF_TRUE",
       "args": {
         "variable": "0"
@@ -30,21 +30,46 @@
       "children": {
         "true": [
           {
-            "id": "el000000-0000-4000-8000-000000000002",
+            "id": "15f00000-0000-4000-8000-000000000017",
+            "command": "EVENT_ACTOR_SET_STATE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "spriteStateId": "Cheer",
+              "loopAnim": true
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000018",
+            "command": "EVENT_ACTOR_EMOTE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "emoteId": "edf96d29-9a08-4813-b2d3-46e0996f89f2"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000019",
             "command": "EVENT_TEXT",
             "args": {
               "text": "You found the Gem!\nYou are a hero!",
-              "avatarId": ""
+              "avatarId": "face00000-0000-4000-8000-0000000000a1"
             }
           }
         ],
         "false": [
           {
-            "id": "el000000-0000-4000-8000-000000000003",
+            "id": "15f00000-0000-4000-8000-000000000020",
+            "command": "EVENT_ACTOR_EMOTE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+              "emoteId": "70a4ce25-1fe4-4ab1-aee9-21255e70fb76"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000021",
             "command": "EVENT_TEXT",
             "args": {
               "text": "A Gem is lost in the\nCave to the south.",
-              "avatarId": ""
+              "avatarId": "face00000-0000-4000-8000-0000000000a1"
             }
           }
         ]

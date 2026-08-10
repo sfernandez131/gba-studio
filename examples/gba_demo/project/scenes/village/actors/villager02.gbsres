@@ -1,0 +1,46 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000102",
+  "_index": 2,
+  "symbol": "actor_villager_02",
+  "prefabId": "",
+  "name": "Miner",
+  "coordinateType": "tiles",
+  "x": 19,
+  "y": 12,
+  "frame": 0,
+  "animate": false,
+  "spriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2",
+  "paletteId": "",
+  "direction": "down",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "collisionExtraFlags": [],
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "15f00000-0000-4000-8000-000000000003",
+      "command": "EVENT_ACTOR_EMOTE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000102",
+        "emoteId": "3c769dca-51f3-426c-942f-71c4d3af6202"
+      }
+    },
+    {
+      "id": "15f00000-0000-4000-8000-000000000004",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "The old shaft is\nno place to linger.",
+        "avatarId": ""
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}

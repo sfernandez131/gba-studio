@@ -1,0 +1,46 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000119",
+  "_index": 19,
+  "symbol": "actor_villager_19",
+  "prefabId": "",
+  "name": "Messenger",
+  "coordinateType": "tiles",
+  "x": 21,
+  "y": 9,
+  "frame": 0,
+  "animate": false,
+  "spriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2",
+  "paletteId": "",
+  "direction": "right",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "collisionExtraFlags": [],
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "15f00000-0000-4000-8000-000000000015",
+      "command": "EVENT_ACTOR_EMOTE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000119",
+        "emoteId": "9df5f63f-ea47-447e-9b14-cb2dbafb697d"
+      }
+    },
+    {
+      "id": "15f00000-0000-4000-8000-000000000016",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "Still no Gem? The\nElder is waiting!",
+        "avatarId": ""
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}
