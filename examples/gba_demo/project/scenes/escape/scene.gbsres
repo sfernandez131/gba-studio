@@ -26,7 +26,54 @@
   ],
   "spritePaletteIds": [],
   "autoFadeSpeed": 1,
-  "script": [],
+  "script": [
+    {
+      "id": "15f00000-0000-4000-8000-000000000037",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "1",
+        "value": {
+          "type": "number",
+          "value": 20
+        }
+      }
+    },
+    {
+      "id": "15f00000-0000-4000-8000-000000000040",
+      "command": "EVENT_SET_TIMER_SCRIPT",
+      "args": {
+        "timer": 1,
+        "units": "frames",
+        "frames": 64,
+        "__scriptTabs": "end"
+      },
+      "symbol": "timer_collapse",
+      "children": {
+        "script": [
+          {
+            "id": "15f00000-0000-4000-8000-000000000038",
+            "command": "EVENT_DEC_VALUE",
+            "args": {
+              "variable": "1"
+            }
+          },
+          {
+            "id": "15f00000-0000-4000-8000-000000000039",
+            "command": "EVENT_CAMERA_SHAKE",
+            "args": {
+              "time": 0.2,
+              "units": "time",
+              "shakeDirection": "horizontal",
+              "magnitude": {
+                "type": "number",
+                "value": 2
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
   "playerHit1Script": [],
   "playerHit2Script": [],
   "playerHit3Script": []

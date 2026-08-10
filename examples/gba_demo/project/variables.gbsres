@@ -1,5 +1,14 @@
 {
   "_resourceType": "variables",
-  "variables": [],
+  "variables": [
+    {
+      "id": "0",
+      "name": "Gem Found"
+    },
+    {
+      "id": "1",
+      "name": "Collapse Countdown"
+    }
+  ],
   "constants": []
 }

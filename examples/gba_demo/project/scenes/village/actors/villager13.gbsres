@@ -1,0 +1,46 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000113",
+  "_index": 13,
+  "symbol": "actor_villager_13",
+  "prefabId": "",
+  "name": "Scholar",
+  "coordinateType": "tiles",
+  "x": 28,
+  "y": 16,
+  "frame": 0,
+  "animate": false,
+  "spriteSheetId": "daf95270-e30d-423b-9ee7-990ae29f57f6",
+  "paletteId": "",
+  "direction": "left",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "",
+  "collisionExtraFlags": [],
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "15f00000-0000-4000-8000-000000000011",
+      "command": "EVENT_ACTOR_EMOTE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000113",
+        "emoteId": "56423c9c-dca0-4f5b-ad92-28e9660d50f1"
+      }
+    },
+    {
+      "id": "15f00000-0000-4000-8000-000000000012",
+      "command": "EVENT_TEXT",
+      "args": {
+        "text": "A Gem that shows\nvisions? Impossible!",
+        "avatarId": ""
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}
