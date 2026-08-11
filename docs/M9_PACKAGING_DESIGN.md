@@ -196,6 +196,41 @@ mtime bookkeeping if this is ever revisited.
 on the GB side too, so two projects still cannot build at once — out-of-tree makes that
 fixable (a per-project build dir) rather than fixing it.
 
+### M9d progress — the bundle assembles and builds (nothing published)
+
+`src/scripts/assembleGbaToolchain.ts` produces a self-contained bundle from a toolchain
+root. Run locally against the dev machine's Wonderful install; **nothing has been published,
+so no source-availability obligation has been taken on yet.**
+
+The question this had to answer was whether a _relocated_ toolchain builds at all — a
+compiler with a baked-in prefix cannot be bundled. It does, and by design rather than luck:
+WT's `gcc.specs` resolves its include and library paths through
+`%:getenv(WONDERFUL_TOOLCHAIN /target/gba/...)`, and `wt_setup.mak` derives every tool path
+from `$(WONDERFUL_TOOLCHAIN)`. Point that variable anywhere and the toolchain follows.
+
+| Result                |                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Bundle size           | **435 MB**, pruned from 521 MB (the source install is ~700 MB)                                                           |
+| Pruned                | package cache, docs, tools for other consoles, and multilib variants for cores the GBA does not have — it is an ARM7TDMI |
+| Build from the bundle | succeeds, with `WONDERFUL_TOOLCHAIN` pointed at it                                                                       |
+| ROM                   | **byte-identical** to the system-toolchain build                                                                         |
+| Licences              | collected into `licenses/`; the script refuses to emit a bundle without them                                             |
+
+One finding came from a failed build rather than from reading: the bundle needs **`wf-bin2s`**
+as well as `wf-gbatool`. Grepping Butano's makefiles for `wf-` confirms those two and only
+those two.
+
+**What is still missing, and it is Windows-specific.** The build above still borrowed `make`,
+`python` and a POSIX shell from MSYS2. On macOS and Linux all three are present system-wide,
+so those platforms are close to done; on Windows a shipped app cannot assume MSYS2, and
+`makeGbaBuild` currently shells to `C:/msys64/usr/bin/bash.exe`. Butano's recipes need a
+real shell, so the options are bundling a minimal MSYS2-like environment or driving the
+compilation ourselves instead of through `make`. That is the remaining M9d work, and it is
+a bigger question than the compiler was.
+
+Deliberately not done: `fetchDependencies.ts` + `dependencies.lock` wiring, which is
+mechanical but pointless until there is a published bundle to fetch.
+
 ## Verification
 
 M9 has no runtime behaviour to GDB-assert, so its verification is structural, and the two
