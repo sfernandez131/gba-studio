@@ -149,7 +149,9 @@ jobs:
           # the audio backend (the M5/M6 stale-cache bug class) is ~137KB.
           test "$size" -ge 150000
           # The Maxmod mixer must be in the link map (audio actually linked).
-          grep -q "mixer_asm" ci-engine/gbavm/build/gbavm.map
+          # Since M9c the build runs in a temp tree, so the CLI drops the .map
+          # and .elf beside the ROM it was asked to produce.
+          grep -q "mixer_asm" out-ci/lost_gem.map
 
       # --- Runtime tests (quality program part 2b) -----------------------------
       # Build the parity fixture and boot it headlessly under mGBA's GDB stub;
@@ -178,4 +180,4 @@ jobs:
       - name: Run the mGBA runtime tests
         run: |
           bash scripts/gba-runtime-test.sh \
-            out-ci/actor_test.gba ci-engine/gbavm/gbavm.elf
+            out-ci/actor_test.gba out-ci/actor_test.elf

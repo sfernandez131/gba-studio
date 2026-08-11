@@ -10,7 +10,10 @@ import ejectGbaBuild from "./gba/ejectGbaBuild";
 import makeGbaBuild, {
   cancelGbaBuildCommandsInProgress,
 } from "./gba/makeGbaBuild";
+import prepareGbaEngineTree from "./gba/prepareGbaEngine";
 import { EngineSchema } from "lib/project/loadEngineSchema";
+import { gbaButanoRoot, gbaEngineRoot } from "consts";
+import Path from "path";
 
 export type BuildType = "rom" | "web" | "pocket" | "gba";
 
@@ -82,10 +85,22 @@ const buildProject = async ({
     // GBA target: skip the GBDK eject/validate path entirely. Generate gbavm
     // bytecode from the start scene's compiled GBVM assembly, then build the
     // gbavm (Butano/devkitARM) engine into a .gba. See src/lib/compiler/gba/.
+    //
+    // M9c: the build gets its own copy of the engine under the build root, so
+    // the engine checkout stays a read-only source and no project's generated
+    // files can leak into the next build.
+    const engineRoot = Path.join(outputRoot, "gba");
+    await prepareGbaEngineTree({
+      engineRoot: gbaEngineRoot,
+      buildRoot: engineRoot,
+      progress,
+    });
+
     await ejectGbaBuild({
       projectData: project,
       projectRoot,
       outputRoot,
+      engineRoot,
       compiledData,
       progress,
       warnings,
@@ -94,6 +109,8 @@ const buildProject = async ({
     if (make) {
       await makeGbaBuild({
         buildRoot: outputRoot,
+        engineRoot,
+        butanoRoot: gbaButanoRoot,
         romFilename,
         progress,
         warnings,

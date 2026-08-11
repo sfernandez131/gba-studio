@@ -1,4 +1,4 @@
-import { copy, readFile, writeFile } from "fs-extra";
+import { copy, pathExists, readFile, writeFile } from "fs-extra";
 import Path from "path";
 import os from "os";
 import { rimraf as rmdir } from "rimraf";
@@ -111,6 +111,22 @@ const main = async (
   } else if (command === "make:gba") {
     const romTmpPath = Path.join(tmpBuildDir, "build", "gba", romFilename);
     await copy(romTmpPath, destination);
+    // The .elf and .map next to the ROM (M9c): the build tree is a temp dir, so
+    // these would otherwise be unreachable - and the .elf is what debugging a
+    // GBA ROM under mGBA's GDB stub requires.
+    const romBase = romFilename.replace(/\.gba$/i, "");
+    const destBase = destination.replace(/\.gba$/i, "");
+    for (const ext of ["elf", "map"]) {
+      const fromPath = Path.join(
+        tmpBuildDir,
+        "build",
+        "gba",
+        `${romBase}.${ext}`,
+      );
+      if (await pathExists(fromPath)) {
+        await copy(fromPath, `${destBase}.${ext}`);
+      }
+    }
   } else if (command === "make:web") {
     const romTmpPath = Path.join(tmpBuildDir, "build", "rom", romFilename);
     await copy(binjgbRoot, destination);

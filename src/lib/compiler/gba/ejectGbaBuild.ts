@@ -5,11 +5,10 @@
 // bytecode (parseGbvmAsm -> emitGbaBytecode -> formatGbaProgramC) and writes it
 // as the engine's src/game_script.c. makeGbaBuild then compiles the gbavm engine.
 //
-// Scope: the start scene's init + first-actor update scripts (two self-contained
-// bytecode blobs, no cross-script linking / engine-symbol model yet), plus the
-// start scene's background converted to a Butano regular_bg (Phase 1). The build
-// happens in the gbavm engine tree (gbaEngineRoot); an isolated/vendored build
-// dir is a later packaging concern.
+// Everything is written into `engineRoot`, which since M9c is the build's OWN
+// copy of the engine tree (<tmp>/_gbsbuild/gba, prepared by prepareGbaEngine.ts)
+// rather than the engine checkout itself. Nothing here may assume the tree is
+// the developer's gbavm working copy.
 
 import {
   writeFile,
@@ -21,7 +20,6 @@ import {
 } from "fs-extra";
 import Path from "path";
 import { PNG } from "pngjs";
-import { gbaEngineRoot } from "consts";
 import { ProjectResources } from "shared/lib/resources/types";
 import { assetFilename } from "shared/lib/helpers/assets";
 import { tileDataIndexFn } from "shared/lib/tiles/tileData";
@@ -55,6 +53,8 @@ type EjectGbaOptions = {
   projectData: ProjectResources;
   projectRoot: string;
   outputRoot: string;
+  /** The build's own engine tree (M9c), already prepared by prepareGbaEngineTree. */
+  engineRoot: string;
   compiledData: {
     files: Record<string, string>;
     // Compiled font order (indices that dialogue \002 font-switch codes refer to).
@@ -75,13 +75,14 @@ const ejectGbaBuild = async ({
   projectData,
   projectRoot,
   outputRoot,
+  engineRoot,
   compiledData,
   progress,
   warnings,
 }: EjectGbaOptions) => {
-  if (!(await pathExists(Path.join(gbaEngineRoot, "Makefile")))) {
+  if (!(await pathExists(Path.join(engineRoot, "Makefile")))) {
     throw new Error(
-      `GBA build: gbavm engine not found at ${gbaEngineRoot} (set the GBAVM_ROOT environment variable).`,
+      `GBA build: engine build tree not prepared at ${engineRoot}`,
     );
   }
 
@@ -93,7 +94,7 @@ const ejectGbaBuild = async ({
   if (!startScene) {
     throw new Error("GBA build: project has no scenes to build");
   }
-  await ensureDir(Path.join(gbaEngineRoot, "src"));
+  await ensureDir(Path.join(engineRoot, "src"));
 
   // --- Link every scene's script graph -> gba_program.c + the scene table ------
   // A GBVM proc symbol "_foo" is compiled to the file keyed "foo.s"; a symbol with
@@ -127,13 +128,13 @@ const ejectGbaBuild = async ({
   const dmgCases: string[] = [];
   const maxmodCases: string[] = [];
   let haveMaxmod = false;
-  await ensureDir(Path.join(gbaEngineRoot, "dmg_audio"));
-  await ensureDir(Path.join(gbaEngineRoot, "audio"));
+  await ensureDir(Path.join(engineRoot, "dmg_audio"));
+  await ensureDir(Path.join(engineRoot, "audio"));
   // Clear stale generated .mod tracks first: a track that switched backend would otherwise
   // leave its file behind in the other dir (bloating the ROM / duplicate symbol). SFX .wav
   // in audio/ are written by the sound-effects step below, so they are left untouched here.
   for (const dir of ["dmg_audio", "audio"]) {
-    const dirPath = Path.join(gbaEngineRoot, dir);
+    const dirPath = Path.join(engineRoot, dir);
     for (const f of await readdir(dirPath)) {
       if (/\.mod$/i.test(f)) await remove(Path.join(dirPath, f));
     }
@@ -151,7 +152,7 @@ const ejectGbaBuild = async ({
     try {
       const data = await readFile(assetFilename(projectRoot, "music", track));
       await writeFile(
-        Path.join(gbaEngineRoot, destDir, `${track.symbol}.mod`),
+        Path.join(engineRoot, destDir, `${track.symbol}.mod`),
         data,
       );
     } catch (e) {
@@ -212,7 +213,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_music_assets.h"),
+    Path.join(engineRoot, "src", "gba_music_assets.h"),
     musicHeader + "\n",
   );
 
@@ -222,7 +223,7 @@ const ejectGbaBuild = async ({
   // for VM_SFX_PLAY. Only .wav for now (vgm/fxhammer are GB register dumps - skipped).
   const sfxIncludes: string[] = [];
   const sfxCases: string[] = [];
-  await ensureDir(Path.join(gbaEngineRoot, "audio"));
+  await ensureDir(Path.join(engineRoot, "audio"));
   let sfxIdx = 0;
   for (const sound of projectData.sounds ?? []) {
     if (sound.type !== "wav" || !/\.wav$/i.test(sound.filename)) {
@@ -234,7 +235,7 @@ const ejectGbaBuild = async ({
     try {
       const data = await readFile(assetFilename(projectRoot, "sounds", sound));
       await writeFile(
-        Path.join(gbaEngineRoot, "audio", `${sound.symbol}.wav`),
+        Path.join(engineRoot, "audio", `${sound.symbol}.wav`),
         data,
       );
     } catch (e) {
@@ -267,7 +268,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_sfx_assets.h"),
+    Path.join(engineRoot, "src", "gba_sfx_assets.h"),
     sfxHeader + "\n",
   );
 
@@ -359,7 +360,7 @@ const ejectGbaBuild = async ({
   );
   // Generate src/gba_user_code.h from the collected snippets. Empty (no snippets)
   // yields an empty dispatch, matching the committed engine baseline.
-  await ensureDir(Path.join(gbaEngineRoot, "src"));
+  await ensureDir(Path.join(engineRoot, "src"));
   const userCodeHeader = [
     '// Generated by GBA Studio (M8e) - author "Run Custom Code (C++)" snippets.',
     "// Each snippet is a gba_user_<n>() function; gba_user_run dispatches by index",
@@ -382,7 +383,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_user_code.h"),
+    Path.join(engineRoot, "src", "gba_user_code.h"),
     userCodeHeader + "\n",
   );
 
@@ -626,12 +627,9 @@ const ejectGbaBuild = async ({
         `native/engine/far-data linking lands in a later milestone`,
     );
   }
+  await writeFile(Path.join(engineRoot, "src", "gba_program.c"), linked.source);
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_program.c"),
-    linked.source,
-  );
-  await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_scenes.c"),
+    Path.join(engineRoot, "src", "gba_scenes.c"),
     formatGbaScenesC(sceneEntries, startSceneIndex, globalProjectileDefs),
   );
 
@@ -706,7 +704,7 @@ const ejectGbaBuild = async ({
   // engine can load any scene's art. gba_scene_assets.h maps a scene index -> its
   // bg + actor->sprite table; Butano items are compile-time symbols, hence the
   // generated switches. Sprite palette index 0 is transparent (GBA requirement).
-  await ensureDir(Path.join(gbaEngineRoot, "graphics"));
+  await ensureDir(Path.join(engineRoot, "graphics"));
   const spritePalette = [
     hexToRgb(settings.customColorsWhite || "E8F8E0"), // 0: transparent
     hexToRgb(settings.customColorsLight || "B0F088"), // 1
@@ -906,11 +904,11 @@ const ejectGbaBuild = async ({
     const bgName = `scene${s}_bg`;
     const converted = await convertBackground(scene);
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${bgName}.bmp`),
+      Path.join(engineRoot, "graphics", `${bgName}.bmp`),
       converted.bmp,
     );
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${bgName}.json`),
+      Path.join(engineRoot, "graphics", `${bgName}.json`),
       JSON.stringify(
         converted.multiBank
           ? // colors_count 128 pads the palette item to all 8 GBC banks so
@@ -934,11 +932,11 @@ const ejectGbaBuild = async ({
     if (sceneIsAffine(scene)) {
       const affName = `scene${s}_affine_bg`;
       await writeFile(
-        Path.join(gbaEngineRoot, "graphics", `${affName}.bmp`),
+        Path.join(engineRoot, "graphics", `${affName}.bmp`),
         await convertAffineBackground(scene),
       );
       await writeFile(
-        Path.join(gbaEngineRoot, "graphics", `${affName}.json`),
+        Path.join(engineRoot, "graphics", `${affName}.json`),
         JSON.stringify({ type: "affine_bg" }) + "\n",
       );
       affineIncludes.push(`#include "bn_affine_bg_items_${affName}.h"`);
@@ -980,11 +978,11 @@ const ejectGbaBuild = async ({
       );
       const name = `scene${s}_sprite_${idx}`;
       await writeFile(
-        Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+        Path.join(engineRoot, "graphics", `${name}.bmp`),
         indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
       );
       await writeFile(
-        Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+        Path.join(engineRoot, "graphics", `${name}.json`),
         JSON.stringify({ type: "sprite", height: sheet.frameHeight }) + "\n",
       );
       spriteIncludes.push(`#include "bn_sprite_items_${name}.h"`);
@@ -1066,11 +1064,11 @@ const ejectGbaBuild = async ({
     );
     const name = `global_sprite_${pi}`;
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      Path.join(engineRoot, "graphics", `${name}.bmp`),
       indexedImageToBmp(sheet.sheet, palette, { align: 8 }),
     );
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      Path.join(engineRoot, "graphics", `${name}.json`),
       JSON.stringify({ type: "sprite", height: sheet.frameHeight }) + "\n",
     );
     spriteIncludes.push(`#include "bn_sprite_items_${name}.h"`);
@@ -1151,7 +1149,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_scene_assets.h"),
+    Path.join(engineRoot, "src", "gba_scene_assets.h"),
     assetsHeader + "\n",
   );
 
@@ -1184,11 +1182,11 @@ const ejectGbaBuild = async ({
     }
     const name = `avatar_${a}`;
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      Path.join(engineRoot, "graphics", `${name}.bmp`),
       indexedImageToBmp(img, palette, { align: 8 }),
     );
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      Path.join(engineRoot, "graphics", `${name}.json`),
       JSON.stringify({ type: "sprite", height: img.height }) + "\n",
     );
     avatarIncludes.push(`#include "bn_sprite_items_${name}.h"`);
@@ -1211,7 +1209,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_avatar_assets.h"),
+    Path.join(engineRoot, "src", "gba_avatar_assets.h"),
     avatarHeader + "\n",
   );
 
@@ -1247,11 +1245,11 @@ const ejectGbaBuild = async ({
     }
     const name = `emote_${e}`;
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      Path.join(engineRoot, "graphics", `${name}.bmp`),
       indexedImageToBmp(img, palette, { align: 8 }),
     );
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      Path.join(engineRoot, "graphics", `${name}.json`),
       JSON.stringify({ type: "sprite", height: img.height }) + "\n",
     );
     emoteIncludes.push(`#include "bn_sprite_items_${name}.h"`);
@@ -1274,7 +1272,7 @@ const ejectGbaBuild = async ({
     "#endif",
   ].join("\n");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_emote_assets.h"),
+    Path.join(engineRoot, "src", "gba_emote_assets.h"),
     emoteHeader + "\n",
   );
 
@@ -1369,7 +1367,7 @@ const ejectGbaBuild = async ({
     }
     const name = `dialogue_font_${i}`;
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.bmp`),
+      Path.join(engineRoot, "graphics", `${name}.bmp`),
       indexedImageToBmp(
         { width: 8, height: FONT_GLYPHS * FONT_GH, data: built.strip },
         fontPalette,
@@ -1377,7 +1375,7 @@ const ejectGbaBuild = async ({
       ),
     );
     await writeFile(
-      Path.join(gbaEngineRoot, "graphics", `${name}.json`),
+      Path.join(engineRoot, "graphics", `${name}.json`),
       JSON.stringify({ type: "sprite", height: FONT_GH }) + "\n",
     );
     const widthsRows: string[] = [];
@@ -1429,7 +1427,7 @@ const ejectGbaBuild = async ({
   }
   fontHeaderLines.push("#endif");
   await writeFile(
-    Path.join(gbaEngineRoot, "src", "gba_font_assets.h"),
+    Path.join(engineRoot, "src", "gba_font_assets.h"),
     fontHeaderLines.join("\n") + "\n",
   );
 
