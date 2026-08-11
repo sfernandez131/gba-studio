@@ -13,6 +13,7 @@ coverage
 .DS_Store
 test/projects/*/build
 buildTools/*/gbdk
+buildTools/*/gba-toolchain
 
 # Webpack
 .webpack/
