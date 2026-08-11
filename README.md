@@ -3,6 +3,12 @@
 > ⚠️ **Experimental — work in progress.** GBA Studio is an independent fork of
 > [GB Studio](https://github.com/chrismaltby/gb-studio). It is **not affiliated with or
 > endorsed by** the GB Studio project.
+>
+> **Nintendo trademarks.** "Nintendo", "Game Boy", "Game Boy Advance" and "GBA" are
+> trademarks of Nintendo. This project is **not affiliated with, authorised, sponsored or
+> endorsed by Nintendo** in any way. Those names are used here only to describe the
+> hardware this software targets. No Nintendo code, BIOS, ROM or other asset is included
+> or distributed — this is an independent homebrew development tool.
 
 **GBA Studio takes GB Studio's drag-and-drop game editor and retargets it from the original
 Game Boy to the Game Boy Advance** — so you can build GBA games the same no-code way, then
@@ -15,8 +21,7 @@ reach for hardware the Game Boy never had.
 - **Keep the GB Studio experience.** Same visual editor, scenes, sprites, dialogue, and
   event scripting. 100% no-code by default.
 - **Target the GBA natively.** Replace the Game Boy / GBDK backend with a
-  [Butano](https://github.com/GValiente/butano) + devkitARM engine that produces real
-  `.gba` ROMs.
+  [Butano](https://github.com/GValiente/butano)-based engine that produces real `.gba` ROMs.
 - **Unlock GBA-only features.** 240×160 screen, thousands of on-screen colors, 128 hardware
   sprites, rotation/scaling (affine) backgrounds and sprites, sampled audio, link-cable play.
 - **Optional code, always.** No code required — but an opt-in escape hatch for power users
@@ -31,7 +36,8 @@ GBA Studio is split into two repos, mirroring GB Studio's own editor + engine la
 | **Editor** | GB Studio's Electron/React app (this repo), being retargeted for GBA | `sfernandez131/gba-studio` |
 | **Engine** | GB Studio's **GBVM** bytecode VM, ported from Z80/GBDK to C/C++ on **Butano** | [`sfernandez131/gbavm`](https://github.com/sfernandez131/gbavm) |
 
-**Toolchain:** devkitARM + Butano + Maxmod (replacing GBDK/SDCC + hUGEDriver), with **mGBA** for preview.
+**Toolchain:** Wonderful Toolchain (or devkitARM, if installed) + Butano + Maxmod — replacing
+GBDK/SDCC + hUGEDriver — with **mGBA** for preview.
 
 ## Roadmap
 
@@ -110,12 +116,12 @@ yarn start
 The editor can now build a project to a `.gba` through the `gbavm` engine from the CLI:
 
 ```bash
-gb-studio-cli make:gba project.gbsproj out.gba   # requires devkitARM + Butano
+gb-studio-cli make:gba project.gbsproj out.gba   # requires a GBA toolchain (see below)
 ```
 
 Wiring the GUI **Build** button is next. The GBA engine
-([`gbavm`](https://github.com/sfernandez131/gbavm)) also builds standalone with devkitARM +
-Butano. For the GB Studio editor's CLI and full documentation, see the upstream
+([`gbavm`](https://github.com/sfernandez131/gbavm)) also builds standalone against Butano.
+For the GB Studio editor's CLI and full documentation, see the upstream
 [GB Studio docs](https://www.gbstudio.dev/docs).
 
 ## Credits & license
@@ -127,5 +133,20 @@ Copyright (c) 2019–2026 Chris Maltby, released under the
 [LICENSE](LICENSE)). Please support the original project:
 [Patreon](https://www.patreon.com/gbstudiodev) · [gbstudio.dev](https://www.gbstudio.dev).
 
-The GBA engine builds on [Butano](https://github.com/GValiente/butano) by Gustavo Valiente
-and the [devkitPro](https://devkitpro.org/) toolchain.
+The GBA engine builds on [Butano](https://github.com/GValiente/butano) by Gustavo Valiente,
+compiled with the [Wonderful Toolchain](https://wonderful.asie.pl/) (devkitARM also works if
+you have it installed). Butano bundles a number of other libraries — Maxmod, libtonc, GBT
+Player and more — which end up inside the ROMs you build.
+
+**Every component, its author and its licence is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**, including what gets linked into your
+games. Everything linked into a ROM is permissively licensed, so **games you build with GBA
+Studio are yours to license and sell as you wish** — nothing here imposes a licence on your
+game.
+
+### Trademarks
+
+"Nintendo", "Game Boy", "Game Boy Advance" and "GBA" are trademarks of Nintendo. This
+project is not affiliated with, authorised, sponsored or endorsed by Nintendo, and includes
+no Nintendo code, BIOS, ROM or other asset. Those names are used only to describe the
+hardware this software targets.
