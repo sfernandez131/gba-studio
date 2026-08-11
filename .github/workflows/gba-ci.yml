@@ -103,10 +103,10 @@ jobs:
       - name: Install dependencies
         run: yarn
 
-      - name: Clone engine (gbavm) and Butano
-        run: |
-          git clone --depth 1 https://github.com/sfernandez131/gbavm.git ci-engine/gbavm
-          git clone --depth 1 --branch 21.7.0 https://github.com/GValiente/butano.git ci-engine/butano
+      # The engine and Butano are vendored as submodules under appData/engine
+      # (M9b) and pinned by commit, so the `submodules: true` checkout above is
+      # all that is needed. CI no longer clones a floating engine at master HEAD,
+      # which means a green run is now reproducible from a gba-studio SHA alone.
 
       - name: Install Wonderful Toolchain (target-gba + blocksds tools)
         run: |
@@ -131,7 +131,6 @@ jobs:
 
       - name: Build the Lost Gem example to a GBA ROM
         env:
-          GBAVM_ROOT: ${{ github.workspace }}/ci-engine/gbavm
           GBA_TOOLCHAIN: wonderful
           WONDERFUL_TOOLCHAIN: /opt/wonderful
         run: |
@@ -160,7 +159,6 @@ jobs:
       # GDB-stub verification recipe used for every M10/M11 slice.
       - name: Build the gba_actor_test fixture to a GBA ROM
         env:
-          GBAVM_ROOT: ${{ github.workspace }}/ci-engine/gbavm
           GBA_TOOLCHAIN: wonderful
           WONDERFUL_TOOLCHAIN: /opt/wonderful
         run: |

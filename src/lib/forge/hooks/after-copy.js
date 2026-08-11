@@ -8,6 +8,19 @@ const disallowedDirs = [
   "appData/engine/gbvm/test",
   "appData/engine/gbvm/examples",
   "gbdk/examples",
+  // The GBA engine (M9b). Build output and previously built ROMs are local
+  // clutter in a working checkout and must never reach the bundle.
+  "appData/engine/gba/build",
+  "appData/engine/gba/builds",
+  // Butano ships its examples, games, tests and rendered docs alongside the
+  // library - ~120MB of the 145MB checkout, none of which a build needs. Only
+  // appData/engine/butano/butano (plus its licence and readme) is required.
+  "appData/engine/butano/examples",
+  "appData/engine/butano/games",
+  "appData/engine/butano/tests",
+  "appData/engine/butano/docs",
+  "appData/engine/butano/docs_tools",
+  "appData/engine/butano/issues",
 ];
 
 const isAllowedPath = (inputPath, disallowedPaths) => {
