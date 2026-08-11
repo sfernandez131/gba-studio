@@ -163,6 +163,39 @@ committing to in this document.
 | **M9e** | Packaging + cross-platform CI: `after-copy` filter, the packaging smoke job, release-matrix wiring.                                                                                          | The packaged app builds the Lost Gem demo on each platform in CI.                                                                                                          |
 | **M9f** | Docs + cleanup: contributor setup instructions, remove the `D:/source/gbavm` fallback, retire the baseline-restore step from the workflow notes.                                             | A fresh clone + documented setup builds a GBA ROM.                                                                                                                         |
 
+### M9c outcome (shipped ahead of M9b)
+
+M9c landed first, since it is independent of both the vendoring and the toolchain question.
+The build now runs in `<tmp>/_gbsbuild/gba`, prepared by `prepareGbaEngine.ts`, and the
+engine checkout is a read-only source. Measured on the dev machine:
+
+|                                  | Result                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Engine checkout after two builds | **byte-identical** (was 110 files dirtied by a single build)                                                               |
+| Out-of-tree ROM vs in-place ROM  | **byte-identical**, and stable across rebuilds                                                                             |
+| Cross-project leakage            | none — the previous project's `graphics/` are gone; the demo rebuilds byte-identically after the fixture builds in between |
+| Cold build                       | 29.2 s                                                                                                                     |
+| Warm rebuild                     | 12.7 s (in-place was 11.9 s, so out-of-tree costs ~0.9 s, ~7%)                                                             |
+
+One finding changed the design. Butano's asset step decides an asset is up to date by
+**comparing mtimes** against a `build/_bn_<name>_graphics_file_info.txt` sentinel
+(`butano_graphics_tool.py`), so preserving the engine's timestamps on assets would let a
+sentinel left by a _different_ project's build mask a restored baseline asset. Today's eject
+happens to overwrite every such file, but that is a property of the current eject, not a
+guarantee — so `prepareGbaEngineTree` stamps the asset dirs to now, making the property
+unconditional. Code keeps its source mtimes, so the expensive half of the build stays
+incremental; only asset regeneration pays, which is the ~0.9 s above.
+
+The object dir surviving across projects is safe for linking: `common_setup.mak` derives
+`OFILES_GRAPHICS` from the `.bmp` files actually present, so intermediates whose source is
+gone are never referenced. Stale intermediates do accumulate in `build/` (35 after a project
+switch); pruning them is deferred, as content-hashing the assets would be a better fix than
+mtime bookkeeping if this is ever revisited.
+
+**Not delivered by M9c:** concurrent builds. `<tmp>/_gbsbuild` is a single shared directory
+on the GB side too, so two projects still cannot build at once — out-of-tree makes that
+fixable (a per-project build dir) rather than fixing it.
+
 ## Verification
 
 M9 has no runtime behaviour to GDB-assert, so its verification is structural, and the two

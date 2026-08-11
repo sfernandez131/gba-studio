@@ -33,6 +33,15 @@ export const gbaEngineRoot = normalize(
   (typeof process !== "undefined" ? process.env.GBAVM_ROOT : undefined) ??
     "D:/source/gbavm",
 );
+// Butano (the GBA framework the engine is built on). gbavm's Makefile declares
+// `LIBBUTANO := ../butano/butano`, i.e. a checkout beside the engine - but since
+// M9c the build runs OUT OF TREE, where that relative path no longer resolves,
+// so makeGbaBuild passes this absolute path to make instead. Not yet vendored
+// into appData either (M9b); override with BUTANO_ROOT.
+export const gbaButanoRoot = normalize(
+  (typeof process !== "undefined" ? process.env.BUTANO_ROOT : undefined) ??
+    `${gbaEngineRoot}/../butano/butano`,
+);
 export const defaultEngineMetaPath = normalize(`${enginesRoot}/engine.json`);
 export const buildToolsRoot = normalize(`${rootDir}/buildTools`);
 export const binjgbRoot = normalize(`${rootDir}/appData/wasm/binjgb`);

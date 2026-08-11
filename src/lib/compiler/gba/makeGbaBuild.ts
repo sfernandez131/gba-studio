@@ -4,9 +4,12 @@
 // (with the game_script.c written by ejectGbaBuild) into a .gba and copies it to
 // <buildRoot>/build/gba/<romFilename> for the CLI/UI copy-out to collect.
 //
-// M2: builds in-place in the gbavm engine tree (gbaEngineRoot) so Butano's
-// relative LIBBUTANO path and warm build cache are reused. Isolated/vendored
-// build dirs are a later packaging concern.
+// M9c: builds OUT OF TREE, in the build's own copy of the engine
+// (<tmp>/_gbsbuild/gba, prepared by prepareGbaEngine.ts) rather than in the
+// engine checkout. Two consequences handled here: the copied tree's relative
+// `LIBBUTANO := ../butano/butano` no longer resolves, so the absolute path is
+// passed to make as LIBBUTANOABS; and the ROM/map are named after the build
+// dir, since gbavm's Makefile takes TARGET from $(notdir $(CURDIR)).
 //
 // Toolchain: Butano's butano.mak picks devkitARM when DEVKITARM is set, else
 // Wonderful Toolchain when WONDERFUL_TOOLCHAIN is set. Wonderful is PREFERRED
@@ -31,10 +34,14 @@ import {
 import type { SpawnOptions } from "child_process";
 import spawn, { ChildProcess } from "lib/helpers/cli/spawn";
 import { envWith } from "lib/helpers/cli/env";
-import { gbaEngineRoot } from "consts";
 
 type MakeGbaOptions = {
+  /** Where the ROM is copied out to: <outputRoot>/build/gba/<romFilename>. */
   buildRoot: string;
+  /** The build's own engine tree (M9c) - make runs here. */
+  engineRoot: string;
+  /** Butano's library root, passed to make since the copied tree's relative path can't resolve. */
+  butanoRoot: string;
   romFilename: string;
   progress: (msg: string) => void;
   warnings: (msg: string) => void;
@@ -79,6 +86,7 @@ const findWonderful = async (): Promise<
 // and EWRAM (256KB) usage summed from the link map's top-level output sections
 // (lines at column 0; input sections are indented and skipped).
 const reportRomStats = async (
+  engineRoot: string,
   romPath: string,
   progress: (msg: string) => void,
 ) => {
@@ -87,9 +95,9 @@ const reportRomStats = async (
   let ewram = 0;
   try {
     const mapPath = Path.join(
-      gbaEngineRoot,
+      engineRoot,
       "build",
-      `${Path.basename(gbaEngineRoot)}.map`,
+      `${Path.basename(engineRoot)}.map`,
     );
     const map = await readFile(mapPath, "utf8");
     for (const m of map.matchAll(
@@ -116,11 +124,18 @@ const reportRomStats = async (
 
 const makeGbaBuild = async ({
   buildRoot,
+  engineRoot,
+  butanoRoot,
   romFilename,
   progress = (_msg) => {},
   warnings = (_msg) => {},
 }: MakeGbaOptions) => {
   cancelling = false;
+  if (!(await pathExists(Path.join(butanoRoot, "butano.mak")))) {
+    throw new Error(
+      `GBA build: Butano not found at ${butanoRoot} (set the BUTANO_ROOT environment variable).`,
+    );
+  }
   const envDkp = process.env.DEVKITPRO?.replace(/\\/g, "/");
   const toolchainPref = process.env.GBA_TOOLCHAIN?.toLowerCase();
   const wonderful =
@@ -137,6 +152,14 @@ const makeGbaBuild = async ({
   let options: SpawnOptions;
   let toolchainName: string;
 
+  // Butano's makefiles consume LIBBUTANOABS only (butano.mak and
+  // tools/sources_setup.mak); gbavm's Makefile derives it from LIBBUTANO behind
+  // an `ifndef`, so setting it on the command line wins and skips the $(realpath)
+  // of a path that no longer exists relative to the copied tree. Quoted because
+  // a user's project/tmp path can contain spaces. MSYS2 make needs the /c/... form.
+  const butanoVarUnix = `LIBBUTANOABS='${toUnixPath(butanoRoot)}'`;
+  const butanoVarNative = `LIBBUTANOABS="${butanoRoot}"`;
+
   if (wonderful && "msys2Root" in wonderful) {
     // Wonderful Toolchain on Windows: run make through the standard MSYS2 bash
     // with the env the Wonderful shell would set. DEVKITARM/DEVKITPRO must be
@@ -145,9 +168,9 @@ const makeGbaBuild = async ({
     command = `${wonderful.msys2Root}/usr/bin/bash.exe`;
     args = [
       "-lc",
-      `cd '${toUnixPath(gbaEngineRoot)}' && unset DEVKITARM DEVKITPRO && ` +
+      `cd '${toUnixPath(engineRoot)}' && unset DEVKITARM DEVKITPRO && ` +
         `export WONDERFUL_TOOLCHAIN=/opt/wonderful PATH=/opt/wonderful/bin:$PATH && ` +
-        `make -j${cpuCount}`,
+        `make ${butanoVarUnix} -j${cpuCount}`,
     ];
     options = {
       env: { ...process.env, MSYSTEM: "UCRT64" },
@@ -159,9 +182,9 @@ const makeGbaBuild = async ({
     delete env.DEVKITARM;
     delete env.DEVKITPRO;
     command = "make";
-    args = [`-j${cpuCount}`];
+    args = [butanoVarNative, `-j${cpuCount}`];
     options = {
-      cwd: gbaEngineRoot,
+      cwd: engineRoot,
       shell: true,
       env: {
         ...env,
@@ -186,16 +209,19 @@ const makeGbaBuild = async ({
       );
     }
     command = bash;
-    args = ["-lc", `cd '${toUnixPath(gbaEngineRoot)}' && make -j${cpuCount}`];
+    args = [
+      "-lc",
+      `cd '${toUnixPath(engineRoot)}' && make ${butanoVarUnix} -j${cpuCount}`,
+    ];
     options = { env: process.env, shell: false };
   } else {
     toolchainName = "devkitARM";
     const devkitPro = envDkp ?? "/opt/devkitpro";
     const devkitArm = `${devkitPro}/devkitARM`;
     command = "make";
-    args = [`-j${cpuCount}`];
+    args = [butanoVarNative, `-j${cpuCount}`];
     options = {
-      cwd: gbaEngineRoot,
+      cwd: engineRoot,
       shell: true,
       env: {
         ...process.env,
@@ -225,23 +251,24 @@ const makeGbaBuild = async ({
   }
 
   // Butano emits $(TARGET).gba in the project root (CURDIR), where
-  // TARGET = $(notdir $(CURDIR)); build/ holds only intermediates.
-  const target = Path.basename(gbaEngineRoot);
-  let romPath = Path.join(gbaEngineRoot, `${target}.gba`);
+  // TARGET = $(notdir $(CURDIR)); build/ holds only intermediates. Out of tree
+  // that makes the ROM <engine build dir>.gba rather than gbavm.gba.
+  const target = Path.basename(engineRoot);
+  let romPath = Path.join(engineRoot, `${target}.gba`);
   if (!(await pathExists(romPath))) {
-    const gbas = (await readdir(gbaEngineRoot).catch(() => [])).filter((f) =>
+    const gbas = (await readdir(engineRoot).catch(() => [])).filter((f) =>
       f.endsWith(".gba"),
     );
     if (gbas.length === 0) {
-      throw new Error(`GBA build: no .gba produced in ${gbaEngineRoot}`);
+      throw new Error(`GBA build: no .gba produced in ${engineRoot}`);
     }
-    romPath = Path.join(gbaEngineRoot, gbas[0]);
+    romPath = Path.join(engineRoot, gbas[0]);
   }
 
   const outDir = Path.join(buildRoot, "build", "gba");
   await ensureDir(outDir);
   await copyFile(romPath, Path.join(outDir, romFilename));
-  await reportRomStats(romPath, progress);
+  await reportRomStats(engineRoot, romPath, progress);
   progress(`GBA ROM built: ${romFilename}`);
 };
 
