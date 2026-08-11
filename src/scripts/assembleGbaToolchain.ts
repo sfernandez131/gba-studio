@@ -40,6 +40,7 @@ import {
   copy,
   ensureDir,
   pathExists,
+  readFile,
   readdir,
   remove,
   stat,
@@ -65,19 +66,61 @@ const bundleContents = [
   "thirdparty/blocksds/core/tools/grit",
   "thirdparty/blocksds/core/tools/mmutil",
   "thirdparty/blocksds/core/licenses",
+  // wf-lua's module path: the wf-* tools `require` Penlight and friends from
+  // here. Small (~2MB), and the build dies deep inside a Lua traceback without
+  // it - a failure that only appears once the tools run outside their install.
+  "lib/lua",
+  "share",
 ];
 
 /**
  * Tools taken from `bin/`. The whole of bin/ is ~17MB of tooling for other
- * consoles; a GBA build calls just these two - `wf-gbatool` fixes the ROM
- * header, `wf-bin2s` turns binary assets into assembly. Derived by grepping
- * Butano's makefiles for `wf-` references, and confirmed by a build failing on
- * the one that was missing.
+ * consoles; a GBA build calls just two - `wf-gbatool` fixes the ROM header and
+ * `wf-bin2s` turns binary assets into assembly. Derived by grepping Butano's
+ * makefiles for `wf-` references, and confirmed by a build failing on the one
+ * that was missing.
+ *
+ * `wf-lua` is here because those two are not programs at all: they are Lua
+ * scripts, and they need their interpreter. See rewriteShebangs below.
  */
-const binaryPrefixes = ["wf-gbatool", "wf-bin2s"];
+const binaryPrefixes = ["wf-gbatool", "wf-bin2s", "wf-lua"];
 
 /** Windows binaries need the runtime DLLs sitting beside them in bin/. */
 const dllSuffix = ".dll";
+
+/**
+ * The Windows shell half of the bundle (`--msys2=<root>`), emitted under `sh/`.
+ *
+ * Butano builds through `make`, and make runs its recipes through a POSIX
+ * shell. macOS and Linux have both; Windows does not, and a shipped app cannot
+ * assume the user installed MSYS2. These are the only programs a GBA build
+ * actually reaches for - the list is short because it was derived by running
+ * builds until they stopped failing, not by reading makefiles:
+ *
+ *   make, sh, bash        the build driver and its shell
+ *   mkdir, rm, echo, true the only coreutils Butano's recipes invoke
+ *   env                   resolves `#!/usr/bin/env wf-lua` (see rewriteShebangs)
+ *   cygpath               NOT referenced by any makefile - wf-lua shells out to
+ *                         it on Windows to resolve WONDERFUL_TOOLCHAIN, and the
+ *                         build dies at the final ROM-fix step without it
+ *
+ * msys-2.0.dll decides the POSIX root from its own location, so `sh/` becomes
+ * "/" and `sh/usr/bin` is both /usr/bin and /bin - hence the mirror.
+ */
+const shellTools = [
+  "make.exe",
+  "sh.exe",
+  "bash.exe",
+  "mkdir.exe",
+  "rm.exe",
+  "echo.exe",
+  "true.exe",
+  "env.exe",
+  "cygpath.exe",
+  "msys-2.0.dll",
+  "msys-intl-8.dll",
+  "msys-iconv-2.dll",
+];
 
 /**
  * Multilib variants to keep. The GBA's CPU is an ARM7TDMI; every other core's
@@ -161,6 +204,36 @@ const pruneMultilibs = async (root: string): Promise<string[]> => {
  */
 const looksLikeMultilib = (name: string): boolean =>
   /^(arm|thumb|cortex|mpcore|iwmmxt|marm|fpu|nofp|v\d)/i.test(name);
+
+/**
+ * Repoint the Lua tools' interpreter at the bundle.
+ *
+ * `wf-gbatool` and `wf-bin2s` are Lua scripts whose shebang hardcodes an
+ * absolute install path - `#!/opt/wonderful/bin/wf-lua`. That is invisible until
+ * you move the toolchain: the build appears to work while silently running the
+ * *system* interpreter, and fails outright on a machine that has no system
+ * install. Rewriting to `#!/usr/bin/env wf-lua` makes them resolve `wf-lua` from
+ * PATH instead, so the bundle works wherever it is unpacked.
+ *
+ * These tools are MIT licensed, so modifying them is permitted; the change is
+ * recorded in the bundle's MANIFEST.
+ */
+const rewriteShebangs = async (bundleRoot: string): Promise<string[]> => {
+  const binDir = Path.join(bundleRoot, "bin");
+  if (!(await pathExists(binDir))) return [];
+  const rewritten: string[] = [];
+  for (const entry of await readdir(binDir)) {
+    const full = Path.join(binDir, entry);
+    if (/\.(exe|dll)$/i.test(entry)) continue;
+    if (!(await stat(full)).isFile()) continue;
+    const body = await readFile(full, "utf8").catch(() => "");
+    const match = body.match(/^#!(\S*\/)?wf-lua\b/);
+    if (!match || body.startsWith("#!/usr/bin/env ")) continue;
+    await writeFile(full, body.replace(/^#![^\n]*/, "#!/usr/bin/env wf-lua"));
+    rewritten.push(entry);
+  }
+  return rewritten;
+};
 
 const collectLicenses = async (
   sourceRoot: string,
@@ -265,6 +338,38 @@ const main = async () => {
         (removed.length
           ? `: ${removed.slice(0, 6).join(", ")}${removed.length > 6 ? ", ..." : ""}`
           : ""),
+    );
+  }
+
+  const msys2 = arg("msys2");
+  if (msys2) {
+    const from = Path.join(msys2, "usr/bin");
+    if (!(await pathExists(from))) {
+      throw new Error(`No usr/bin under ${msys2} - is that an MSYS2 root?`);
+    }
+    const shBin = Path.join(out, "sh/usr/bin");
+    await ensureDir(shBin);
+    await ensureDir(Path.join(out, "sh/tmp"));
+    for (const tool of shellTools) {
+      const src = Path.join(from, tool);
+      if (!(await pathExists(src))) {
+        throw new Error(`Shell bundle: ${tool} not found in ${from}`);
+      }
+      await copy(src, Path.join(shBin, tool));
+    }
+    // msys-2.0.dll treats sh/ as "/", where /bin and /usr/bin are the same dir.
+    await copy(shBin, Path.join(out, "sh/bin"));
+    console.log(`  + sh/ (${shellTools.length} files: make, shell, coreutils)`);
+  } else if (process.platform === "win32") {
+    console.log(
+      `  ! no --msys2=<root> given: the bundle will need make/sh from elsewhere on Windows`,
+    );
+  }
+
+  const rewritten = await rewriteShebangs(out);
+  if (rewritten.length) {
+    console.log(
+      `  ~ repointed ${rewritten.length} Lua tool shebang(s) at the bundle: ${rewritten.join(", ")}`,
     );
   }
 
