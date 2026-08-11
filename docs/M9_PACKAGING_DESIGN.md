@@ -351,13 +351,13 @@ The bundle now carries a `sh/` directory, and **the whole of what Windows needs 
 files**. That list was arrived at by running builds until they stopped failing, which is why
 it is short and why two entries would never have been found by reading:
 
-| Need | Why |
-| --- | --- |
-| `make`, `sh`, `bash` | the build driver and the shell its recipes run in |
-| `mkdir`, `rm`, `echo`, `true` | the only coreutils Butano's recipes invoke |
-| `env` | resolves the rewritten `#!/usr/bin/env wf-lua` shebang |
-| **`cygpath`** | **not referenced by any makefile** — `wf-lua` shells out to it on Windows to resolve `WONDERFUL_TOOLCHAIN`; without it the build dies at the final ROM-fix step |
-| `msys-2.0.dll` + 2 | the runtime those binaries link against |
+| Need                          | Why                                                                                                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make`, `sh`, `bash`          | the build driver and the shell its recipes run in                                                                                                               |
+| `mkdir`, `rm`, `echo`, `true` | the only coreutils Butano's recipes invoke                                                                                                                      |
+| `env`                         | resolves the rewritten `#!/usr/bin/env wf-lua` shebang                                                                                                          |
+| **`cygpath`**                 | **not referenced by any makefile** — `wf-lua` shells out to it on Windows to resolve `WONDERFUL_TOOLCHAIN`; without it the build dies at the final ROM-fix step |
+| `msys-2.0.dll` + 2            | the runtime those binaries link against                                                                                                                         |
 
 The assembly script also **rewrites the Lua tools' shebangs** to `#!/usr/bin/env wf-lua`, so
 they resolve their interpreter from the bundle rather than from an absolute install path.
@@ -374,9 +374,37 @@ embeddable package (~15 MB, PSF licensed, no source obligation) is the intended 
 that is a fetch rather than a copy. Worth noting the path form matters: Windows paths must be
 passed with forward slashes, since the shell eats backslashes.
 
+### The build prefers the bundle
+
+`makeGbaBuild` no longer hunts for MSYS2 at a fixed path. Toolchain discovery moved into
+`findGbaToolchain.ts`, which picks, in order:
+
+1. **bundled** — `buildTools/<platform>-<arch>/gba-toolchain`, using its own `sh/` on Windows
+   so nothing need be installed;
+2. **a system Wonderful install** — the developer path, and what CI still uses;
+3. **devkitARM**, left to the caller as before, and never bundled.
+
+`GBA_TOOLCHAIN=bundled|wonderful|devkitarm` forces a choice, so the bundled path can be
+exercised on a machine that also has a system install — and, usefully, CI pins
+`GBA_TOOLCHAIN=wonderful`, so it regression-tests the fallback on every PR. A bundle
+directory without `target/gba` in it is ignored rather than trusted, so a half-fetched
+bundle fails during discovery instead of deep inside a compile. 17 unit tests cover the
+order, the overrides and the loud-failure cases.
+
+**Verified end to end through the CLI**: with a bundle in `buildTools/win32-x64/`, a plain
+`make:gba` auto-selects it and produces a **byte-identical ROM**.
+
+**One more finding, and it settles how Python must ship.** The first CLI attempt failed with
+a nonsense path — `/cygdrive/c/...<cwd>.../C:/Users/...`. An **MSYS2/Cygwin Python** had been
+picked up from the inherited `PATH` (devkitPro ships one), and such a Python treats a
+`C:/...` argument as a _relative_ path. A native Windows Python handles it correctly. So the
+bundle cannot merely _hope_ a usable Python is present: it has to **ship one and put it first
+on PATH**, which is what `<bundle>/python` is for. This is a stronger argument for bundling
+Python than size or licensing ever was — the alternative is breaking on any machine with a
+Cygwin-flavoured Python installed.
+
 Deliberately not done: `fetchDependencies.ts` + `dependencies.lock` wiring, which is
-mechanical but pointless until there is a published bundle to fetch; and `makeGbaBuild`
-still looks for MSYS2 at a fixed location rather than preferring a bundled `sh/`.
+mechanical but pointless until there is a published bundle to fetch.
 
 ## Verification
 
