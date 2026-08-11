@@ -327,16 +327,56 @@ One finding came from a failed build rather than from reading: the bundle needs 
 as well as `wf-gbatool`. Grepping Butano's makefiles for `wf-` confirms those two and only
 those two.
 
-**What is still missing, and it is Windows-specific.** The build above still borrowed `make`,
-`python` and a POSIX shell from MSYS2. On macOS and Linux all three are present system-wide,
-so those platforms are close to done; on Windows a shipped app cannot assume MSYS2, and
-`makeGbaBuild` currently shells to `C:/msys64/usr/bin/bash.exe`. Butano's recipes need a
-real shell, so the options are bundling a minimal MSYS2-like environment or driving the
-compilation ourselves instead of through `make`. That is the remaining M9d work, and it is
-a bigger question than the compiler was.
+**Correction to the above.** That first "builds from the bundle" result was only partly true.
+`wf-gbatool` and `wf-bin2s` are not programs — they are Lua scripts whose shebang hardcodes
+`#!/opt/wonderful/bin/wf-lua`. The build appeared to succeed from the bundle while silently
+running the **system** interpreter, and would have failed outright on a machine with no
+Wonderful install. This is the failure mode a bundle is most likely to hide, because
+everything looks green on the machine that built it. See the shell answer below for the fix.
+
+### The Windows shell answer
+
+macOS and Linux have `make`, a POSIX shell and `python` system-wide, so they need nothing
+extra. Windows has none of them, and a shipped app cannot assume MSYS2.
+
+Two options were on the table: bundle a shell environment, or drop `make` and drive
+compilation from TypeScript the way `makeBuild.ts` already drives GBDK (GB Studio ships **no**
+`make` — it spawns `lcc` per file and links). **Bundling wins**, on two grounds: it is ~19 MB
+against a 435 MB toolchain, a rounding error; and driving compilation ourselves would mean
+reimplementing `butano.mak`'s flags, source discovery and asset step, then re-syncing it
+every time Butano changes — the same divergence argument that rejected rewriting the Python
+asset tool.
+
+The bundle now carries a `sh/` directory, and **the whole of what Windows needs is twelve
+files**. That list was arrived at by running builds until they stopped failing, which is why
+it is short and why two entries would never have been found by reading:
+
+| Need | Why |
+| --- | --- |
+| `make`, `sh`, `bash` | the build driver and the shell its recipes run in |
+| `mkdir`, `rm`, `echo`, `true` | the only coreutils Butano's recipes invoke |
+| `env` | resolves the rewritten `#!/usr/bin/env wf-lua` shebang |
+| **`cygpath`** | **not referenced by any makefile** — `wf-lua` shells out to it on Windows to resolve `WONDERFUL_TOOLCHAIN`; without it the build dies at the final ROM-fix step |
+| `msys-2.0.dll` + 2 | the runtime those binaries link against |
+
+The assembly script also **rewrites the Lua tools' shebangs** to `#!/usr/bin/env wf-lua`, so
+they resolve their interpreter from the bundle rather than from an absolute install path.
+Those tools are MIT licensed, so modifying them is permitted; the MANIFEST records it.
+
+**Verified end to end**: with `WONDERFUL_TOOLCHAIN` pointed at the bundle and `PATH`
+containing only the bundle plus a native Windows Python — **no system MSYS2 or Wonderful
+install reachable** — a build produces a **byte-identical ROM**. Bundle 456 MB, of which the
+shell half is 19 MB.
+
+Python is the one piece still borrowed: the test used a system CPython. It does not need to
+be an MSYS2 one — every path the makefiles hand to Python is Windows-style, so **python.org's
+embeddable package (~15 MB, PSF licensed, no source obligation) is the intended answer**, and
+that is a fetch rather than a copy. Worth noting the path form matters: Windows paths must be
+passed with forward slashes, since the shell eats backslashes.
 
 Deliberately not done: `fetchDependencies.ts` + `dependencies.lock` wiring, which is
-mechanical but pointless until there is a published bundle to fetch.
+mechanical but pointless until there is a published bundle to fetch; and `makeGbaBuild`
+still looks for MSYS2 at a fixed location rather than preferring a bundled `sh/`.
 
 ## Verification
 
