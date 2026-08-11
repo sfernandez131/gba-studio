@@ -163,6 +163,29 @@ committing to in this document.
 | **M9e** | Packaging + cross-platform CI: `after-copy` filter, the packaging smoke job, release-matrix wiring.                                                                                          | The packaged app builds the Lost Gem demo on each platform in CI.                                                                                                          |
 | **M9f** | Docs + cleanup: contributor setup instructions, remove the `D:/source/gbavm` fallback, retire the baseline-restore step from the workflow notes.                                             | A fresh clone + documented setup builds a GBA ROM.                                                                                                                         |
 
+### M9b outcome
+
+Both engines are now submodules under `appData/engine`, pinned by commit:
+`appData/engine/gba` → sfernandez131/gbavm, `appData/engine/butano` →
+GValiente/butano at the `21.7.0` tag the engine is verified against. `consts.ts` resolves
+both from there; `GBAVM_ROOT` and `BUTANO_ROOT` survive only as developer overrides for
+pointing a build at a working checkout. **A build with both unset produces a
+byte-identical ROM**, and `gba-ci.yml` drops its `git clone` steps — so a green CI run is
+finally reproducible from a gba-studio SHA alone (problem 5, closed).
+
+Fetching Butano the way GBDK is fetched was considered, because its **145 MB working tree
+is now checked out by all eight CI jobs** while only one needs it (history is just 17 MB,
+so the cost is disk and checkout time rather than network). It was rejected on
+reproducibility grounds: Butano publishes **no release assets**, only GitHub's
+auto-generated source archives, and those are not guaranteed byte-stable, so they cannot
+be SHA-256 pinned the way `dependencies.lock` pins GBDK. A submodule pins by commit, which
+is the stronger guarantee. If CI time becomes a problem, the fix is a partial or sparse
+submodule checkout, not a tarball.
+
+Packaging excludes Butano's `examples/`, `games/`, `tests/`, `docs/`, `docs_tools/` and
+`issues/` — roughly 120 MB of the 145 MB — plus the engine's `build/` and `builds/`, via
+the existing `after-copy` filter. Only `appData/engine/butano/butano` is needed to build.
+
 ### M9c outcome (shipped ahead of M9b)
 
 M9c landed first, since it is independent of both the vendoring and the toolchain question.

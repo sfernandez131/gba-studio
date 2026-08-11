@@ -23,24 +23,27 @@ if (isDist) {
 export const buildUUID = "_gbsbuild";
 export const enginesRoot = normalize(`${rootDir}/appData/engine`);
 export const defaultEngineRoot = normalize(`${enginesRoot}/gbvm`);
-// gbavm (GBA/Butano) engine tree. Not yet vendored into appData; defaults to the
-// sibling dev checkout and can be overridden with GBAVM_ROOT. Used by the GBA build.
+// gbavm (GBA/Butano) engine tree, vendored as a submodule beside gbvm (M9b).
+// GBAVM_ROOT is a DEVELOPER OVERRIDE for pointing the build at a working engine
+// checkout; the shipped app always uses the vendored copy. Builds never write
+// here - M9c copies the tree into the build root first (prepareGbaEngine.ts).
 // `process` doesn't exist in the renderer (webpack target "web"), and unlike
 // NODE_ENV this env read isn't substituted at build time - guard so importing
 // this module doesn't throw there. The override only matters to the CLI/main
 // process build, which run under Node.
 export const gbaEngineRoot = normalize(
   (typeof process !== "undefined" ? process.env.GBAVM_ROOT : undefined) ??
-    "D:/source/gbavm",
+    `${enginesRoot}/gba`,
 );
-// Butano (the GBA framework the engine is built on). gbavm's Makefile declares
-// `LIBBUTANO := ../butano/butano`, i.e. a checkout beside the engine - but since
-// M9c the build runs OUT OF TREE, where that relative path no longer resolves,
-// so makeGbaBuild passes this absolute path to make instead. Not yet vendored
-// into appData either (M9b); override with BUTANO_ROOT.
+// Butano, the GBA framework the engine builds against, vendored alongside it
+// (zlib licensed, pinned to the release the engine is verified on). gbavm's
+// Makefile declares `LIBBUTANO := ../butano/butano`, i.e. a checkout beside the
+// engine, but since M9c the build runs out of tree where that relative path
+// can't resolve - makeGbaBuild passes this absolute path to make instead.
+// BUTANO_ROOT overrides it, for testing against another Butano.
 export const gbaButanoRoot = normalize(
   (typeof process !== "undefined" ? process.env.BUTANO_ROOT : undefined) ??
-    `${gbaEngineRoot}/../butano/butano`,
+    `${enginesRoot}/butano/butano`,
 );
 export const defaultEngineMetaPath = normalize(`${enginesRoot}/engine.json`);
 export const buildToolsRoot = normalize(`${rootDir}/buildTools`);

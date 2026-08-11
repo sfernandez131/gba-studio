@@ -1,3 +1,9 @@
 [submodule "appData/engine/gbvm"]
 	path = appData/engine/gbvm
 	url = https://github.com/chrismaltby/gbvm.git
+[submodule "appData/engine/gba"]
+	path = appData/engine/gba
+	url = https://github.com/sfernandez131/gbavm.git
+[submodule "appData/engine/butano"]
+	path = appData/engine/butano
+	url = https://github.com/GValiente/butano.git

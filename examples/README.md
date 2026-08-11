@@ -3,9 +3,17 @@
 Sample projects used to develop and verify the GBA target. Build any of them with:
 
 ```
-GBAVM_ROOT=<path-to-gbavm> DEVKITPRO=C:/devkitPro \
-  node out/cli/gb-studio-cli.js make:gba <project>/project.gbsproj <out>.gba
+node out/cli/gb-studio-cli.js make:gba <project>/project.gbsproj <out>.gba
 ```
+
+The engine and Butano are vendored as submodules under `appData/engine` (M9b), so no
+paths need setting — run `yarn fetch-deps` once to pull them. You still need a GBA
+toolchain installed (Wonderful Toolchain preferred, devkitARM as a fallback); bundling
+one is M9d. To build against a working engine checkout instead of the vendored copy, set
+`GBAVM_ROOT` (and `BUTANO_ROOT` for Butano).
+
+Alongside `<out>.gba` the CLI writes `<out>.elf` and `<out>.map` — the `.elf` is what
+mGBA's GDB stub needs to debug a ROM.
 
 (Re-build the CLI first with `npm run make:cli` after TypeScript changes.)
 
