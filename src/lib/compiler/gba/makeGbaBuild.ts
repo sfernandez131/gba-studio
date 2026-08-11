@@ -268,6 +268,21 @@ const makeGbaBuild = async ({
   const outDir = Path.join(buildRoot, "build", "gba");
   await ensureDir(outDir);
   await copyFile(romPath, Path.join(outDir, romFilename));
+
+  // Ship the debug artifacts beside the ROM. Before M9c they could be found in
+  // the engine checkout; now the build tree is a temp dir nothing outside knows
+  // about, and the .elf is what the mGBA GDB-stub recipe (and the CI runtime
+  // test) needs, while the .map is how the audio-backend-linked assert works.
+  const romBase = romFilename.replace(/\.gba$/i, "");
+  for (const [from, to] of [
+    [Path.join(engineRoot, `${target}.elf`), `${romBase}.elf`],
+    [Path.join(engineRoot, "build", `${target}.map`), `${romBase}.map`],
+  ]) {
+    if (await pathExists(from)) {
+      await copyFile(from, Path.join(outDir, to));
+    }
+  }
+
   await reportRomStats(engineRoot, romPath, progress);
   progress(`GBA ROM built: ${romFilename}`);
 };
