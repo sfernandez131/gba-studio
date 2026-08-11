@@ -154,14 +154,98 @@ committing to in this document.
 
 ## Slice plan
 
-| Slice   | Scope                                                                                                                                                                                        | Verify                                                                                                                                                                     |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M9a** | This design doc, plus the toolchain spike: settle candidate 1 vs 2, and the `make`/`python` question, with a written answer.                                                                 | A spike note in this doc; no code.                                                                                                                                         |
-| **M9b** | Vendor the engines: `appData/engine/gba` + `appData/engine/butano` submodules; `consts.ts` gains `gbaEngineRoot`/`butanoRoot` pointing at them, with `GBAVM_ROOT` demoted to a dev override. | The demo builds with `GBAVM_ROOT` unset; CI drops its clone steps and stays green.                                                                                         |
-| **M9c** | Out-of-tree builds: thread `engineRoot` through eject + make, copy-per-build, `LIBBUTANO` override, object cache.                                                                            | Build two different projects back to back and diff the vendored engine tree — it must be byte-identical afterwards. A ROM built out-of-tree must match one built in place. |
-| **M9d** | Toolchain bundling per the M9a answer: `fetchDependencies.ts` + lock + `buildTools/<plat>-<arch>/gba-toolchain`.                                                                             | `yarn fetch-deps --arch=<each>` succeeds; a GBA build works with no hand-installed toolchain on a clean machine/container.                                                 |
-| **M9e** | Packaging + cross-platform CI: `after-copy` filter, the packaging smoke job, release-matrix wiring.                                                                                          | The packaged app builds the Lost Gem demo on each platform in CI.                                                                                                          |
-| **M9f** | Docs + cleanup: contributor setup instructions, remove the `D:/source/gbavm` fallback, retire the baseline-restore step from the workflow notes.                                             | A fresh clone + documented setup builds a GBA ROM.                                                                                                                         |
+| Slice   | Scope                                                                                                                                                                                                                           | Verify                                                                                                                                                                                    |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M9a** | This design doc, plus the toolchain spike: settle candidate 1 vs 2, and the `make`/`python` question, with a written answer.                                                                                                    | A spike note in this doc; no code.                                                                                                                                                        |
+| **M9b** | Vendor the engines: `appData/engine/gba` + `appData/engine/butano` submodules; `consts.ts` gains `gbaEngineRoot`/`butanoRoot` pointing at them, with `GBAVM_ROOT` demoted to a dev override.                                    | The demo builds with `GBAVM_ROOT` unset; CI drops its clone steps and stays green.                                                                                                        |
+| **M9c** | Out-of-tree builds: thread `engineRoot` through eject + make, copy-per-build, `LIBBUTANO` override, object cache.                                                                                                               | Build two different projects back to back and diff the vendored engine tree — it must be byte-identical afterwards. A ROM built out-of-tree must match one built in place.                |
+| **M9d** | Toolchain bundling per the M9a answer: an assembly script producing `gba-toolchain-<plat>-<version>` + a matching source tarball and `licenses/` dir; `fetchDependencies.ts` + lock + `buildTools/<plat>-<arch>/gba-toolchain`. | `yarn fetch-deps --arch=<each>` succeeds; a GBA build works with no hand-installed toolchain on a clean machine/container; every GPL binary in the bundle has source published beside it. |
+| **M9e** | Packaging + cross-platform CI: `after-copy` filter, the packaging smoke job, release-matrix wiring.                                                                                                                             | The packaged app builds the Lost Gem demo on each platform in CI.                                                                                                                         |
+| **M9f** | Docs + cleanup: contributor setup instructions, remove the `D:/source/gbavm` fallback, retire the baseline-restore step from the workflow notes.                                                                                | A fresh clone + documented setup builds a GBA ROM.                                                                                                                                        |
+
+### M9a spike outcome — the licensing answer
+
+**This section is an engineering inventory, not legal advice.** It records what each component
+that would ship is licensed under and what obligation that creates. A lawyer should confirm the
+GPL §6 mechanics before the first release that bundles a toolchain.
+
+#### What ends up inside a user's ROM
+
+This is the question that matters most for a game-making tool, and it is settled. The link map
+of the Lost Gem demo shows a ROM links exactly four things:
+
+| Linked into every ROM               | License                                       |
+| ----------------------------------- | --------------------------------------------- |
+| `crt0.o` (Wonderful Toolchain)      | zlib                                          |
+| `libgcc.a`                          | GPLv3 **+ GCC Runtime Library Exception 3.1** |
+| `libstdc++.a`                       | GPLv3 **+ GCC Runtime Library Exception 3.1** |
+| Butano and its 17 bundled libraries | zlib / MIT / ISC / CC0 / public domain        |
+
+The Runtime Library Exception is granted in the shipped headers (verified, not assumed) and
+exists precisely to allow GCC's runtime to be linked into a program under any license, provided
+compilation used an Eligible Compilation Process — plain GCC, which is what we do. Every one of
+Butano's bundled libraries was checked individually: maxmod is ISC; libtonc, gbt-player, ugba,
+etl, ctti, gba-modern, cult-of-gba-bios, aas, gba-link-connection and lineclipping are MIT;
+agbabi, stdgba and the WT crt0 are zlib; posprintf is a public-domain dedication. The only
+copyleft in the set is MPL-2.0 on `devkitarm-crt0`, which is file-level and only reaches a build
+that uses the devkitARM path.
+
+**No copyleft reaches the ROM. Users can license and sell their games however they like.** This
+is a property to protect in every later slice, not just a fact to record.
+
+#### What we would ship in the installer
+
+| Component                       | License                | Obligation                    |
+| ------------------------------- | ---------------------- | ----------------------------- |
+| GB Studio fork, gbavm           | MIT                    | notice                        |
+| Butano + third parties          | zlib / MIT / ISC / CC0 | notices                       |
+| arm-none-eabi GCC, binutils     | GPLv3                  | **corresponding source**      |
+| `libgcc` / `libstdc++` binaries | GPLv3 + RLE            | **corresponding source**      |
+| GNU make                        | GPLv3                  | **corresponding source**      |
+| **grit**                        | **GPLv2**              | **corresponding source**      |
+| Python                          | PSF                    | notice                        |
+| mGBA wasm (already shipped)     | MPL 2.0                | source availability           |
+| GBDK-2020 (already shipped)     | mixed, GPLv2 parts     | ships its own `licenses/` dir |
+
+These tools are _invoked as subprocesses, never linked_, so bundling them alongside an MIT
+application is mere aggregation — GB Studio's own licensing is unaffected. The recurring
+obligation is source availability for the GPL binaries we redistribute.
+
+#### The decision
+
+**Assemble our own toolchain bundle from upstream sources and publish it ourselves.**
+
+The blocker this milestone carried — "may we redistribute Wonderful Toolchain's packages?" —
+turns out to be the wrong question. Every component is redistributable on its own terms; WT is
+just a convenient channel. Building our own bundle removes the dependency on someone else's
+goodwill entirely, and it fixes a real gap: **WT's tree ships no `COPYING3` or `COPYING.RUNTIME`,
+so redistributing it as-is would inherit a compliance defect.** Owning the bundle means owning
+the licence files too.
+
+Concretely, for M9d:
+
+1. Build `gba-toolchain-<platform>-<version>` per platform from ARM's official GNU toolchain
+   release (or FSF sources), plus grit, plus make.
+2. Publish it in **our own** GitHub releases with a matching `-src.tar.gz` beside it. Same place,
+   equivalent access — the cleanest way to discharge GPL §6, and the same shape GBDK's authors
+   use (they ship a `licenses/` directory, which GB Studio copies wholesale today).
+3. SHA-256 pin it in `dependencies.lock` and fetch it through the existing
+   `fetchDependencies.ts`, which is why M9d was scoped around that mechanism.
+4. Ship a `licenses/` directory inside the bundle, mirroring GBDK's layout.
+
+**devkitPro stays excluded** regardless — its trademark and repackaging terms are the original
+reason for this whole question. The devkitARM code path remains detect-only, never bundled.
+
+**Revised position on Python.** The design originally floated reimplementing Butano's asset step
+to delete the Python dependency. On inspection that means reimplementing `butano_assets_tool.py`
+plus the graphics, audio and DMG-audio tools it drives — and permanently diverging from Butano's
+own pipeline, so every Butano update becomes a merge. Python is PSF licensed (a notice, no source
+obligation), macOS and Linux ship it, and python.org publishes an embeddable Windows package
+intended for exactly this. **Bundle Python; do not fork Butano's tooling.** Reconsider only if
+the bundle size turns out to matter.
+
+The ongoing commitment this creates is hosting source tarballs alongside each release, for as
+long as the corresponding binaries are distributed.
 
 ### M9c outcome (shipped ahead of M9b)
 
@@ -213,13 +297,16 @@ GB output — it touches no compiler logic).
 
 ## Risks
 
-1. **Toolchain redistribution is unresolved** and is the milestone's only true unknown. It
-   is deliberately isolated into M9a as a spike, and M9b/M9c deliver real value regardless
-   of how it lands — vendoring and out-of-tree builds are worth doing even if users still
-   install their own compiler.
-2. **`make` and `python` may not be bundleable cheaply**, which could push the Node
-   asset-step rewrite into M9's critical path. Mitigation: M9a spikes it; if it grows, it
-   becomes its own milestone and M9d ships with a detected system toolchain.
+1. ~~**Toolchain redistribution is unresolved.**~~ **Resolved by the M9a spike**: every
+   component is redistributable on its own terms, so we assemble and publish our own bundle
+   rather than asking permission to redistribute someone else's. What remains is an
+   _obligation_, not an unknown — GPL corresponding source must be published beside every
+   release that carries the toolchain, and kept available for as long as those binaries are.
+   A lawyer should confirm the §6 mechanics before the first such release.
+2. ~~**`make` and `python` may not be bundleable cheaply.**~~ Both are bundleable: Python is
+   PSF (notice only) with an official embeddable Windows package, make is GPLv3 and rides the
+   same source-publication path as the compiler. The asset-step rewrite is explicitly **not**
+   taken — it would fork Butano's tooling permanently for no licensing gain.
 3. **Losing the warm build cache** would turn every build into a full Butano rebuild. The
    object cache in M9c is not optional garnish — it is the price of leaving the engine tree.
 4. **Butano as a submodule pins a large-ish tree** (7.6 MB for the library, far more if the
