@@ -34,6 +34,8 @@ import {
 import type { SpawnOptions } from "child_process";
 import spawn, { ChildProcess } from "lib/helpers/cli/spawn";
 import { envWith } from "lib/helpers/cli/env";
+import { buildToolsRoot } from "consts";
+import { findGbaToolchain } from "./findGbaToolchain";
 
 type MakeGbaOptions = {
   /** Where the ROM is copied out to: <outputRoot>/build/gba/<romFilename>. */
@@ -59,27 +61,6 @@ const toUnixPath = (p: string): string =>
       /^([A-Za-z]):\//,
       (_m, drive: string) => `/${drive.toLowerCase()}/`,
     );
-
-// Locate a Wonderful Toolchain install. On Windows it lives inside an MSYS2
-// tree at <msys2>/opt/wonderful (WONDERFUL_MSYS2 or C:/msys64); on Unix at
-// $WONDERFUL_TOOLCHAIN or /opt/wonderful.
-const findWonderful = async (): Promise<
-  { msys2Root: string } | { root: string } | null
-> => {
-  if (process.platform === "win32") {
-    const msys2Root =
-      process.env.WONDERFUL_MSYS2?.replace(/\\/g, "/") ?? "C:/msys64";
-    if (await pathExists(`${msys2Root}/opt/wonderful/bin`)) {
-      return { msys2Root };
-    }
-    return null;
-  }
-  const root = process.env.WONDERFUL_TOOLCHAIN ?? "/opt/wonderful";
-  if (await pathExists(`${root}/bin`)) {
-    return { root };
-  }
-  return null;
-};
 
 // GBA ROM stats (M7 follow-up): the GB path prints GBDK romusage; give the GBA
 // path an equivalent one-line summary. ROM = the .gba file size; IWRAM (32KB)
@@ -137,15 +118,19 @@ const makeGbaBuild = async ({
     );
   }
   const envDkp = process.env.DEVKITPRO?.replace(/\\/g, "/");
-  const toolchainPref = process.env.GBA_TOOLCHAIN?.toLowerCase();
+  const toolchain = await findGbaToolchain({
+    buildToolsRoot,
+    platform: process.platform,
+    arch: process.arch,
+    env: process.env,
+    exists: pathExists,
+  });
   const wonderful =
-    toolchainPref === "devkitarm" ? null : await findWonderful();
-  if (toolchainPref === "wonderful" && !wonderful) {
-    throw new Error(
-      "GBA build: GBA_TOOLCHAIN=wonderful but no Wonderful Toolchain install found " +
-        "(expected <msys2>/opt/wonderful on Windows, $WONDERFUL_TOOLCHAIN or /opt/wonderful elsewhere).",
-    );
-  }
+    toolchain?.kind === "wonderful-msys2"
+      ? { msys2Root: toolchain.msys2Root }
+      : toolchain?.kind === "wonderful"
+        ? { root: toolchain.root }
+        : null;
 
   let command: string;
   let args: string[];
@@ -160,7 +145,46 @@ const makeGbaBuild = async ({
   const butanoVarUnix = `LIBBUTANOABS='${toUnixPath(butanoRoot)}'`;
   const butanoVarNative = `LIBBUTANOABS="${butanoRoot}"`;
 
-  if (wonderful && "msys2Root" in wonderful) {
+  if (toolchain?.kind === "bundled") {
+    // The shipped bundle (M9d): everything the build needs lives under one
+    // root, and the toolchain relocates because WT's gcc.specs resolves its
+    // paths from $WONDERFUL_TOOLCHAIN at compile time.
+    toolchainName = "bundled toolchain";
+    const root = toolchain.root.replace(/\\/g, "/");
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      WONDERFUL_TOOLCHAIN: root,
+    };
+    delete env.DEVKITARM;
+    delete env.DEVKITPRO;
+
+    if (process.platform === "win32") {
+      // The bundle carries its own make + POSIX shell under sh/, so no MSYS2
+      // install is needed. Paths must use FORWARD SLASHES: the shell strips
+      // backslashes, which silently mangles them into nonsense mid-build.
+      command = `${root}/sh/usr/bin/make.exe`;
+      args = [
+        `LIBBUTANOABS=${butanoRoot.replace(/\\/g, "/")}`,
+        `-j${cpuCount}`,
+      ];
+      env.PATH = envWith([
+        `${root}/sh/usr/bin`,
+        `${root}/bin`,
+        // Butano's asset step needs python. A bundled one wins when present;
+        // otherwise the system's is used (macOS/Linux always have one).
+        `${root}/python`,
+      ]);
+    } else {
+      command = "make";
+      args = [butanoVarNative, `-j${cpuCount}`];
+      env.PATH = envWith([`${root}/bin`]);
+    }
+    options = {
+      cwd: engineRoot,
+      shell: process.platform !== "win32",
+      env,
+    };
+  } else if (wonderful && "msys2Root" in wonderful) {
     // Wonderful Toolchain on Windows: run make through the standard MSYS2 bash
     // with the env the Wonderful shell would set. DEVKITARM/DEVKITPRO must be
     // unset or butano.mak picks devkitARM instead.
