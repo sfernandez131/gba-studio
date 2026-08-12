@@ -50,6 +50,8 @@ type MakeGbaOptions = {
 };
 
 const cpuCount = os.cpus().length;
+/** Lines of make output kept to explain a failed build. */
+const MAKE_TAIL_LINES = 40;
 const childSet = new Set<ChildProcess>();
 let cancelling = false;
 
@@ -257,15 +259,39 @@ const makeGbaBuild = async ({
   }
 
   progress(`Building GBA ROM (${toolchainName}/Butano)...`);
+
+  // Keep the tail of make's output so a failure can say WHY. Without this the
+  // error is just "make failed (exit 2)": the compiler's actual complaint goes
+  // to progress/warnings, which the CLI drops unless --verbose and the editor
+  // shows in a log pane the user may never open. A build that cannot explain
+  // itself is the worst thing to hand someone whose toolchain is subtly wrong.
+  const tail: string[] = [];
+  const recordTail = (msg: string) => {
+    for (const line of msg.split("\n")) {
+      if (line.trim().length === 0) continue;
+      tail.push(line);
+      if (tail.length > MAKE_TAIL_LINES) tail.shift();
+    }
+  };
+
   const { child, completed } = spawn(command, args, options, {
-    onLog: (msg) => progress(msg),
-    onError: (msg) => warnings(msg),
+    onLog: (msg) => {
+      recordTail(msg);
+      progress(msg);
+    },
+    onError: (msg) => {
+      recordTail(msg);
+      warnings(msg);
+    },
   });
   childSet.add(child);
   try {
     await completed;
   } catch (code) {
-    throw new Error(`GBA build: ${toolchainName} make failed (exit ${code})`);
+    throw new Error(
+      `GBA build: ${toolchainName} make failed (exit ${code})` +
+        (tail.length ? `\n${tail.join("\n")}` : ""),
+    );
   } finally {
     childSet.delete(child);
   }

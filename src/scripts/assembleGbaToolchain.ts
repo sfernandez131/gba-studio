@@ -59,6 +59,15 @@ const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
 const platformArch = `${process.platform}-${process.arch}`;
 const repoRoot = Path.normalize(`${__dirname}/../../`);
 
+/**
+ * A relocatable bundle must contain no links back into the machine that built
+ * it. Unix toolchain trees are full of symlinks (Windows ones are not, which is
+ * why this only bites once the script runs on Linux or macOS), and copying them
+ * as links would leave the bundle silently depending on the source install -
+ * working on the build machine and breaking everywhere else.
+ */
+const copyOptions = { dereference: true } as const;
+
 /** Paths copied out of the source toolchain, relative to its root. */
 const bundleContents = [
   "target/gba",
@@ -308,7 +317,7 @@ const main = async () => {
       continue;
     }
     console.log(`  + ${rel}`);
-    await copy(from, Path.join(out, rel));
+    await copy(from, Path.join(out, rel), copyOptions);
   }
 
   // The one bin/ tool a GBA build calls, plus the DLLs it needs on Windows.
@@ -320,7 +329,11 @@ const main = async () => {
         binaryPrefixes.some((p) => entry.startsWith(p)) ||
         entry.toLowerCase().endsWith(dllSuffix);
       if (keep) {
-        await copy(Path.join(srcBin, entry), Path.join(out, "bin", entry));
+        await copy(
+          Path.join(srcBin, entry),
+          Path.join(out, "bin", entry),
+          copyOptions,
+        );
       }
     }
     console.log(`  + bin/ (${binaryPrefixes.join(", ")} + runtime DLLs)`);
