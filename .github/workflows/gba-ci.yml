@@ -255,6 +255,25 @@ jobs:
             test -x "$tool" || { echo "NOT EXECUTABLE: $tool"; ls -la "$tool"; exit 1; }
           done
 
+      # Present and executable is not the same as runnable. A dynamically linked
+      # binary whose ELF interpreter is an absolute path into the source install
+      # dies with a bare "not found" once that install is gone - indistinguishable
+      # from a missing file, and invisible on Windows where there is no such
+      # indirection. Print what these actually depend on.
+      - name: Report the tools' dynamic dependencies
+        run: |
+          B=buildTools/linux-x64/gba-toolchain
+          for tool in \
+            "$B/thirdparty/blocksds/core/tools/mmutil/mmutil" \
+            "$B/thirdparty/blocksds/core/tools/grit/grit" \
+            "$B/bin/wf-lua" \
+            "$B/toolchain/gcc-arm-none-eabi/bin/arm-none-eabi-gcc"; do
+            echo "=== $tool"
+            file "$tool" || true
+            readelf -l "$tool" 2>/dev/null | grep -i "interpreter" || echo "  (no interpreter: static?)"
+            ldd "$tool" 2>&1 | head -8 || true
+          done
+
       - name: Build CLI
         run: NO_TYPE_CHECKING=1 npm run make:cli
 
