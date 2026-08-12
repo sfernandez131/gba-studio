@@ -406,6 +406,31 @@ Cygwin-flavoured Python installed.
 Deliberately not done: `fetchDependencies.ts` + `dependencies.lock` wiring, which is
 mechanical but pointless until there is a published bundle to fetch.
 
+### M9e progress — CI builds from the bundle, on Linux
+
+Every job before this built with a _system_ Wonderful install: how this was developed, but not
+how a user's machine looks. The new **`gba-bundled-toolchain`** job builds what we intend to
+ship — a self-contained bundle, used with no toolchain installed:
+
+1. install Wonderful (the bundle's source material);
+2. `assembleGbaToolchain.ts --source=/opt/wonderful`, asserting the bundle has a GBA target,
+   a MANIFEST, and a non-empty `licenses/` — the GPL components make those mandatory;
+3. **`sudo mv /opt/wonderful /opt/wonderful.hidden`**;
+4. build the demo with `GBA_TOOLCHAIN=bundled` and assert the ROM plus a linked audio backend.
+
+Step 3 is the point. Anything still reaching for a system install fails in CI rather than on a
+user's machine — which is exactly how the wf-tools' hardcoded `#!/opt/wonderful/bin/wf-lua`
+shebang was caught on Windows, where a bundle build had looked green while silently using the
+system interpreter.
+
+It is also the first time `assembleGbaToolchain.ts`, `findGbaToolchain`'s bundled branch and
+`makeGbaBuild`'s bundled+unix branch run anywhere other than the author's Windows box. Risk 5
+said to expect surprises there rather than in the design; this job is where they surface.
+
+Still to come in M9e: a packaging smoke job that runs the _packaged_ app rather than the repo,
+and release-matrix wiring — both of which need a published bundle to fetch, so they follow M9d's
+remaining piece rather than preceding it.
+
 ## Verification
 
 M9 has no runtime behaviour to GDB-assert, so its verification is structural, and the two
