@@ -427,6 +427,50 @@ It is also the first time `assembleGbaToolchain.ts`, `findGbaToolchain`'s bundle
 `makeGbaBuild`'s bundled+unix branch run anywhere other than the author's Windows box. Risk 5
 said to expect surprises there rather than in the design; this job is where they surface.
 
+#### What the job found: WT's Linux binaries are not relocatable
+
+The job went red four times, and each failure was a real defect invisible from Windows. The
+last one changes the milestone's plan, so it is worth stating precisely.
+
+| #   | Failure                                            | Fix                                                                                                                                                                                       |
+| --- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `make failed (exit 2)` and nothing else            | `makeGbaBuild` now keeps make's last 40 lines and puts them in the error — the CLI drops progress output unless `--verbose`, so failures were undiagnosable from a CI log or a bug report |
+| 2   | symlinks copied as links into the build machine    | assemble with `dereference: true`                                                                                                                                                         |
+| 3   | `mmutil: not found`, though present and executable | not a file problem — see below                                                                                                                                                            |
+| 4   | —                                                  | the actual cause                                                                                                                                                                          |
+
+`readelf` on every Wonderful binary — `mmutil`, `grit`, `wf-lua`, and `arm-none-eabi-gcc`
+itself — shows the same thing:
+
+```
+interpreter /opt/wonderful/lib/ld-musl-x86_64.so.1
+libc.musl-x86_64.so.1 => not found
+```
+
+They are musl-linked with an **absolute ELF interpreter path**. An interpreter path cannot be
+relative, so these binaries run only when `/opt/wonderful` exists at exactly that location.
+Move the install and they fail with a bare "not found", indistinguishable from a missing file.
+
+**Wonderful Toolchain is relocatable on Windows and not on Linux.** Windows PE binaries carry
+no interpreter path, and WT's `gcc.specs` resolves everything else from `$WONDERFUL_TOOLCHAIN`
+— which is why every Windows test passed, and why this could only surface here.
+
+That falsifies part of the M9a spike. **Candidate 1 (repackage WT) works on Windows but cannot
+produce a self-contained Linux bundle** without `patchelf`-ing every ELF to point at the
+install location — which, since the final path is only known on the user's machine, would mean
+running patchelf at fetch time and bundling patchelf itself. **Candidate 2 (ARM's official GNU
+toolchain) uses the system interpreter and relocates for free**, which is exactly why it is the
+conventional thing to bundle. This is the first hard evidence between the two, and it points at
+a split: WT on Windows, ARM's toolchain on Linux and macOS — or ARM's everywhere, with `grit`
+and `mmutil` sourced separately.
+
+Pending that decision the job assembles and inspects rather than hiding the install and
+building from the bundle: that step would fail for a reason no change in this repo can fix. It
+still builds _using_ the bundle, which exercises `findGbaToolchain`'s bundled branch and
+`makeGbaBuild`'s bundled+unix branch — everything except the relocation. A guard asserts the
+interpreter is still the `/opt/wonderful` one, so if a future toolchain source relocates
+cleanly, CI says so and the stricter steps come back.
+
 Still to come in M9e: a packaging smoke job that runs the _packaged_ app rather than the repo,
 and release-matrix wiring — both of which need a published bundle to fetch, so they follow M9d's
 remaining piece rather than preceding it.
