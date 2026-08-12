@@ -238,6 +238,23 @@ jobs:
           test -n "$(ls -A buildTools/linux-x64/gba-toolchain/licenses)"
           du -sh buildTools/linux-x64/gba-toolchain
 
+      # A bundle whose tools are present but not runnable fails deep inside a
+      # Python traceback from Butano's asset step, which is a miserable way to
+      # find out. Assert the binaries a build actually executes are there AND
+      # executable, before anything depends on them.
+      - name: Assert the bundle's tools are runnable
+        run: |
+          B=buildTools/linux-x64/gba-toolchain
+          ls -la "$B/thirdparty/blocksds/core/tools/mmutil/" "$B/bin/"
+          for tool in \
+            "$B/thirdparty/blocksds/core/tools/mmutil/mmutil" \
+            "$B/thirdparty/blocksds/core/tools/grit/grit" \
+            "$B/bin/wf-lua" \
+            "$B/toolchain/gcc-arm-none-eabi/bin/arm-none-eabi-gcc"; do
+            test -f "$tool" || { echo "MISSING: $tool"; exit 1; }
+            test -x "$tool" || { echo "NOT EXECUTABLE: $tool"; ls -la "$tool"; exit 1; }
+          done
+
       - name: Build CLI
         run: NO_TYPE_CHECKING=1 npm run make:cli
 
