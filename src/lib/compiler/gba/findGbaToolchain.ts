@@ -72,7 +72,18 @@ export const findGbaToolchain = async ({
 
   // 1. The bundle. `target/gba` is the marker: an empty or half-fetched
   //    directory should fall through rather than fail mid-build.
-  if (preference !== "wonderful") {
+  //
+  //    WINDOWS ONLY, unless asked for explicitly. Wonderful's Unix binaries are
+  //    musl-linked with an ABSOLUTE ELF interpreter baked in
+  //    (/opt/wonderful/lib/ld-musl-x86_64.so.1), and an interpreter path cannot
+  //    be relative - so a bundle assembled from them runs only while the
+  //    original install is still there, failing with a bare "not found"
+  //    otherwise. Windows PE binaries carry no such path, which is why bundling
+  //    works there and only there for now. Auto-selecting a bundle on Unix would
+  //    mean preferring something that cannot work over a system install that
+  //    can. `GBA_TOOLCHAIN=bundled` still forces it, so a future patchelf'd or
+  //    differently-sourced bundle stays testable. See docs/M9_PACKAGING_DESIGN.md.
+  if (preference !== "wonderful" && (platform === "win32" || preference)) {
     const root = bundledToolchainRoot(buildToolsRoot, platform, arch);
     if (await exists(`${root}/target/gba`)) {
       return { kind: "bundled", root };
@@ -107,3 +118,22 @@ export const findGbaToolchain = async ({
 
   return null;
 };
+
+/**
+ * What to tell someone who has no GBA toolchain.
+ *
+ * Until a bundle ships on every platform this is a real user-facing state, and
+ * "make: command not found" three layers down is not an answer. On Windows a
+ * bundle is expected, so its absence is a broken install; elsewhere the user is
+ * expected to have a toolchain, so point at how to get one.
+ */
+export const gbaToolchainHelp = (platform: NodeJS.Platform): string =>
+  platform === "win32"
+    ? "GBA build: no GBA toolchain found. A bundled toolchain should have shipped with " +
+      "GBA Studio - try reinstalling, or install the Wonderful Toolchain " +
+      "(https://wonderful.asie.pl/) and rebuild."
+    : "GBA build: no GBA toolchain found. Install the Wonderful Toolchain " +
+      "(https://wonderful.asie.pl/ - it provides ARM GCC, grit and mmutil), then " +
+      "ensure WONDERFUL_TOOLCHAIN points at it (default /opt/wonderful). devkitARM " +
+      "also works if you already have it. A bundled toolchain currently ships on " +
+      "Windows only - see docs/M9_PACKAGING_DESIGN.md.";

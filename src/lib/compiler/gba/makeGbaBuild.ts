@@ -35,7 +35,7 @@ import type { SpawnOptions } from "child_process";
 import spawn, { ChildProcess } from "lib/helpers/cli/spawn";
 import { envWith } from "lib/helpers/cli/env";
 import { buildToolsRoot } from "consts";
-import { findGbaToolchain } from "./findGbaToolchain";
+import { findGbaToolchain, gbaToolchainHelp } from "./findGbaToolchain";
 
 type MakeGbaOptions = {
   /** Where the ROM is copied out to: <outputRoot>/build/gba/<romFilename>. */
@@ -227,10 +227,7 @@ const makeGbaBuild = async ({
       envDkp && /^[A-Za-z]:/.test(envDkp) ? envDkp : "C:/devkitPro";
     const bash = `${dkpWin}/msys2/usr/bin/bash.exe`;
     if (!(await pathExists(bash))) {
-      throw new Error(
-        `GBA build: no GBA toolchain found. Install Wonderful Toolchain (MSYS2 + ` +
-          `/opt/wonderful) or devkitPro (msys2 bash not found at ${bash}).`,
-      );
+      throw new Error(gbaToolchainHelp(process.platform));
     }
     command = bash;
     args = [
@@ -239,9 +236,15 @@ const makeGbaBuild = async ({
     ];
     options = { env: process.env, shell: false };
   } else {
+    // devkitARM on Unix. Check it is actually there: without this the build
+    // reaches make and dies on a missing compiler, which tells the user nothing
+    // about what to install.
     toolchainName = "devkitARM";
     const devkitPro = envDkp ?? "/opt/devkitpro";
     const devkitArm = `${devkitPro}/devkitARM`;
+    if (!(await pathExists(`${devkitArm}/bin`))) {
+      throw new Error(gbaToolchainHelp(process.platform));
+    }
     command = "make";
     args = [butanoVarNative, `-j${cpuCount}`];
     options = {
