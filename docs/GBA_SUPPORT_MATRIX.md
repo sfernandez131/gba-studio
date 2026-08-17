@@ -10,9 +10,25 @@ use, so this table is exact, not aspirational.
 | Encoded directly to a gbavm opcode | 84 |
 | Expanded to equivalent gbavm sequences | 20 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **105 / 156 (67%)** |
+| **Supported total** | **105 / 153 bridgeable (69%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 42 |
+| Unbridged (build fails on use) | 39 |
+| Not applicable to the GBA | 3 |
+| _All GBVM macros_ | _156_ |
+
+The percentage is measured against the **bridgeable** macros, not all of them:
+some describe Game Boy hardware the GBA does not have, so they can never be
+supported and including them would put 100% out of reach for no reason.
+
+## Not applicable to the GBA
+
+These describe hardware the GBA does not have, so there is nothing to bridge. Ones that would make a ROM silently wrong (inline Z80 assembly) fail the build with an explanation; ones that are merely absent (Super Game Boy transfers) are dropped with a note. See docs/MATRIX_COMPLETION_DESIGN.md.
+
+| Macro |
+|---|
+| `VM_ASM` |
+| `VM_ENDASM` |
+| `VM_SGB_TRANSFER` |
 
 ## Unbridged — the honest to-do list
 
@@ -29,11 +45,9 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_SET_BOUNDS` |
 | `VM_ACTOR_SET_SPRITESHEET_BY_REF` |
 | `VM_ACTOR_TERMINATE_UPDATE` |
-| `VM_ASM` |
 | `VM_CAMERA_MOVE_TO` |
 | `VM_CAMERA_SET_POS` |
 | `VM_CONTEXT_PREPARE` |
-| `VM_ENDASM` |
 | `VM_GET_INT16` |
 | `VM_GET_TILE_XY` |
 | `VM_HIDE_SPRITES` |
@@ -58,7 +72,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_RUMBLE` |
 | `VM_SCENE_STACK_RESET` |
 | `VM_SET_PRINT_DIR` |
-| `VM_SGB_TRANSFER` |
 | `VM_SHOW_SPRITES` |
 | `VM_SIO_EXCHANGE` |
 | `VM_SIO_SET_MODE` |

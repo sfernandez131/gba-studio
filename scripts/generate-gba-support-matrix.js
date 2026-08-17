@@ -48,6 +48,9 @@ const namesIn = (text) =>
   new Set([...text.matchAll(/["']?(VM_[A-Z0-9_]+)["']?/g)].map((m) => m[1]));
 
 const direct = namesIn(section(/const MACRO_TO_OP/));
+// Macros describing hardware the GBA does not have. Not "unbridged": there is
+// nothing to bridge, and counting them as outstanding work overstates the gap.
+const notApplicable = namesIn(section(/const TARGET_NA_MACROS/));
 const expanded = namesIn(section(/const EXPAND_MACROS/));
 const skipped = namesIn(section(/const SKIP_MACROS/));
 
@@ -56,6 +59,8 @@ const skipped = namesIn(section(/const SKIP_MACROS/));
 const anywhere = namesIn(bridge);
 
 const categorize = (name) => {
+  // Before `anywhere`, which would otherwise classify these as special-cased.
+  if (notApplicable.has(name)) return "n/a";
   if (direct.has(name)) return "direct";
   if (expanded.has(name)) return "expanded";
   if (skipped.has(name)) return "skipped";
@@ -67,7 +72,11 @@ const rows = allMacros.map((name) => ({ name, cat: categorize(name) }));
 const count = (cat) => rows.filter((r) => r.cat === cat).length;
 
 const supported = count("direct") + count("expanded") + count("special");
-const pct = ((100 * supported) / rows.length).toFixed(0);
+// The denominator that means something: a macro describing hardware the GBA
+// lacks can never be supported, so including it makes 100% unreachable and the
+// percentage misleading. Report progress against what is actually bridgeable.
+const bridgeable = rows.length - count("n/a");
+const pct = ((100 * supported) / bridgeable).toFixed(0);
 
 const table = (cat, note) => {
   const items = rows.filter((r) => r.cat === cat);
@@ -91,10 +100,19 @@ use, so this table is exact, not aspirational.
 | Encoded directly to a gbavm opcode | ${count("direct")} |
 | Expanded to equivalent gbavm sequences | ${count("expanded")} |
 | Special-cased parser handling | ${count("special")} |
-| **Supported total** | **${supported} / ${rows.length} (${pct}%)** |
+| **Supported total** | **${supported} / ${bridgeable} bridgeable (${pct}%)** |
 | Skipped with a warning (safe no-op) | ${count("skipped")} |
 | Unbridged (build fails on use) | ${count("UNBRIDGED")} |
+| Not applicable to the GBA | ${count("n/a")} |
+| _All GBVM macros_ | _${rows.length}_ |
 
+The percentage is measured against the **bridgeable** macros, not all of them:
+some describe Game Boy hardware the GBA does not have, so they can never be
+supported and including them would put 100% out of reach for no reason.
+
+## Not applicable to the GBA
+
+${table("n/a", "These describe hardware the GBA does not have, so there is nothing to bridge. Ones that would make a ROM silently wrong (inline Z80 assembly) fail the build with an explanation; ones that are merely absent (Super Game Boy transfers) are dropped with a note. See docs/MATRIX_COMPLETION_DESIGN.md.")}
 ## Unbridged — the honest to-do list
 
 ${table("UNBRIDGED", "Using any of these in a GBA project fails the build with an unknown-macro error. These map to the roadmap's parity milestones (M10 actors, M11 menus, M13 scene types...).")}
@@ -116,6 +134,7 @@ fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.writeFileSync(dest, out);
 console.log(
   `Wrote ${path.relative(root, dest)}: ${rows.length} macros - ` +
-    `${supported} supported (${pct}%), ${count("skipped")} skipped, ` +
-    `${count("UNBRIDGED")} unbridged`,
+    `${supported}/${bridgeable} bridgeable supported (${pct}%), ` +
+    `${count("skipped")} skipped, ${count("UNBRIDGED")} unbridged, ` +
+    `${count("n/a")} n/a`,
 );

@@ -334,6 +334,47 @@ const SKIP_MACROS = new Set<string>([
   "VM_MUSIC_MUTE",
 ]);
 
+/**
+ * Macros that describe hardware the GBA does not have.
+ *
+ * These are NOT "unbridged" - there is nothing to bridge, and counting them as
+ * outstanding work misstates how complete the target is. They split by whether
+ * dropping them still gives the author the game they asked for:
+ *
+ *   fatal: false - the feature is cosmetic or absent-by-design on GBA, so the
+ *          game runs correctly without it and a dropped-with-a-note is right.
+ *   fatal: true  - the ROM would be silently WRONG. Better to refuse the build
+ *          and say why than to hand someone a broken game.
+ *
+ * See docs/MATRIX_COMPLETION_DESIGN.md.
+ */
+export const TARGET_NA_MACROS: Record<
+  string,
+  { reason: string; fatal: boolean }
+> = {
+  // Inline Z80 assembly, assembled into the ROM by GBDK. The GBA is an ARM7TDMI:
+  // the bytes are not instructions it can run, and there is no translation. A
+  // project relying on inline asm cannot work here, and quietly dropping the
+  // block would produce a ROM that builds and then misbehaves.
+  VM_ASM: {
+    reason:
+      "inline Game Boy (Z80) assembly cannot run on the GBA's ARM processor",
+    fatal: true,
+  },
+  VM_ENDASM: {
+    reason:
+      "inline Game Boy (Z80) assembly cannot run on the GBA's ARM processor",
+    fatal: true,
+  },
+  // Super Game Boy border/palette transfers. There is no SGB on GBA hardware, so
+  // the transfer has nothing to talk to - the game plays, minus a border it could
+  // never have shown.
+  VM_SGB_TRANSFER: {
+    reason: "the Super Game Boy does not exist on GBA hardware",
+    fatal: false,
+  },
+};
+
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
 // in the .s are layered on top of these.
 const BASE_CONSTS: Record<string, number> = {
@@ -1157,6 +1198,21 @@ export function parseGbvmAsm(
       continue;
     }
 
+    const notApplicable = TARGET_NA_MACROS[mnemonic];
+    if (notApplicable) {
+      if (notApplicable.fatal) {
+        throw new Error(
+          `GBA build: "${mnemonic}" cannot be supported on the Game Boy Advance - ` +
+            `${notApplicable.reason}. Remove the event that uses it, or keep that ` +
+            `project on the GB target.`,
+        );
+      }
+      skipped.push(
+        `${mnemonic} (not applicable on GBA: ${notApplicable.reason})`,
+      );
+      continue;
+    }
+
     const expand = EXPAND_MACROS[mnemonic];
     if (expand) {
       const produced = expand(splitArgs(argStr), ev);
@@ -1167,7 +1223,13 @@ export function parseGbvmAsm(
 
     const op = MACRO_TO_OP[mnemonic];
     if (op === undefined) {
-      throw new Error(`Unsupported GBVM macro "${mnemonic}" (line: "${line}")`);
+      // Fail loud by design: a silently dropped op is a game that builds and
+      // then misbehaves. Name the macro and where to look, so the report is
+      // actionable rather than just a stop.
+      throw new Error(
+        `GBA build: "${mnemonic}" is not bridged to the GBA target yet ` +
+          `(line: "${line}"). See docs/GBA_SUPPORT_MATRIX.md for what is supported.`,
+      );
     }
     const kinds: GbaOperandType[] = GBA_OPCODE_SPECS[op] ?? [];
     const args = splitArgs(argStr);
