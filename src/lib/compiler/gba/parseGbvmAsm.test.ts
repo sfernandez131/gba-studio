@@ -93,8 +93,41 @@ describe("parseGbvmAsm", () => {
 
   test("throws on an unknown macro rather than dropping it silently", () => {
     expect(() => parseGbvmAsm("        VM_TOTALLY_MADE_UP 1, 2\n")).toThrow(
-      /Unsupported GBVM macro "VM_TOTALLY_MADE_UP"/,
+      /"VM_TOTALLY_MADE_UP" is not bridged to the GBA target yet/,
     );
+  });
+
+  // Macros describing hardware the GBA does not have. These are not a to-do
+  // list, and the two kinds must behave differently: one would produce a ROM
+  // that is silently wrong, the other only loses something the GBA never had.
+  describe("hardware the GBA does not have", () => {
+    test("inline Z80 assembly fails the build and says why", () => {
+      expect(() => parseGbvmAsm("        VM_ASM\n")).toThrow(
+        /cannot be supported on the Game Boy Advance/,
+      );
+      expect(() => parseGbvmAsm("        VM_ASM\n")).toThrow(
+        /Z80.*cannot run on the GBA's ARM processor/,
+      );
+    });
+
+    test("the error names an action, not just a refusal", () => {
+      expect(() => parseGbvmAsm("        VM_ENDASM\n")).toThrow(
+        /Remove the event that uses it, or keep that project on the GB target/,
+      );
+    });
+
+    // A Super Game Boy border is absent by design on GBA: the game itself is
+    // unaffected, so refusing to build would be worse than dropping it.
+    test("Super Game Boy transfers are dropped with a note, not fatal", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_SGB_TRANSFER         _sgb_packet\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped).toEqual([
+        expect.stringContaining("VM_SGB_TRANSFER (not applicable on GBA:"),
+      ]);
+      expect(skipped[0]).toMatch(/Super Game Boy does not exist/);
+    });
   });
 
   test("evaluates SDCC expression wrappers and named constants", () => {
