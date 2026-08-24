@@ -424,7 +424,25 @@ const main = async () => {
         ? ""
         : ` (pruned from ${mb(beforePrune)}, saved ${mb(beforePrune - afterPrune)})`),
   );
-  console.log(`Verify with:  WONDERFUL_TOOLCHAIN=${out} <build a project>`);
+
+  // Be honest about what was just produced. On Unix, Wonderful's binaries are
+  // musl-linked with an absolute ELF interpreter (/opt/wonderful/lib/ld-musl-*),
+  // and an interpreter path cannot be relative - so the bundle only runs while
+  // the source install is still in place. It is useful for testing and for a
+  // future patchelf step, but it is not the self-contained artefact the name
+  // suggests, and silence here would be how someone ships a broken installer.
+  if (process.platform !== "win32") {
+    console.log(
+      `\nWARNING: this bundle is NOT self-contained on ${process.platform}.\n` +
+        `  Wonderful's Unix binaries hardcode their ELF interpreter as\n` +
+        `  /opt/wonderful/lib/ld-musl-*.so.1, so they stop working the moment that\n` +
+        `  install goes away. Check with:\n` +
+        `    readelf -l <bundle>/toolchain/gcc-arm-none-eabi/bin/arm-none-eabi-gcc | grep interpreter\n` +
+        `  A shipped bundle is Windows-only for now - see docs/M9_PACKAGING_DESIGN.md.`,
+    );
+  }
+
+  console.log(`\nVerify with:  WONDERFUL_TOOLCHAIN=${out} <build a project>`);
 };
 
 main().catch((e) => {

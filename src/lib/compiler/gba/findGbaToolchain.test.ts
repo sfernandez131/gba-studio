@@ -1,6 +1,7 @@
 import {
   bundledToolchainRoot,
   findGbaToolchain,
+  gbaToolchainHelp,
   gbaToolchainPreference,
 } from "./findGbaToolchain";
 
@@ -35,6 +36,40 @@ describe("findGbaToolchain", () => {
       ),
     });
     expect(toolchain).toEqual({ kind: "bundled", root: bundle });
+  });
+
+  // Wonderful's Unix binaries hardcode an absolute ELF interpreter, so a bundle
+  // assembled from them cannot run once the source install is gone. Preferring
+  // one over a working system install would be strictly worse.
+  describe("on Unix a bundle is not auto-selected", () => {
+    const unixBundle = bundledToolchainRoot(buildToolsRoot, "linux", "x64");
+
+    test("a system install wins even when a bundle is present", async () => {
+      const toolchain = await find({
+        platform: "linux",
+        exists: existsFor(`${unixBundle}/target/gba`, "/opt/wonderful/bin"),
+      });
+      expect(toolchain).toEqual({ kind: "wonderful", root: "/opt/wonderful" });
+    });
+
+    test("with no system install it reports nothing rather than the bundle", async () => {
+      const toolchain = await find({
+        platform: "linux",
+        exists: existsFor(`${unixBundle}/target/gba`),
+      });
+      expect(toolchain).toBeNull();
+    });
+
+    // Still reachable on purpose: CI exercises the bundled branch on Linux, and
+    // a future relocatable bundle should not need a code change to be tried.
+    test("GBA_TOOLCHAIN=bundled still selects it", async () => {
+      const toolchain = await find({
+        platform: "linux",
+        env: { GBA_TOOLCHAIN: "bundled" },
+        exists: existsFor(`${unixBundle}/target/gba`),
+      });
+      expect(toolchain).toEqual({ kind: "bundled", root: unixBundle });
+    });
   });
 
   test("falls back to a system Wonderful install on Windows", async () => {
@@ -131,6 +166,23 @@ describe("findGbaToolchain", () => {
       });
       expect(toolchain).toEqual({ kind: "bundled", root: bundle });
     });
+  });
+});
+
+describe("gbaToolchainHelp", () => {
+  // This is what a user with no toolchain actually reads, so it has to name
+  // something they can go and do.
+  test("tells a Unix user how to get a toolchain", () => {
+    const help = gbaToolchainHelp("linux");
+    expect(help).toMatch(/Wonderful Toolchain/);
+    expect(help).toMatch(/wonderful\.asie\.pl/);
+    expect(help).toMatch(/WONDERFUL_TOOLCHAIN/);
+  });
+
+  test("treats a missing Windows toolchain as a broken install", () => {
+    const help = gbaToolchainHelp("win32");
+    expect(help).toMatch(/should have shipped/);
+    expect(help).toMatch(/reinstall/i);
   });
 });
 

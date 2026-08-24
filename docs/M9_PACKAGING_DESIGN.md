@@ -512,6 +512,39 @@ GB output — it touches no compiler logic).
    Windows box. macOS and Linux paths in `makeGbaBuild` exist but have never been exercised;
    M9e is the first time they will be. Expect surprises there, not in the design.
 
+## Scope decision: bundle on Windows, detect and guide elsewhere
+
+The interpreter finding leaves four ways to get a toolchain onto a user's machine, and none of
+them is free:
+
+| Option                                        | Why not, or not yet                                                                                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| devkitARM                                     | cannot be redistributed — the constraint that started all of this                                                                                                                                                               |
+| Wonderful                                     | relocatable on Windows; **not** on Linux/macOS (absolute ELF interpreter)                                                                                                                                                       |
+| ARM's official GNU toolchain                  | relocatable, but **Butano supports exactly two toolchains** — `butano.mak` picks devkitARM or Wonderful by env var and hard-`$(error)`s otherwise, so adopting it means owning and maintaining a third integration indefinitely |
+| patchelf the Wonderful bundle at install time | keeps Butano's supported path, but needs ELF surgery on the user's machine and patchelf itself bundled                                                                                                                          |
+
+**The decision: ship a bundle on Windows; on Linux and macOS, detect a system toolchain and
+tell the user how to install one.** The reasoning is that Windows is where bundling both
+matters most and already works — no package manager, no system toolchain, and the Wonderful
+binaries relocate cleanly, verified end to end with a byte-identical ROM. Linux and macOS users
+have package managers and Wonderful has a one-line installer, so a clear message is a
+defensible v1 there. This unblocks M9 now for the cost of a `platform === "win32"` check, and
+leaves patchelf available later if Unix bundling turns out to matter.
+
+What that means in code:
+
+- `findGbaToolchain` only **auto-selects** a bundle on Windows. `GBA_TOOLCHAIN=bundled` still
+  forces it anywhere, so CI keeps exercising the bundled branch on Linux and a future
+  relocatable bundle needs no code change to try.
+- A missing toolchain now produces `gbaToolchainHelp()` — naming the Wonderful Toolchain, its
+  URL and `WONDERFUL_TOOLCHAIN` on Unix, and treating absence on Windows as a broken install.
+  The Unix devkitARM path also checks the compiler exists first, instead of reaching `make`
+  and dying on a missing binary.
+- `assembleGbaToolchain` prints a prominent warning when run on a non-Windows host, with the
+  `readelf` command to confirm it: a bundle that is not self-contained must say so, or someone
+  will ship a broken installer on the strength of its name.
+
 ## Deferred
 
 - Signing/notarisation for the GBA-specific payload (the existing macOS notarize hook should
