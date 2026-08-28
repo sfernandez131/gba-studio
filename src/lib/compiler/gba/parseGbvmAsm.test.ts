@@ -130,6 +130,31 @@ describe("parseGbvmAsm", () => {
     });
   });
 
+  // Replace Tile at XY (matrix slice B) - the most-used unbridged macro in the
+  // stock gbs2 sample (104 uses), so its operand handling is worth pinning down.
+  describe("VM_REPLACE_TILE_XY", () => {
+    test("drops the GB bank and keeps the tile index as a variable", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_REPLACE_TILE_XY 3, 5, 255, _tileset_grass, .ARG0\n",
+        { dataSymbols: { _tileset_grass: 2 } },
+      );
+      // x, y, tileset index (from dataSymbols), tile-index VARIABLE (.ARG0 = -1).
+      expect(items).toEqual([
+        { kind: "op", op: 0x9c, operands: [3, 5, 2, -1] },
+      ]);
+    });
+
+    // A project can reference art the eject did not emit; that should cost the
+    // one event, not the whole build.
+    test("drops with a note when the tileset symbol is unknown", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_REPLACE_TILE_XY 0, 0, 255, _tileset_missing, .ARG0\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped.length).toBe(1);
+    });
+  });
+
   test("evaluates SDCC expression wrappers and named constants", () => {
     const { items } = parseGbvmAsm(
       `.FOO = 10\n        VM_SET_CONST ^/(.FOO + 2)/, .MODE_8X16\n`,

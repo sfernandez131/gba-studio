@@ -245,6 +245,31 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   // [ref, emote]; the emote symbol resolves to the emitted sprite index via
   // dataSymbols (bank dropped - GBA is flat). Drop the op if the emote wasn't
   // emitted so the project still builds.
+  // Replace Tile at XY (matrix slice B). vm.i declares
+  //   VM_REPLACE_TILE_XY X, Y, TILEDATA_BANK, TILEDATA, START_IDX
+  // and gbavm's op 0x9C takes [x, y, tileset index, tile-index variable]: the
+  // BANK is dropped (a GB cartridge concern with no GBA equivalent, same as SFX
+  // and emotes), TILEDATA is the `_<tileset symbol>` data pointer the eject
+  // registers in dataSymbols, and START_IDX stays a VARIABLE REFERENCE because
+  // GB Studio reads it through VM_REF_TO_PTR - scripts can compute which tile to
+  // draw, which is how animated tiles step frames.
+  VM_REPLACE_TILE_XY: (a, ev) => {
+    let x: number;
+    let y: number;
+    let tileset: number;
+    let startVar: number;
+    try {
+      x = ev(a[0]) & 0xff;
+      y = ev(a[1]) & 0xff;
+      tileset = ev(a[3]);
+      startVar = ev(a[4]);
+    } catch {
+      // An unknown tileset symbol means the project references art the eject did
+      // not emit; drop with a note rather than failing the whole build.
+      return null;
+    }
+    return [{ kind: "op", op: 0x9c, operands: [x, y, tileset, startVar] }];
+  },
   VM_ACTOR_EMOTE: (a, ev) => {
     let refVal: number;
     let emote: number;
