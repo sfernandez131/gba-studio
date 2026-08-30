@@ -1861,7 +1861,14 @@ class ScriptBuilder extends ScriptBuilderBase {
     this._addComment(`Input Script Attach`);
     const scriptRef = this._compileSubScript("input", script, symbol);
     const inputValue = inputDec(input);
-    let ctx = inputValue.toString(2).padStart(8, "0").indexOf("1") + 1;
+    // The slot is derived from the mask's highest set bit, so re-attaching the same
+    // button reuses its slot. GB pads to 8 because it has 8 buttons; the GBA adds L
+    // and R (KEY_BITS 0x100/0x200), and padding to 8 there would fold them onto the
+    // Start slot and silently overwrite whatever was attached to it. Widening the pad
+    // to 10 keeps one slot per button; the GBA engine's tables are 10 wide to match.
+    const { settings } = this.options;
+    const slotBits = settings.platform === "gba" ? 10 : 8;
+    let ctx = inputValue.toString(2).padStart(slotBits, "0").indexOf("1") + 1;
     if (ctx <= 0) {
       ctx = 1;
     }

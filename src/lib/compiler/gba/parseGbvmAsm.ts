@@ -143,6 +143,16 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_SAVE_CLEAR: 0x2f,
   // Timers (M6f): PREPARE arms a slot with a script (addr is a ptr -> collected proc), SET
   // starts it firing every N ticks, STOP/RESET disable / restart it.
+  // Input attach/wait (matrix slice C): GB Studio's "Attach Script to Button" and
+  // "Wait For Input". CONTEXT_PREPARE binds a 1-based slot to a script proc (a ptr,
+  // resolved like BEGINTHREAD); ATTACH points every button bit in the mask at that
+  // slot; DETACH clears them; WAIT blocks the thread until a masked key goes down.
+  // The masks are the editor's 10-bit KEY_BITS values (M8a added L/R at bits 8/9), so
+  // the GBA operand is a u16 where GB packs a byte.
+  VM_CONTEXT_PREPARE: 0x55,
+  VM_INPUT_ATTACH: 0x53,
+  VM_INPUT_DETACH: 0x5f,
+  VM_INPUT_WAIT: 0x52,
   VM_TIMER_PREPARE: 0x70,
   VM_TIMER_SET: 0x71,
   VM_TIMER_STOP: 0x72,
@@ -469,6 +479,9 @@ const BASE_CONSTS: Record<string, number> = {
   ".DISPLAY_DEFAULT": 0,
   ".DISPLAY_PRESERVE_POS": 1,
   ".TEXT_TILE_CONTINUE": 0xff,
+  // VM_INPUT_ATTACH slot flag (slice C): the attached script claims the button, so
+  // the built-in default action (player movement / A-to-interact) must not see it.
+  ".OVERRIDE_DEFAULT": 0x80,
   // VM_MUSIC_PLAY loop flag (M5a).
   ".MUSIC_NO_LOOP": 0,
   ".MUSIC_LOOP": 1,

@@ -15,8 +15,10 @@
 #      commit-under-fade check),
 #   3. launches a projectile RIGHT (angle 64) then DOWN (angle 128),
 #   4. swaps the player spritesheet,
-#   5. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#   6. opens a six-item Menu (count=6).
+#   5. attaches a script to B + SELECT with "override default button action", then
+#      removes it from SELECT alone (matrix slice C),
+#   6. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
+#   7. opens a six-item Menu (count=6).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -80,6 +82,10 @@ gdb-multiarch -batch \
   -ex "print/d plat_extra_jumps" \
   -ex "echo \n@SHMUP\n" \
   -ex "print/d shooter_scroll_speed" \
+  -ex "echo \n@INPUT\n" \
+  -ex "print/x vm_input_slots[5]" \
+  -ex "print/x vm_input_slots[6]" \
+  -ex "print/d vm_input_events[3].pc != 0" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -139,4 +145,18 @@ val_after "@PLATFORM" '= 2$'     | grep -q "= 2$"     || fail "plat_coyote_frame
 # link with GB's default (32 GB-subpx/frame = 2px/frame).
 val_after "@SHMUP" '= 32$' | grep -q "= 32$" || fail "shooter_scroll_speed != 32"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables)"
+# Input attach (matrix slice C). The fixture attaches a script to B + SELECT with
+# "override default button action", then removes it from SELECT alone:
+#   - B is KEY_BITS 0x20 (bit 5) and SELECT 0x40 (bit 6); the slot is derived from
+#     the mask's highest set bit over a 10-bit pad (the GBA has L/R at bits 8/9),
+#     so 0x60 -> slot 4, stored with .OVERRIDE_DEFAULT as 0x84.
+#   - the detach must clear SELECT's bit and leave B's alone.
+#   - slot 4's script pointer (vm_input_events[3]) must be linked, not null.
+# Keys cannot be injected over the GDB stub, so the press itself is verified by hand
+# (temporarily forcing hw_input_held); what CI guards is that the attach wiring
+# survives - a broken slot derivation or a dropped ptr relocation shows up here.
+val_after "@INPUT" '= 0x84$' | grep -q "= 0x84$" || fail "B input slot != 0x84 (slot 4 | OVERRIDE_DEFAULT)"
+val_after "@INPUT" '= 0x0$'  | grep -q "= 0x0$"  || fail "SELECT input slot not cleared by the detach"
+val_after "@INPUT" '= 1$'    | grep -q "= 1$"    || fail "attached script pointer is null"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach)"
