@@ -125,6 +125,8 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   // M8e: run an author Custom Code (C++) snippet. The i16 operand is the snippet
   // index (the eject assigns it + resolves the _gba_user_<eventId> symbol).
   0x9b: ["i16"], // USER_CODE snippet-index
+  // REPLACE_TILE_XY (slice B): x, y, tileset index, tile-index variable.
+  0x9c: ["u8", "u8", "i16", "i16"],
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)

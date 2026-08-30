@@ -1,0 +1,11 @@
+{
+  "_resourceType": "tileset",
+  "id": "7113e700-0000-4000-8000-000000001115",
+  "name": "probe",
+  "symbol": "tileset_probe",
+  "filename": "probe.png",
+  "width": 2,
+  "height": 1,
+  "imageWidth": 16,
+  "imageHeight": 8
+}

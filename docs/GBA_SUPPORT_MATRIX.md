@@ -8,11 +8,11 @@ use, so this table is exact, not aspirational.
 | Category | Count |
 |---|---|
 | Encoded directly to a gbavm opcode | 84 |
-| Expanded to equivalent gbavm sequences | 20 |
+| Expanded to equivalent gbavm sequences | 21 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **105 / 153 bridgeable (69%)** |
+| **Supported total** | **106 / 153 bridgeable (69%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 39 |
+| Unbridged (build fails on use) | 38 |
 | Not applicable to the GBA | 3 |
 | _All GBVM macros_ | _156_ |
 
@@ -64,7 +64,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_POLL` |
 | `VM_PRINT_OVERLAY` |
 | `VM_REPLACE_TILE` |
-| `VM_REPLACE_TILE_XY` |
 | `VM_RTC_GET` |
 | `VM_RTC_LATCH` |
 | `VM_RTC_SET` |
@@ -198,6 +197,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 | `VM_MUSIC_PLAY` |
 | `VM_MUSIC_STOP` |
 | `VM_PROJECTILE_LOAD_TYPE` |
+| `VM_REPLACE_TILE_XY` |
 | `VM_RET` |
 | `VM_RET_FAR` |
 | `VM_RET_FAR_N` |
