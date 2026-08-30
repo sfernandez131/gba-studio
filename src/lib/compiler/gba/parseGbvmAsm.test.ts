@@ -136,7 +136,7 @@ describe("parseGbvmAsm", () => {
     test("drops the GB bank and keeps the tile index as a variable", () => {
       const { items } = parseGbvmAsm(
         "        VM_REPLACE_TILE_XY 3, 5, 255, _tileset_grass, .ARG0\n",
-        { dataSymbols: { _tileset_grass: 2 } },
+        { dataSymbols: { ["_tileset_grass"]: 2 } },
       );
       // x, y, tileset index (from dataSymbols), tile-index VARIABLE (.ARG0 = -1).
       expect(items).toEqual([
