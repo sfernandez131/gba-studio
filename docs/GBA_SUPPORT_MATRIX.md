@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 84 |
+| Encoded directly to a gbavm opcode | 88 |
 | Expanded to equivalent gbavm sequences | 21 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **106 / 153 bridgeable (69%)** |
+| **Supported total** | **110 / 153 bridgeable (72%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 38 |
+| Unbridged (build fails on use) | 34 |
 | Not applicable to the GBA | 3 |
 | _All GBVM macros_ | _156_ |
 
@@ -47,13 +47,9 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_TERMINATE_UPDATE` |
 | `VM_CAMERA_MOVE_TO` |
 | `VM_CAMERA_SET_POS` |
-| `VM_CONTEXT_PREPARE` |
 | `VM_GET_INT16` |
 | `VM_GET_TILE_XY` |
 | `VM_HIDE_SPRITES` |
-| `VM_INPUT_ATTACH` |
-| `VM_INPUT_DETACH` |
-| `VM_INPUT_WAIT` |
 | `VM_LOAD_TEXT_EX` |
 | `VM_LOAD_TILESET` |
 | `VM_MUSIC_ROUTINE` |
@@ -123,6 +119,7 @@ One-to-one macro → gbavm opcode.
 | `VM_CALL_FAR` |
 | `VM_CALL_NATIVE` |
 | `VM_CHOICE` |
+| `VM_CONTEXT_PREPARE` |
 | `VM_COS_SCALE` |
 | `VM_DISPLAY_TEXT` |
 | `VM_DISPLAY_TEXT_EX` |
@@ -134,7 +131,10 @@ One-to-one macro → gbavm opcode.
 | `VM_IF` |
 | `VM_IF_CONST` |
 | `VM_INIT_RNG` |
+| `VM_INPUT_ATTACH` |
+| `VM_INPUT_DETACH` |
 | `VM_INPUT_GET` |
+| `VM_INPUT_WAIT` |
 | `VM_INVOKE` |
 | `VM_JOIN` |
 | `VM_JUMP` |

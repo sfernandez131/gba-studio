@@ -429,6 +429,55 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  describe("input attach/wait (slice C)", () => {
+    test("bridges VM_CONTEXT_PREPARE to op 0x55 with a script ptr operand", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_CONTEXT_PREPARE 3, ___bank_input_0, _input_0\n",
+      );
+      expect(items).toEqual([
+        { kind: "op", op: 0x55, operands: [3, 0, { label: "_input_0" }] },
+      ]);
+    });
+
+    test("bridges VM_INPUT_ATTACH to op 0x53 as mask, slot", () => {
+      const { items } = parseGbvmAsm("        VM_INPUT_ATTACH 16, 4\n");
+      expect(items).toEqual([{ kind: "op", op: 0x53, operands: [16, 4] }]);
+    });
+
+    test("resolves .OVERRIDE_DEFAULT into the attach slot operand", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_INPUT_ATTACH 16, ^/(4 | .OVERRIDE_DEFAULT)/\n",
+      );
+      expect(items).toEqual([
+        { kind: "op", op: 0x53, operands: [16, 4 | 0x80] },
+      ]);
+    });
+
+    test("keeps the GBA-only L/R bits in the 16-bit attach mask", () => {
+      // M8a put L/R at KEY_BITS 0x100/0x200; GB packs the mask into a byte, so the
+      // GBA operand has to be a u16 or a shoulder-button attach would encode as 0.
+      const { items } = parseGbvmAsm("        VM_INPUT_ATTACH 768, 1\n");
+      expect(items).toEqual([{ kind: "op", op: 0x53, operands: [768, 1] }]);
+    });
+
+    test("bridges VM_INPUT_DETACH to op 0x5f and VM_INPUT_WAIT to op 0x52", () => {
+      expect(parseGbvmAsm("        VM_INPUT_DETACH 16\n").items).toEqual([
+        { kind: "op", op: 0x5f, operands: [16] },
+      ]);
+      expect(parseGbvmAsm("        VM_INPUT_WAIT 255\n").items).toEqual([
+        { kind: "op", op: 0x52, operands: [255] },
+      ]);
+    });
+
+    test("emits the attach mask as two bytes and the slot as one", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_INPUT_ATTACH 768, ^/(1 | .OVERRIDE_DEFAULT)/\n",
+      );
+      const { bytes } = emitGbaBytecode(items);
+      expect(Array.from(bytes)).toEqual([0x53, 0x00, 0x03, 0x81]);
+    });
+  });
+
   test("drops VM_RANDOMIZE (no GBA equivalent) and reports it skipped", () => {
     const { items, skipped } = parseGbvmAsm("        VM_RANDOMIZE\n");
     expect(items).toEqual([]);

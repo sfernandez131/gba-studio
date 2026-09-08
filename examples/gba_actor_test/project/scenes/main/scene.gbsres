@@ -182,6 +182,63 @@
       }
     },
     {
+      "id": "c0000000-0000-4000-8000-00000000c001",
+      "command": "EVENT_SET_INPUT_SCRIPT",
+      "args": {
+        "input": [
+          "b",
+          "select"
+        ],
+        "override": true,
+        "__scriptTabs": "press"
+      },
+      "symbol": "input_b_select",
+      "children": {
+        "true": [
+          {
+            "id": "c0000000-0000-4000-8000-00000000c002",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "2",
+              "value": {
+                "type": "number",
+                "value": 7
+              }
+            }
+          },
+          {
+            "id": "c0000000-0000-4000-8000-00000000c003",
+            "command": "EVENT_AWAIT_INPUT",
+            "args": {
+              "input": [
+                "a"
+              ]
+            }
+          },
+          {
+            "id": "c0000000-0000-4000-8000-00000000c004",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "2",
+              "value": {
+                "type": "number",
+                "value": 9
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c0000000-0000-4000-8000-00000000c005",
+      "command": "EVENT_REMOVE_INPUT_SCRIPT",
+      "args": {
+        "input": [
+          "select"
+        ]
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000e1",
       "command": "EVENT_CHOICE",
       "args": {

@@ -127,6 +127,13 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x9b: ["i16"], // USER_CODE snippet-index
   // REPLACE_TILE_XY (slice B): x, y, tileset index, tile-index variable.
   0x9c: ["u8", "u8", "i16", "i16"],
+  // Input attach/wait (slice C). CONTEXT_PREPARE's addr is the attached script proc
+  // (resolved like BEGINTHREAD). The masks are u16 because the editor's KEY_BITS
+  // carry the GBA-only L/R at bits 8/9; ATTACH's slot packs .OVERRIDE_DEFAULT (0x80).
+  0x55: ["u8", "u8", "ptr"], // CONTEXT_PREPARE slot, bank, addr
+  0x53: ["u16", "u8"], // INPUT_ATTACH mask, slot
+  0x5f: ["u16"], // INPUT_DETACH mask
+  0x52: ["u16"], // INPUT_WAIT mask
   // Timers (M6f). TIMER_PREPARE's addr is the timer script proc (resolved like BEGINTHREAD).
   0x70: ["u8", "u8", "ptr"], // TIMER_PREPARE context, bank, addr
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)
