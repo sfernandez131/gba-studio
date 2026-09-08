@@ -65,7 +65,15 @@
     }
   ],
   "startScript": [],
-  "updateScript": [],
+  "updateScript": [
+    {
+      "id": "d0000000-0000-4000-8000-00000000d001",
+      "command": "EVENT_INC_VALUE",
+      "args": {
+        "variable": "4"
+      }
+    }
+  ],
   "hit1Script": [],
   "hit2Script": [],
   "hit3Script": [

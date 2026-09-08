@@ -17,8 +17,11 @@
 #   4. swaps the player spritesheet,
 #   5. attaches a script to B + SELECT with "override default button action", then
 #      removes it from SELECT alone (matrix slice C),
-#   6. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#   7. opens a six-item Menu (count=6).
+#   6. sets the Npc's animation tick + frame, reads the frame back over a marker, and
+#      stops the Npc's update script while stopping AND restarting the Watcher's
+#      (matrix slice D; both actors' update scripts increment a counter variable),
+#   7. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
+#   8. opens a six-item Menu (count=6).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -57,6 +60,14 @@ gdb-multiarch -batch \
   -ex "continue" \
   -ex "echo \n@LAUNCH2\n" -ex "info registers r3" \
   -ex "delete" \
+  -ex "break hw_actor_set_anim_tick" \
+  -ex "continue" \
+  -ex "echo \n@ANIMTICK\n" -ex "info registers r0 r1" \
+  -ex "delete" \
+  -ex "break hw_actor_set_anim_frame" \
+  -ex "continue" \
+  -ex "echo \n@ANIMFRAME\n" -ex "x/2hu \$r0" \
+  -ex "delete" \
   -ex "break hw_choice_step" \
   -ex "continue" \
   -ex "echo \n@CHOICE\n" -ex "info registers r0 r1" \
@@ -68,7 +79,7 @@ gdb-multiarch -batch \
   -ex "return (int)2" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 5 8" \
+  -ex "ignore 7 8" \
   -ex "continue" \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
@@ -86,6 +97,13 @@ gdb-multiarch -batch \
   -ex "print/x vm_input_slots[5]" \
   -ex "print/x vm_input_slots[6]" \
   -ex "print/d vm_input_events[3].pc != 0" \
+  -ex "echo \n@GETFRAME\n" -ex "print script_memory[3]" \
+  -ex "echo \n@NPC1\n" -ex "print script_memory[4]" \
+  -ex "echo \n@WATCH1\n" -ex "print script_memory[5]" \
+  -ex "ignore 7 60" \
+  -ex "continue" \
+  -ex "echo \n@NPC2\n" -ex "print script_memory[4]" \
+  -ex "echo \n@WATCH2\n" -ex "print script_memory[5]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -159,4 +177,32 @@ val_after "@INPUT" '= 0x84$' | grep -q "= 0x84$" || fail "B input slot != 0x84 (
 val_after "@INPUT" '= 0x0$'  | grep -q "= 0x0$"  || fail "SELECT input slot not cleared by the detach"
 val_after "@INPUT" '= 1$'    | grep -q "= 1$"    || fail "attached script pointer is null"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach)"
+# Actor animation control (matrix slice D). The fixture's Npc (runtime actor 1) gets its
+# animation tick set, then frame 1 written and read straight back; both placed actors carry
+# a per-frame update script that increments a counter.
+#
+# Set Animation Speed passes GB's anim_tick MASK through unchanged (15 = advance every 16
+# frames), and the frame op carries GB's {ID, FRAME} pseudo-struct - r0 points at it, so the
+# two halfwords are the actor index and the requested frame.
+val_after "@ANIMTICK" "^r0" | grep -q " 1$"  || fail "set_anim_tick actor != 1"
+val_after "@ANIMTICK" "^r1" | grep -q " 15$" || fail "set_anim_tick mask != 15"
+val_after "@ANIMFRAME" "^0x" | grep -qE "1[[:space:]]+1$" || fail "set_anim_frame block != {1, 1}"
+
+# The read-back must be 0, not 1: the Npc's idle animation is a single frame, so GB's
+# `FRAME % (frame_end - frame_start)` folds it back. The slot held 99 immediately before,
+# so reading 0 proves the get actually wrote rather than the op being skipped.
+val_after "@GETFRAME" '^\$' | grep -q "= 0$" || fail "get_anim_frame did not overwrite the marker with 0"
+
+# Update-script control. The Npc was stopped and left stopped, so its counter must be
+# frozen at 0 across a 60-frame walk; the Watcher was stopped and RESTARTED, so its counter
+# must be climbing. Running both is what separates BEGIN_UPDATE actually restarting a dead
+# thread from the thread simply never having been stopped.
+npc1=$(val_after "@NPC1" '^\$' | sed 's/.*= //')
+npc2=$(val_after "@NPC2" '^\$' | sed 's/.*= //')
+watch1=$(val_after "@WATCH1" '^\$' | sed 's/.*= //')
+watch2=$(val_after "@WATCH2" '^\$' | sed 's/.*= //')
+[ "$npc1" = "0" ] && [ "$npc2" = "0" ] || fail "terminated update script still ran (npc $npc1 -> $npc2)"
+[ -n "$watch1" ] && [ -n "$watch2" ] && [ "$watch2" -gt "$watch1" ] \
+  || fail "restarted update script is not advancing (watcher $watch1 -> $watch2)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control)"
