@@ -239,6 +239,69 @@
       }
     },
     {
+      "id": "d0000000-0000-4000-8000-000000000010",
+      "command": "EVENT_ACTOR_SET_ANIMATION_SPEED",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+        "speed": 15
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000011",
+      "command": "EVENT_ACTOR_SET_FRAME",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000001",
+        "frame": {
+          "type": "number",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000012",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "3",
+        "value": {
+          "type": "number",
+          "value": 99
+        }
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000013",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "3",
+        "value": {
+          "type": "property",
+          "target": "bbbbbbbb-0000-4000-8000-000000000001",
+          "property": "frame"
+        }
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000014",
+      "command": "EVENT_ACTOR_STOP_UPDATE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000015",
+      "command": "EVENT_ACTOR_STOP_UPDATE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000016",
+      "command": "EVENT_ACTOR_START_UPDATE",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000002"
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000e1",
       "command": "EVENT_CHOICE",
       "args": {

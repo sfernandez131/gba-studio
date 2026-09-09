@@ -127,6 +127,13 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x9b: ["i16"], // USER_CODE snippet-index
   // REPLACE_TILE_XY (slice B): x, y, tileset index, tile-index variable.
   0x9c: ["u8", "u8", "i16", "i16"],
+  // Actor animation control (slice D). The ref operand resolves to the actor block the
+  // codegen builds on the VM stack: word 0 is the ID, word 1 the animation FRAME.
+  0x43: ["i16", "u8"], // ACTOR_SET_ANIM_TICK ref, tick (GB's anim_tick MASK)
+  0x75: ["i16"], // ACTOR_SET_ANIM_FRAME ref
+  0x83: ["i16"], // ACTOR_GET_ANIM_FRAME ref
+  0x8e: ["i16"], // ACTOR_BEGIN_UPDATE ref
+  0x74: ["i16"], // ACTOR_TERMINATE_UPDATE ref
   // Input attach/wait (slice C). CONTEXT_PREPARE's addr is the attached script proc
   // (resolved like BEGINTHREAD). The masks are u16 because the editor's KEY_BITS
   // carry the GBA-only L/R at bits 8/9; ATTACH's slot packs .OVERRIDE_DEFAULT (0x80).

@@ -429,6 +429,40 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Actor animation control (matrix slice D). The FRAME ops carry GB's {ID, FRAME}
+  // pseudo-struct as one stack ref, so the operand is a single index, not a pair.
+  describe("actor animation control (slice D)", () => {
+    test("bridges the frame ops to 0x75 / 0x83 with the ref block index", () => {
+      expect(
+        parseGbvmAsm(
+          ".LOCAL_ACTOR = -4\n        VM_ACTOR_SET_ANIM_FRAME .LOCAL_ACTOR\n",
+        ).items,
+      ).toEqual([{ kind: "op", op: 0x75, operands: [-4] }]);
+      expect(parseGbvmAsm("        VM_ACTOR_GET_ANIM_FRAME .ARG0\n").items).toEqual([
+        { kind: "op", op: 0x83, operands: [-1] },
+      ]);
+    });
+
+    // GB spends opcode 0x3D on SET_ANIM_TICK; gbavm already uses that number for
+    // MOVE_CANCEL, so this one is deliberately renumbered.
+    test("renumbers SET_ANIM_TICK to 0x43 and keeps ref, tick order", () => {
+      const { items } = parseGbvmAsm("        VM_ACTOR_SET_ANIM_TICK .ARG0, 15\n");
+      expect(items).toEqual([{ kind: "op", op: 0x43, operands: [-1, 15] }]);
+      const { bytes } = emitGbaBytecode(items);
+      // i16 ref (-1, little-endian) then the u8 tick MASK.
+      expect(Array.from(bytes)).toEqual([0x43, 0xff, 0xff, 0x0f]);
+    });
+
+    test("bridges BEGIN_UPDATE to 0x8e and TERMINATE_UPDATE to 0x74", () => {
+      expect(parseGbvmAsm("        VM_ACTOR_BEGIN_UPDATE .ARG0\n").items).toEqual([
+        { kind: "op", op: 0x8e, operands: [-1] },
+      ]);
+      expect(parseGbvmAsm("        VM_ACTOR_TERMINATE_UPDATE .ARG0\n").items).toEqual([
+        { kind: "op", op: 0x74, operands: [-1] },
+      ]);
+    });
+  });
+
   describe("input attach/wait (slice C)", () => {
     test("bridges VM_CONTEXT_PREPARE to op 0x55 with a script ptr operand", () => {
       const { items } = parseGbvmAsm(

@@ -82,6 +82,15 @@ const MACRO_TO_OP: Record<string, number> = {
   // animation states (M10c): the state operand is the global STATE_* index
   // from game_globals.i, already merged into the operand evaluator (M4h).
   VM_ACTOR_SET_ANIM_SET: 0x41,
+  // Actor animation control (matrix slice D). GB's SET_ANIM_TICK is opcode 0x3D,
+  // which gbavm already spends on MOVE_CANCEL, so it takes a free number among the
+  // other actor-property ops; the rest keep GB's numbers. The FRAME ops carry GB's
+  // {ID, FRAME} pseudo-struct as a single stack ref, like MOVE_TO's {ID, X, Y}.
+  VM_ACTOR_SET_ANIM_TICK: 0x43,
+  VM_ACTOR_SET_ANIM_FRAME: 0x75,
+  VM_ACTOR_GET_ANIM_FRAME: 0x83,
+  VM_ACTOR_BEGIN_UPDATE: 0x8e,
+  VM_ACTOR_TERMINATE_UPDATE: 0x74,
   // M10e: actor flags / collision toggle / single-op blocking Move To
   VM_ACTOR_SET_FLAGS: 0x44,
   VM_ACTOR_SET_COLL_ENABLED: 0x45,
