@@ -429,6 +429,32 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Camera control (matrix slice E). Both macros are renumbered: GB gives them 0x70/0x71,
+  // which gbavm already spends on the timer ops.
+  describe("camera control (slice E)", () => {
+    test("bridges VM_CAMERA_MOVE_TO to 0x64 as ref, speed, after_lock", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_CAMERA_MOVE_TO .ARG1, 32, .CAMERA_UNLOCK\n",
+      );
+      expect(items).toEqual([{ kind: "op", op: 0x64, operands: [-2, 32, 0] }]);
+    });
+
+    test("resolves the axis lock flags the codegen unions together", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_CAMERA_MOVE_TO .ARG1, 8, ^/(.CAMERA_LOCK_X | .CAMERA_LOCK_Y)/\n",
+      );
+      // Bit 0 = lock X, bit 1 = lock Y; both set is GB's .CAMERA_LOCK.
+      expect(items).toEqual([{ kind: "op", op: 0x64, operands: [-2, 8, 3] }]);
+    });
+
+    test("bridges VM_CAMERA_SET_POS to 0x65 with just the ref block", () => {
+      const { items } = parseGbvmAsm("        VM_CAMERA_SET_POS .ARG1\n");
+      expect(items).toEqual([{ kind: "op", op: 0x65, operands: [-2] }]);
+      const { bytes } = emitGbaBytecode(items);
+      expect(Array.from(bytes)).toEqual([0x65, 0xfe, 0xff]);
+    });
+  });
+
   // Actor animation control (matrix slice D). The FRAME ops carry GB's {ID, FRAME}
   // pseudo-struct as one stack ref, so the operand is a single index, not a pair.
   describe("actor animation control (slice D)", () => {

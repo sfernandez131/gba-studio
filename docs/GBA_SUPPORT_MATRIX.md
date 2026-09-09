@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 93 |
+| Encoded directly to a gbavm opcode | 95 |
 | Expanded to equivalent gbavm sequences | 21 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **115 / 153 bridgeable (75%)** |
+| **Supported total** | **117 / 153 bridgeable (76%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 29 |
+| Unbridged (build fails on use) | 27 |
 | Not applicable to the GBA | 3 |
 | _All GBVM macros_ | _156_ |
 
@@ -40,8 +40,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_SET_ANIM` |
 | `VM_ACTOR_SET_BOUNDS` |
 | `VM_ACTOR_SET_SPRITESHEET_BY_REF` |
-| `VM_CAMERA_MOVE_TO` |
-| `VM_CAMERA_SET_POS` |
 | `VM_GET_INT16` |
 | `VM_GET_TILE_XY` |
 | `VM_HIDE_SPRITES` |
@@ -118,6 +116,8 @@ One-to-one macro → gbavm opcode.
 | `VM_CALL` |
 | `VM_CALL_FAR` |
 | `VM_CALL_NATIVE` |
+| `VM_CAMERA_MOVE_TO` |
+| `VM_CAMERA_SET_POS` |
 | `VM_CHOICE` |
 | `VM_CONTEXT_PREPARE` |
 | `VM_COS_SCALE` |
