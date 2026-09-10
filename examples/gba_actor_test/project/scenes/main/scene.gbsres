@@ -346,6 +346,80 @@
       }
     },
     {
+      "id": "f0000000-0000-4000-8000-00000000f001",
+      "command": "EVENT_PRINT",
+      "args": {
+        "source": "overlay",
+        "margin": 2,
+        "y": 0,
+        "height": 4,
+        "__scriptTabs": "true"
+      },
+      "children": {
+        "true": [
+          {
+            "id": "f0000000-0000-4000-8000-000000000010",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "6",
+              "value": {
+                "type": "number",
+                "value": 99
+              }
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "f0000000-0000-4000-8000-000000000011",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "6",
+              "value": {
+                "type": "number",
+                "value": 42
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "f0000000-0000-4000-8000-00000000f002",
+      "command": "EVENT_IF_DEVICE_GBA",
+      "args": {
+        "__scriptTabs": "true"
+      },
+      "children": {
+        "true": [
+          {
+            "id": "f0000000-0000-4000-8000-000000000012",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "7",
+              "value": {
+                "type": "number",
+                "value": 1
+              }
+            }
+          }
+        ],
+        "false": [
+          {
+            "id": "f0000000-0000-4000-8000-000000000013",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "7",
+              "value": {
+                "type": "number",
+                "value": 2
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000e1",
       "command": "EVENT_CHOICE",
       "args": {
