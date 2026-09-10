@@ -101,6 +101,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x61: [], // MUSIC_STOP (M5a)
   0x66: ["u8"], // SFX_PLAY sfx index (M5b)
   0x63: ["u8"], // SOUND_MASTERVOL vol (M5c)
+  0x67: ["u8", "u8"], // MUSIC_SETPOS pattern, row (slice G)
   // SRAM save (M6a). SAVE_PEEK macro args are RES, DEST, SOUR, COUNT, SLOT.
   0x2e: ["i16", "i16", "u16", "u16", "u8"], // SAVE_PEEK res, dest, sour, count, slot
   0x2f: ["u8"], // SAVE_CLEAR slot

@@ -150,6 +150,9 @@ const MACRO_TO_OP: Record<string, number> = {
   // M11c: the box width (GB window tiles); x comes from MOVE_TO, height from the
   // text sizing. Color/frame options accepted + ignored by the engine for now.
   VM_OVERLAY_CLEAR: 0x96,
+  // Music position (matrix slice G): jump the playing track to a pattern/row. Butano's
+  // DMG player takes exactly GB's two operands, so this keeps GB's opcode number.
+  VM_MUSIC_SETPOS: 0x67,
   // Audio master volume (M5c): VM_SOUND_MASTERVOL <vol> -> op 0x63 [vol].
   VM_SOUND_MASTERVOL: 0x63,
   // SRAM save (M6a): SAVE_PEEK (check/read a save) + SAVE_CLEAR. Save/load themselves
@@ -419,6 +422,14 @@ const SKIP_MACROS = new Set<string>([
   // feature that silently does nothing. Dropped with a note instead: text renders
   // left-to-right, and implementing RTL is engine work in its own right.
   "VM_SET_PRINT_DIR",
+  // Music routines (matrix slice G). VM_MUSIC_ROUTINE attaches a script to one of four
+  // music-event slots, but the events themselves come from hUGEDriver's routine effect
+  // in .uge PATTERN DATA - the tracker raises them, not the VM. gbavm plays DMG music
+  // through Butano's player and cannot play .uge tracks at all yet (the eject skips
+  // them; that is M14), so there is no source for these events. Attaching a script to a
+  // callback that can never fire would claim a feature that silently does nothing, so
+  // this drops with a note until M14 gives it something to listen to.
+  "VM_MUSIC_ROUTINE",
   // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
   // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,
   // so per-channel music muting is not needed - dropped.
