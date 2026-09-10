@@ -8,11 +8,11 @@ use, so this table is exact, not aspirational.
 | Category | Count |
 |---|---|
 | Encoded directly to a gbavm opcode | 95 |
-| Expanded to equivalent gbavm sequences | 22 |
+| Expanded to equivalent gbavm sequences | 23 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **118 / 151 bridgeable (78%)** |
-| Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 24 |
+| **Supported total** | **119 / 151 bridgeable (79%)** |
+| Skipped with a warning (safe no-op) | 11 |
+| Unbridged (build fails on use) | 21 |
 | Not applicable to the GBA | 5 |
 | _All GBVM macros_ | _156_ |
 
@@ -48,9 +48,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_LOAD_TILESET` |
 | `VM_MUSIC_ROUTINE` |
 | `VM_MUSIC_SETPOS` |
-| `VM_OVERLAY_SETPOS` |
-| `VM_OVERLAY_SET_MAP` |
-| `VM_OVERLAY_SET_SUBMAP` |
 | `VM_POLL` |
 | `VM_REPLACE_TILE` |
 | `VM_RTC_GET` |
@@ -71,7 +68,9 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 |---|
 | `VM_MUSIC_MUTE` |
 | `VM_OVERLAY_SCROLL` |
+| `VM_OVERLAY_SET_MAP` |
 | `VM_OVERLAY_SET_SCROLL` |
+| `VM_OVERLAY_SET_SUBMAP` |
 | `VM_OVERLAY_SET_SUBMAP_EX` |
 | `VM_RANDOMIZE` |
 | `VM_SET_FONT` |
@@ -196,6 +195,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 | `VM_GET_UINT8` |
 | `VM_MUSIC_PLAY` |
 | `VM_MUSIC_STOP` |
+| `VM_OVERLAY_SETPOS` |
 | `VM_PROJECTILE_LOAD_TYPE` |
 | `VM_REPLACE_TILE_XY` |
 | `VM_RET` |
