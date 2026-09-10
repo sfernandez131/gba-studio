@@ -179,14 +179,23 @@ const MACRO_TO_OP: Record<string, number> = {
 // vm.i declares `VM_GET_INT8 IDX, ADDR`; INPUT_GET's spec is [joyid, idx], so we emit
 // joyid 0 + the destination index. Keeps all GBA-specific input handling in the
 // bridge (no change to the shared codegen / GB path).
-const gbaInputGet = (args: string[], ev: (s: string) => number): GbaItem[] => {
+const gbaInputGet = (
+  args: string[],
+  ev: (s: string) => number,
+  memTag: number,
+): GbaItem[] => {
   const [idx, addr] = args;
-  if (addr === undefined || !/_joypads/.test(addr)) {
-    throw new Error(
-      `VM_GET_*INT8 source "${addr ?? ""}" is not supported on GBA (only the joypad read is bridged)`,
-    );
+  if (addr !== undefined && /_joypads/.test(addr)) {
+    return [{ kind: "op", op: 0x54, operands: [0, ev(idx)] }];
   }
-  return [{ kind: "op", op: 0x54, operands: [0, ev(idx)] }];
+  // Any other source is an ordinary engine-variable read. This used to throw, which
+  // took out more than it looked: the "If Device GBA" event reads _is_GBA this way,
+  // and the GB Printer codegen reads _is_CGB before it does anything else - so both
+  // failed the build on the read, never reaching the op they were really about.
+  if (addr === undefined) {
+    throw new Error("VM_GET_*INT8 is missing its source address");
+  }
+  return [memGetItem(memTag, idx, addr, ev)];
 };
 
 // Macros that are GBVM convenience wrappers (vm.i expands them); we expand them too.
@@ -194,8 +203,19 @@ const gbaInputGet = (args: string[], ev: (s: string) => number): GbaItem[] => {
 type ExpandFn = (args: string[], ev: (s: string) => number) => GbaItem[] | null;
 const EXPAND_MACROS: Record<string, ExpandFn> = {
   // GBA input: read the live keypad bitmask instead of GB Studio's _joypads WRAM.
-  VM_GET_INT8: (a, ev) => gbaInputGet(a, ev),
-  VM_GET_UINT8: (a, ev) => gbaInputGet(a, ev),
+  VM_GET_INT8: (a, ev) => gbaInputGet(a, ev, MEM_I8),
+  VM_GET_UINT8: (a, ev) => gbaInputGet(a, ev, MEM_U8),
+  VM_GET_INT16: (a, ev) => [memGetItem(MEM_I16, a[0], a[1], ev)],
+  // GB Printer (matrix slice F). The GBA has no Game Boy Printer, and GB Studio's own
+  // codegen already handles that case: it calls VM_PRINTER_DETECT, tests the result
+  // against the error mask, and branches to the event's failure path. So the honest
+  // bridge is to report the same status a missing printer produces - gbvm's
+  // printer_wait() returns PRN_STATUS_MASK_ERRORS (0xF0) when nothing answers - and let
+  // the project's own error handling run. VM_PRINT_OVERLAY is then unreachable, and is
+  // categorised not-applicable rather than left to fail the build.
+  VM_PRINTER_DETECT: (a, ev) => [
+    { kind: "op", op: 0x14, operands: [ev(a[0]), 0xf0] },
+  ],
   // VM_FADE_IN/OUT IS_MODAL -> VM_FADE <flags>. gbavm's fade is a no-op, so the
   // exact flag bits are irrelevant; we keep the IN/OUT distinction for readability.
   VM_FADE_IN: () => [{ kind: "op", op: 0x57, operands: [0x02] }],
@@ -377,7 +397,11 @@ const SKIP_MACROS = new Set<string>([
   "VM_SET_TEXT_SOUND",
   "VM_SET_FONT",
   "VM_SWITCH_TEXT_LAYER",
-  "VM_PRINTER_DETECT",
+  // Right-to-left text. The macro is a write to _vwf_direction, which would compile
+  // fine, but gbavm's text renderer does not read it - so bridging it would claim a
+  // feature that silently does nothing. Dropped with a note instead: text renders
+  // left-to-right, and implementing RTL is engine work in its own right.
+  "VM_SET_PRINT_DIR",
   // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
   // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,
   // so per-channel music muting is not needed - dropped.
@@ -421,6 +445,14 @@ export const TARGET_NA_MACROS: Record<
   // never have shown.
   VM_SGB_TRANSFER: {
     reason: "the Super Game Boy does not exist on GBA hardware",
+    fatal: false,
+  },
+  // Printing the overlay to a Game Boy Printer over the link port. No such
+  // peripheral exists for the GBA. Dropping it is safe here specifically because
+  // VM_PRINTER_DETECT reports "no printer" (0xF0), so GB Studio's own Print codegen
+  // has already branched to the event's failure path and never reaches this op.
+  VM_PRINT_OVERLAY: {
+    reason: "the Game Boy Printer cannot be connected to a GBA",
     fatal: false,
   },
 };
@@ -627,6 +659,24 @@ const pushMemAddr = (
     const v = ev(addrArg);
     out.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff);
   }
+};
+
+// Build the RPN GbaItem for a "read engine symbol ADDR into IDXA" macro
+// (VM_GET_INT8/UINT8/INT16), mirroring vm.i: raw-memory read, then REF_SET into the
+// target index. The 32-bit address is the same "ram" relocation the write path uses,
+// so the linker allocates (or resolves) the engine variable either way.
+const memGetItem = (
+  memTag: number,
+  idxArg: string,
+  addrArg: string,
+  ev: (s: string) => number,
+): GbaItem => {
+  const bytes: number[] = [RPN_REF_MEM, memTag];
+  const relocs: RpnReloc[] = [];
+  pushMemAddr(addrArg, bytes, relocs, ev);
+  bytes.push(...encodeRpnRef(RPN_REF_SET, ev(idxArg)));
+  bytes.push(RPN_STOP);
+  return { kind: "rpn", bytes, relocs };
 };
 
 // Build the RPN GbaItem for a "write to engine symbol ADDR" macro

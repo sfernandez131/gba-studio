@@ -22,8 +22,10 @@
 #      (matrix slice D; both actors' update scripts increment a counter variable),
 #   7. jumps the camera to tile (10, 6), walks it to (12, 6) at 1px/frame, then Camera
 #      Locks it back onto the player (matrix slice E),
-#   8. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#   9. opens a six-item Menu (count=6).
+#   8. runs a Print (GB Printer) event, which must take its printer-missing path, and an
+#      "If Device GBA" check, which must take its true path (matrix slice F),
+#   9. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
+#  10. opens a six-item Menu (count=6).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -114,6 +116,8 @@ gdb-multiarch -batch \
   -ex "continue" \
   -ex "echo \n@NPC2\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH2\n" -ex "print script_memory[5]" \
+  -ex "echo \n@PRINTPATH\n" -ex "print script_memory[6]" \
+  -ex "echo \n@ISGBA\n" -ex "print script_memory[7]" \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
   -ex "echo \n@CAMLOCKY\n" -ex "print/d gba_camera_lock_y" \
   -ex "quit" \
@@ -234,4 +238,18 @@ val_after "@CAMMOVE" "^r2" | grep -q " 0$"  || fail "camera move after_lock != .
 val_after "@CAMLOCKX" '^\$' | grep -q "= 1$" || fail "camera X axis did not re-lock to the player"
 val_after "@CAMLOCKY" '^\$' | grep -q "= 1$" || fail "camera Y axis did not re-lock to the player"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control)"
+# GB Printer + device check (matrix slice F). Neither is really about an opcode: both were
+# failing on an ENGINE-SYMBOL READ, because VM_GET_*INT8 only accepted _joypads and threw
+# for anything else. The Print codegen reads _is_CGB before it does anything, and "If
+# Device GBA" reads _is_GBA, so both died on the read rather than on the feature.
+#
+# The GBA has no Game Boy Printer, and GB Studio's own codegen already handles that case:
+# it detects, tests the status against the error mask, and branches. VM_PRINTER_DETECT now
+# reports what a missing printer reports (0xF0), so the event must take its FALSE path -
+# variable 6 lands on 42. A 99 would mean the game had been told a print succeeded.
+val_after "@PRINTPATH" '^\$' | grep -q "= 42$" || fail "Print event did not take the printer-missing path"
+
+# ...and _is_GBA must read 1, or every "If Device GBA" branch silently inverts.
+val_after "@ISGBA" '^\$' | grep -q "= 1$" || fail "If Device GBA took the false path (_is_GBA != 1)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks)"

@@ -429,6 +429,62 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Engine-symbol reads (matrix slice F). VM_GET_*INT8 used to accept only the joypad
+  // and throw for everything else, which took out more than it looked: "If Device GBA"
+  // reads _is_GBA this way and the GB Printer codegen reads _is_CGB before anything else.
+  describe("engine-symbol reads (slice F)", () => {
+    test("still retargets the joypad read to VM_INPUT_GET", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_GET_UINT8 .ARG0, ^/(_joypads + 1)/\n",
+      );
+      expect(items).toEqual([{ kind: "op", op: 0x54, operands: [0, -1] }]);
+    });
+
+    test("reads any other engine symbol instead of failing the build", () => {
+      const { items } = parseGbvmAsm("        VM_GET_UINT8 .ARG0, __is_GBA\n");
+      expect(items).toHaveLength(1);
+      const item = items[0];
+      if (item.kind !== "rpn") throw new Error("expected an RPN read");
+      // The 32-bit address is a relocation the linker resolves to the engine var.
+      expect(item.relocs).toEqual([{ at: 2, symbol: "__is_GBA" }]);
+      // raw-memory read of .MEM_U8, then REF_SET into .ARG0.
+      expect(item.bytes.slice(0, 2)).toEqual([0xf9, 0x75]);
+    });
+
+    test("still reports a missing source rather than reading nothing", () => {
+      expect(() => parseGbvmAsm("        VM_GET_UINT8 .ARG0\n")).toThrow(
+        /missing its source address/,
+      );
+    });
+  });
+
+  // The GB Printer (matrix slice F). There is no printer on GBA, and GB Studio's own
+  // codegen branches on the detect result - so reporting "no printer" is what makes a
+  // Print event behave correctly rather than claiming a print succeeded.
+  describe("GB Printer (slice F)", () => {
+    test("VM_PRINTER_DETECT reports the missing-printer status", () => {
+      const { items } = parseGbvmAsm("        VM_PRINTER_DETECT .ARG0, 30\n");
+      // 0xF0 is gbvm's PRN_STATUS_MASK_ERRORS - what printer_wait() returns on timeout.
+      expect(items).toEqual([{ kind: "op", op: 0x14, operands: [-1, 0xf0] }]);
+    });
+
+    test("VM_PRINT_OVERLAY is dropped as not-applicable, not fatal", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_PRINT_OVERLAY .ARG0, 0, 4, 2\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped[0]).toMatch(/Game Boy Printer cannot be connected to a GBA/);
+    });
+
+    test("VM_SET_PRINT_DIR is skipped rather than silently inert", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_SET_PRINT_DIR .UI_PRINT_RIGHTTOLEFT\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped[0]).toMatch(/^VM_SET_PRINT_DIR/);
+    });
+  });
+
   // Camera control (matrix slice E). Both macros are renumbered: GB gives them 0x70/0x71,
   // which gbavm already spends on the timer ops.
   describe("camera control (slice E)", () => {

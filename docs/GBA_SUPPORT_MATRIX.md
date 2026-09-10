@@ -8,12 +8,12 @@ use, so this table is exact, not aspirational.
 | Category | Count |
 |---|---|
 | Encoded directly to a gbavm opcode | 95 |
-| Expanded to equivalent gbavm sequences | 21 |
+| Expanded to equivalent gbavm sequences | 22 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **117 / 153 bridgeable (76%)** |
+| **Supported total** | **118 / 151 bridgeable (78%)** |
 | Skipped with a warning (safe no-op) | 9 |
-| Unbridged (build fails on use) | 27 |
-| Not applicable to the GBA | 3 |
+| Unbridged (build fails on use) | 24 |
+| Not applicable to the GBA | 5 |
 | _All GBVM macros_ | _156_ |
 
 The percentage is measured against the **bridgeable** macros, not all of them:
@@ -28,6 +28,8 @@ These describe hardware the GBA does not have, so there is nothing to bridge. On
 |---|
 | `VM_ASM` |
 | `VM_ENDASM` |
+| `VM_PRINTER_DETECT` |
+| `VM_PRINT_OVERLAY` |
 | `VM_SGB_TRANSFER` |
 
 ## Unbridged — the honest to-do list
@@ -40,7 +42,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_ACTOR_SET_ANIM` |
 | `VM_ACTOR_SET_BOUNDS` |
 | `VM_ACTOR_SET_SPRITESHEET_BY_REF` |
-| `VM_GET_INT16` |
 | `VM_GET_TILE_XY` |
 | `VM_HIDE_SPRITES` |
 | `VM_LOAD_TEXT_EX` |
@@ -51,7 +52,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_OVERLAY_SET_MAP` |
 | `VM_OVERLAY_SET_SUBMAP` |
 | `VM_POLL` |
-| `VM_PRINT_OVERLAY` |
 | `VM_REPLACE_TILE` |
 | `VM_RTC_GET` |
 | `VM_RTC_LATCH` |
@@ -59,7 +59,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_RTC_START` |
 | `VM_RUMBLE` |
 | `VM_SCENE_STACK_RESET` |
-| `VM_SET_PRINT_DIR` |
 | `VM_SHOW_SPRITES` |
 | `VM_SIO_EXCHANGE` |
 | `VM_SIO_SET_MODE` |
@@ -74,9 +73,9 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 | `VM_OVERLAY_SCROLL` |
 | `VM_OVERLAY_SET_SCROLL` |
 | `VM_OVERLAY_SET_SUBMAP_EX` |
-| `VM_PRINTER_DETECT` |
 | `VM_RANDOMIZE` |
 | `VM_SET_FONT` |
+| `VM_SET_PRINT_DIR` |
 | `VM_SET_TEXT_SOUND` |
 | `VM_SWITCH_TEXT_LAYER` |
 
@@ -192,6 +191,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 | `VM_ACTOR_SET_SPRITESHEET` |
 | `VM_FADE_IN` |
 | `VM_FADE_OUT` |
+| `VM_GET_INT16` |
 | `VM_GET_INT8` |
 | `VM_GET_UINT8` |
 | `VM_MUSIC_PLAY` |

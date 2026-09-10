@@ -62,6 +62,24 @@ export const cNameOf = (symbol: string): string => symbol.replace(/^_/, "");
 // Native VM functions the gbavm engine provides (src/gba_natives.*). A script's
 // VM_INVOKE / VM_CALL_NATIVE reference to one of these resolves to the function's
 // address; keep in sync with the engine's include/gba_natives.h.
+// Engine RAM variables that are device facts rather than script state, so a zero
+// default would be a lie. Everything else starts at 0.
+//
+// `is_CGB` is 0 deliberately, and it is worth saying why, because "the GBA does
+// colour" argues the other way. Scripts branch on it for two different reasons, and
+// the two disagree: colour gating wants 1, while GB Studio's own printer codegen uses
+// it to gate `cpu_slow`/`cpu_fast` - CGB double-speed calls that do not exist here and
+// would link as unresolved natives, i.e. a call through a null pointer. 0 keeps that
+// path unreachable, and GBA projects have `is_GBA` (and the "If Device GBA" event) for
+// the capability question, which is the flag actually meant for it.
+// Keys are cName form: GBVM writes these as `__is_GBA` (SDCC's underscore on top of
+// the engine's own), and cNameOf strips exactly one, so `_is_GBA` is what lands here.
+// (computed-key form: ESLint's camelcase rule rejects underscore-prefixed bare keys)
+const ENGINE_VAR_INITIALISERS: Record<string, number> = {
+  ["_is_GBA"]: 1,
+  ["_is_CGB"]: 0,
+};
+
 export const GBA_NATIVE_SYMBOLS = new Set<string>([
   "_wait_frames",
   "_camera_shake_frames",
@@ -156,7 +174,9 @@ export function formatLinkedC(
     out.push(
       "// Engine RAM variables (written by scripts; consumed by engine systems).",
     );
-    for (const v of engineVars) out.push(`short ${v} = 0;`);
+    for (const v of engineVars) {
+      out.push(`short ${v} = ${ENGINE_VAR_INITIALISERS[v] ?? 0};`);
+    }
     out.push("");
   }
 
