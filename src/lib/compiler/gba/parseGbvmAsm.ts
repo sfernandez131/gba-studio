@@ -216,6 +216,13 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   VM_PRINTER_DETECT: (a, ev) => [
     { kind: "op", op: 0x14, operands: [ev(a[0]), 0xf0] },
   ],
+  // VM_OVERLAY_SETPOS X, Y places the overlay window instantly, which is exactly
+  // gbavm's OVERLAY_MOVE_TO with the .OVERLAY_SPEED_INSTANT sentinel (-3) - no new
+  // engine op needed. (vm.i builds VM_OVERLAY_HIDE out of this macro too, but that
+  // one is bridged separately to op 0x93.)
+  VM_OVERLAY_SETPOS: (a, ev) => [
+    { kind: "op", op: 0x91, operands: [ev(a[0]), ev(a[1]), -3] },
+  ],
   // VM_FADE_IN/OUT IS_MODAL -> VM_FADE <flags>. gbavm's fade is a no-op, so the
   // exact flag bits are irrelevant; we keep the IN/OUT distinction for readability.
   VM_FADE_IN: () => [{ kind: "op", op: 0x57, operands: [0x02] }],
@@ -394,6 +401,16 @@ const SKIP_MACROS = new Set<string>([
   "VM_OVERLAY_SET_SCROLL",
   "VM_OVERLAY_SET_SUBMAP_EX",
   "VM_OVERLAY_SET_MAP_TILES",
+  // ...and the two non-EX forms of the same thing. All of these copy tiles into GB's
+  // hardware WINDOW TILEMAP. gbavm's overlay is not a tilemap: it is a drawn panel plus
+  // text sprites, so there is nothing to copy into. Supporting them for real means giving
+  // the engine a genuine second tilemap layer - worth doing if a project needs it, but it
+  // is an architectural change, not a bridge. Until then these drop, which costs the
+  // scene-behind-the-window effect and leaves the panel its solid colour; the game plays.
+  // Leaving SET_MAP/SET_SUBMAP failing the build while their _EX and _TILES siblings were
+  // silently skipped was just inconsistent.
+  "VM_OVERLAY_SET_MAP",
+  "VM_OVERLAY_SET_SUBMAP",
   "VM_SET_TEXT_SOUND",
   "VM_SET_FONT",
   "VM_SWITCH_TEXT_LAYER",

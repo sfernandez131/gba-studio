@@ -429,6 +429,29 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Overlay window family (matrix slice F2).
+  describe("overlay window (slice F2)", () => {
+    test("VM_OVERLAY_SETPOS becomes an instant OVERLAY_MOVE_TO", () => {
+      const { items } = parseGbvmAsm("        VM_OVERLAY_SETPOS 3, 14\n");
+      // -3 is .OVERLAY_SPEED_INSTANT: place the window rather than slide it.
+      expect(items).toEqual([{ kind: "op", op: 0x91, operands: [3, 14, -3] }]);
+    });
+
+    // These copy tiles into GB's window TILEMAP, which gbavm's drawn-panel overlay does
+    // not have. Dropping them costs the scene-behind-the-window effect, not the game -
+    // and it makes them consistent with the _EX / _TILES siblings already skipped.
+    test("the tilemap-copy forms are skipped, not fatal", () => {
+      for (const asm of [
+        "        VM_OVERLAY_SET_MAP 0, 0, 0, 4, 4\n",
+        "        VM_OVERLAY_SET_SUBMAP 0, 0, 4, 4, 2, 2\n",
+      ]) {
+        const { items, skipped } = parseGbvmAsm(asm);
+        expect(items).toEqual([]);
+        expect(skipped).toHaveLength(1);
+      }
+    });
+  });
+
   // Engine-symbol reads (matrix slice F). VM_GET_*INT8 used to accept only the joypad
   // and throw for everything else, which took out more than it looked: "If Device GBA"
   // reads _is_GBA this way and the GB Printer codegen reads _is_CGB before anything else.
