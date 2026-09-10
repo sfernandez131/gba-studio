@@ -99,3 +99,62 @@ to say it.
    guard.
 3. **The tail may not be worth finishing.** 15 macros no sample uses may cost more than
    they return. Slice H is deliberately demand-driven rather than completionist.
+
+---
+
+## Outcome (closed 2026-09-10)
+
+Slices A–G are done. The matrix stands at **120 / 151 bridgeable (79%)**, with 19
+unbridged, 12 skipped-with-a-warning, and 5 not applicable to the target.
+
+The milestone is declared complete here, deliberately short of the tail. What follows is
+what shipped, and — more usefully — what the work taught that the plan above got wrong.
+
+### What each slice actually turned out to be
+
+| Slice | Planned                          | What it was                                                                                                                                       |
+| ----- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | recategorise the impossible ones | as planned                                                                                                                                        |
+| B     | tile replacement                 | as planned; engine + editor                                                                                                                       |
+| C     | input attach/wait                | as planned, plus a per-frame **suppression mask** — GB clears the key from `joy`, which gbavm cannot do because it reads Butano's keypad directly |
+| D     | actor animation control          | mostly **engine** work: the actor had no explicit frame at all, and update threads discarded their handle                                         |
+| E     | camera control                   | mostly **engine** work: gbavm had no camera-lock concept, so a script-set camera snapped straight back                                            |
+| F     | "overlay / print extras"         | **three different answers** — see below                                                                                                           |
+| G     | music callbacks                  | **half unsupportable** — see below                                                                                                                |
+
+### The three things worth remembering
+
+**1. The macro list was a poor predictor of the work.** Slices D and E read as small
+bridging jobs and were mostly engine features that did not exist. Slice F read as six
+macros and was really one latent bug plus two architectural blockers. Scoping from the GB
+sources first — which this plan did call for — is what kept that from becoming rework.
+
+**2. Slice F found a bug the matrix could not see.** `VM_GET_*INT8` accepted only
+`_joypads` and threw for every other source, so GB Studio's own **"If Device GBA" event did
+not work on the GBA target**, and no project with a Print event could build. The matrix
+counts macros, and this was a macro that _was_ bridged — the failure lived in an operand.
+A green matrix cell is not the same as a working feature.
+
+**3. "Not applicable" and "skipped" carried more weight than expected.** Five macros are
+absent-by-design hardware, and twelve are features the engine has no structure for. Forcing
+those into the bridged column would have produced a higher percentage and a worse product:
+`VM_SET_PRINT_DIR` and `VM_MUSIC_ROUTINE` would both have compiled and silently done
+nothing.
+
+### What is deliberately not done
+
+- **`VM_OVERLAY_SET_MAP` / `SET_SUBMAP`** copy into GB's hardware window tilemap. gbavm's
+  overlay is a drawn panel plus text sprites — there is nothing to copy into. Real support
+  needs a **second tilemap layer in the engine**: a milestone, not a slice.
+- **`VM_MUSIC_ROUTINE`** attaches scripts to events hUGEDriver raises from `.uge` pattern
+  data. gbavm cannot play `.uge` at all yet, so nothing would ever fire. **M14** unblocks it.
+- **`VM_LOAD_TILESET` / `VM_LOAD_TEXT_EX`** stay unbridged (fail loud) rather than skipped,
+  because they are not cosmetic — a dropped tileset load means wrong graphics.
+  `VM_LOAD_TILESET` also needs a bulk VRAM path: slice B's `overwrite_tile` queues into a
+  32-per-frame buffer that a whole tileset would blow through.
+- **RTC and SIO** remain out of scope, as planned.
+- **The rest of the tail** is demand-driven, exactly as slice H intended.
+
+The sentence this milestone was aiming at — _the stock `gbs2` sample builds and plays on
+GBA_ — is closer but not provable without exporting and running that sample end to end.
+That is worth doing on its own, and is not a bridging task.
