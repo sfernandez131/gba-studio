@@ -91,6 +91,12 @@ const MACRO_TO_OP: Record<string, number> = {
   VM_ACTOR_GET_ANIM_FRAME: 0x83,
   VM_ACTOR_BEGIN_UPDATE: 0x8e,
   VM_ACTOR_TERMINATE_UPDATE: 0x74,
+  // Camera control (matrix slice E). GB numbers these 0x70/0x71, which gbavm already
+  // spends on VM_TIMER_PREPARE / VM_TIMER_SET, so both are renumbered. The ref operand
+  // is the {X, Y} block the codegen builds on the VM stack, in the editor's 32-per-pixel
+  // subpixels with GB's half-screen offset already folded in.
+  VM_CAMERA_MOVE_TO: 0x64,
+  VM_CAMERA_SET_POS: 0x65,
   // M10e: actor flags / collision toggle / single-op blocking Move To
   VM_ACTOR_SET_FLAGS: 0x44,
   VM_ACTOR_SET_COLL_ENABLED: 0x45,
@@ -505,7 +511,9 @@ const BASE_CONSTS: Record<string, number> = {
   EXCEPTION_SAVE: 3,
   EXCEPTION_LOAD: 4,
   EXCEPTION_TERMINATE: 5,
-  // camera lock flags (written to _camera_settings)
+  // Camera lock flags. These were already needed where the codegen writes them to
+  // _camera_settings; matrix slice E also reads them as VM_CAMERA_MOVE_TO's AFTER_LOCK
+  // operand, where the engine takes bit 0 = follow the player on X, bit 1 = on Y.
   ".CAMERA_LOCK": 0x03,
   ".CAMERA_LOCK_X": 0x01,
   ".CAMERA_LOCK_Y": 0x02,

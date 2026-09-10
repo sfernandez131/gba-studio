@@ -302,6 +302,50 @@
       }
     },
     {
+      "id": "e0000000-0000-4000-8000-00000000e001",
+      "command": "EVENT_CAMERA_MOVE_TO",
+      "args": {
+        "x": {
+          "type": "number",
+          "value": 10
+        },
+        "y": {
+          "type": "number",
+          "value": 6
+        },
+        "speed": 0,
+        "units": "tiles"
+      }
+    },
+    {
+      "id": "e0000000-0000-4000-8000-00000000e002",
+      "command": "EVENT_CAMERA_MOVE_TO",
+      "args": {
+        "x": {
+          "type": "number",
+          "value": 12
+        },
+        "y": {
+          "type": "number",
+          "value": 6
+        },
+        "speed": 1,
+        "units": "tiles"
+      }
+    },
+    {
+      "id": "e0000000-0000-4000-8000-00000000e003",
+      "command": "EVENT_CAMERA_LOCK",
+      "args": {
+        "speed": 0,
+        "axis": [
+          "x",
+          "y"
+        ],
+        "preventScroll": []
+      }
+    },
+    {
       "id": "abcdef01-0000-4000-8000-0000000000e1",
       "command": "EVENT_CHOICE",
       "args": {

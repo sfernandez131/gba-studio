@@ -127,6 +127,10 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x9b: ["i16"], // USER_CODE snippet-index
   // REPLACE_TILE_XY (slice B): x, y, tileset index, tile-index variable.
   0x9c: ["u8", "u8", "i16", "i16"],
+  // Camera control (slice E). The ref operand resolves to the {X, Y} block on the VM
+  // stack; MOVE_TO blocks the thread until both axes arrive, then applies AFTER_LOCK.
+  0x64: ["i16", "u8", "u8"], // CAMERA_MOVE_TO ref, speed, after_lock
+  0x65: ["i16"], // CAMERA_SET_POS ref
   // Actor animation control (slice D). The ref operand resolves to the actor block the
   // codegen builds on the VM stack: word 0 is the ID, word 1 the animation FRAME.
   0x43: ["i16", "u8"], // ACTOR_SET_ANIM_TICK ref, tick (GB's anim_tick MASK)

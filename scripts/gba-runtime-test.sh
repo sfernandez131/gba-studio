@@ -20,8 +20,10 @@
 #   6. sets the Npc's animation tick + frame, reads the frame back over a marker, and
 #      stops the Npc's update script while stopping AND restarting the Watcher's
 #      (matrix slice D; both actors' update scripts increment a counter variable),
-#   7. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#   8. opens a six-item Menu (count=6).
+#   7. jumps the camera to tile (10, 6), walks it to (12, 6) at 1px/frame, then Camera
+#      Locks it back onto the player (matrix slice E),
+#   8. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
+#   9. opens a six-item Menu (count=6).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -68,6 +70,14 @@ gdb-multiarch -batch \
   -ex "continue" \
   -ex "echo \n@ANIMFRAME\n" -ex "x/2hu \$r0" \
   -ex "delete" \
+  -ex "break hw_camera_set_pos" \
+  -ex "continue" \
+  -ex "echo \n@CAMSET\n" -ex "x/2hu \$r0" \
+  -ex "delete" \
+  -ex "break hw_camera_move_step" \
+  -ex "continue" \
+  -ex "echo \n@CAMMOVE\n" -ex "info registers r1 r2" \
+  -ex "delete" \
   -ex "break hw_choice_step" \
   -ex "continue" \
   -ex "echo \n@CHOICE\n" -ex "info registers r0 r1" \
@@ -79,7 +89,7 @@ gdb-multiarch -batch \
   -ex "return (int)2" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 7 8" \
+  -ex "ignore 9 8" \
   -ex "continue" \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
@@ -100,10 +110,12 @@ gdb-multiarch -batch \
   -ex "echo \n@GETFRAME\n" -ex "print script_memory[3]" \
   -ex "echo \n@NPC1\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH1\n" -ex "print script_memory[5]" \
-  -ex "ignore 7 60" \
+  -ex "ignore 9 60" \
   -ex "continue" \
   -ex "echo \n@NPC2\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH2\n" -ex "print script_memory[5]" \
+  -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
+  -ex "echo \n@CAMLOCKY\n" -ex "print/d gba_camera_lock_y" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -205,4 +217,21 @@ watch2=$(val_after "@WATCH2" '^\$' | sed 's/.*= //')
 [ -n "$watch1" ] && [ -n "$watch2" ] && [ "$watch2" -gt "$watch1" ] \
   || fail "restarted update script is not advancing (watcher $watch1 -> $watch2)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control)"
+# Camera control (matrix slice E). The coordinate contract between the editor and the
+# engine is the part most likely to break silently, so it is asserted at the boundary:
+# Camera Move To (tiles 10, 6) with speed 0 compiles to VM_CAMERA_SET_POS, and the {X, Y}
+# block r0 points at must read 5120, 3840 - the editor's 32-per-pixel subpixels with GB's
+# +80px / +72px half-screen offset already folded in (10*256 + 80*32, 6*256 + 72*32).
+val_after "@CAMSET" "^0x" | grep -qE "5120[[:space:]]+3840$" || fail "camera set_pos block != {5120, 3840} subpx"
+
+# The following Camera Move To runs at speed 1 px/frame = 32 subpx (r1), and the event
+# always passes .CAMERA_UNLOCK (r2 = 0); locking back is the Camera Lock event's job.
+val_after "@CAMMOVE" "^r1" | grep -q " 32$" || fail "camera move speed != 32 subpx/frame"
+val_after "@CAMMOVE" "^r2" | grep -q " 0$"  || fail "camera move after_lock != .CAMERA_UNLOCK"
+
+# ...and Camera Lock is what exercises the after_lock != 0 branch: once its move lands,
+# both axes must be following the player again. Without this the restore path is dead code.
+val_after "@CAMLOCKX" '^\$' | grep -q "= 1$" || fail "camera X axis did not re-lock to the player"
+val_after "@CAMLOCKY" '^\$' | grep -q "= 1$" || fail "camera Y axis did not re-lock to the player"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control)"
