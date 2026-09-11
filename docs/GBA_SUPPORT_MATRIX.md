@@ -7,12 +7,12 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 95 |
+| Encoded directly to a gbavm opcode | 96 |
 | Expanded to equivalent gbavm sequences | 23 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **119 / 151 bridgeable (79%)** |
-| Skipped with a warning (safe no-op) | 11 |
-| Unbridged (build fails on use) | 21 |
+| **Supported total** | **120 / 151 bridgeable (79%)** |
+| Skipped with a warning (safe no-op) | 12 |
+| Unbridged (build fails on use) | 19 |
 | Not applicable to the GBA | 5 |
 | _All GBVM macros_ | _156_ |
 
@@ -46,8 +46,6 @@ Using any of these in a GBA project fails the build with an unknown-macro error.
 | `VM_HIDE_SPRITES` |
 | `VM_LOAD_TEXT_EX` |
 | `VM_LOAD_TILESET` |
-| `VM_MUSIC_ROUTINE` |
-| `VM_MUSIC_SETPOS` |
 | `VM_POLL` |
 | `VM_REPLACE_TILE` |
 | `VM_RTC_GET` |
@@ -67,6 +65,7 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 | Macro |
 |---|
 | `VM_MUSIC_MUTE` |
+| `VM_MUSIC_ROUTINE` |
 | `VM_OVERLAY_SCROLL` |
 | `VM_OVERLAY_SET_MAP` |
 | `VM_OVERLAY_SET_SCROLL` |
@@ -142,6 +141,7 @@ One-to-one macro → gbavm opcode.
 | `VM_LOOP` |
 | `VM_MEMCPY` |
 | `VM_MEMSET` |
+| `VM_MUSIC_SETPOS` |
 | `VM_OVERLAY_CLEAR` |
 | `VM_OVERLAY_HIDE` |
 | `VM_OVERLAY_MOVE_TO` |

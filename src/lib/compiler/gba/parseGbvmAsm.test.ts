@@ -429,6 +429,26 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Music callbacks (matrix slice G) - one real bridge, one honest drop.
+  describe("music callbacks (slice G)", () => {
+    test("VM_MUSIC_SETPOS keeps GB's opcode and its pattern, row operands", () => {
+      const { items } = parseGbvmAsm("        VM_MUSIC_SETPOS 3, 16\n");
+      expect(items).toEqual([{ kind: "op", op: 0x67, operands: [3, 16] }]);
+      const { bytes } = emitGbaBytecode(items);
+      expect(Array.from(bytes)).toEqual([0x67, 0x03, 0x10]);
+    });
+
+    // The events these attach to come from hUGEDriver's routine effect in .uge pattern
+    // data, and gbavm cannot play .uge tracks at all yet - so nothing would ever fire.
+    test("VM_MUSIC_ROUTINE is dropped with a note rather than bridged", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_MUSIC_ROUTINE 0, ___bank_rtn, _rtn\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped[0]).toMatch(/^VM_MUSIC_ROUTINE/);
+    });
+  });
+
   // Overlay window family (matrix slice F2).
   describe("overlay window (slice F2)", () => {
     test("VM_OVERLAY_SETPOS becomes an instant OVERLAY_MOVE_TO", () => {
