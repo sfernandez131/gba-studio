@@ -496,7 +496,9 @@ describe("parseGbvmAsm — P0 opcodes", () => {
         "        VM_PRINT_OVERLAY .ARG0, 0, 4, 2\n",
       );
       expect(items).toEqual([]);
-      expect(skipped[0]).toMatch(/Game Boy Printer cannot be connected to a GBA/);
+      expect(skipped[0]).toMatch(
+        /Game Boy Printer cannot be connected to a GBA/,
+      );
     });
 
     test("VM_SET_PRINT_DIR is skipped rather than silently inert", () => {
