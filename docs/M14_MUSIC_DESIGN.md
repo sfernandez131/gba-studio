@@ -170,17 +170,49 @@ Two more things the probe showed, both for M14b:
 - **Still owed: an ears-on listen.** Every register says an A440 tone is playing on both
   speakers; nobody has heard it yet.
 
+## M14b result (2026-09-11): the player, pulse channels first
+
+`gbavm/src/huge_player.cpp` (gbavm#79) ports hUGEDriver's tick/row/order machinery and
+pulse-channel note playback. The song data is the editor's own `exportToC` output compiled as
+C, so there is no second exporter to keep in step.
+
+Three things the port turned up:
+
+- **The driver ticks at 64 Hz, not once per frame.** GB Studio runs it from the timer
+  interrupt — `TAC 0x07` is 16,384 Hz, `TMA 0xC0` overflows at 256 Hz, and `music_play_isr`
+  runs the driver every 4th, so exactly 64 Hz. Ticking once per GBA frame (59.73 Hz) would
+  play every song **~6.7% slow**, and no register check would catch it. The player
+  accumulates in GBA clock cycles instead, so the long-run rate is exact; some frames run two
+  ticks.
+- **A rest row skips the instrument entirely.** The branch sits before the instrument block
+  in the asm, which is easy to misread — the first pass of the port got it wrong.
+- **The GB header's types would not compile.** It types the order tables and routines
+  loosely; GCC 14+ makes _incompatible-pointer-types_ a hard error even in C. gbavm's
+  `hUGEDriver.h` declares what the exporter actually emits, and the real output then compiles
+  with zero warnings. Two SDCC-isms still have to be stripped (`#pragma bank`, `__at`) —
+  `scripts/huge/gbaify.py`, which M14d folds into the eject.
+
+**Verified** by a throwaway probe recording every note write, diffed against an independent
+reference that predicts each one from the song data and the asm's rules
+(`scripts/huge/README.md`). `Rulz_BattleTheme` (tempo 3, 56 writes) and `Rulz_GonaSpace`
+(tempo 7, 52 writes), both across an order boundary: **every write matches** on frame, tick,
+order, row, channel, and value.
+
+**Not verified:** a trace against the GB build itself. The GDB stub cannot debug the GB's
+SM83 CPU, so there is no headless way to capture one — which is why the check above uses an
+independent reference instead, and why an ears-on listen still matters.
+
 ## Slice plan
 
-| Slice    | Scope                                                                                                                                                                         | Verify                                                                             |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                     |
-| **M14b** | Port the hUGE tick/player to C++ against the PSG, consuming the song structure `exportToC` already produces. Start with note playback on the two pulse channels.              | Frame-level register trace vs. the GB build playing the same track.                |
-| M14c     | Effects, wave channel, noise.                                                                                                                                                 | Same trace, per effect.                                                            |
-| M14d     | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                             |
-| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture. |
-| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                     |
-| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                  |
+| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
+| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
+| **M14c** | Effects, subpattern tables, wave channel, noise. Extend `scripts/huge/reference.py` with each rule, read from the asm.                                                        | The same probe-and-reference diff, per effect and channel.                                                                  |
+| M14d     | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
+| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
+| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
+| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
 
 ## Verification
 
