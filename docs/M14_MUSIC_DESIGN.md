@@ -136,17 +136,51 @@ owner on each Music Play, the way Butano already switches between GBT and VGM.
 the registers hold across frames (nothing clobbers them), plus an ears-on listen. If that
 holds, Route C is clear.
 
+### M14a result (2026-09-11): handover works — with one ordering rule the source hid
+
+A throwaway probe on the `gba_actor_test` fixture started GBT track 0 at frame 60, stopped it
+at frame 120, then wrote channel 1 by hand: an A440 square, full volume, envelope held, length
+disabled, routed to both speakers. Registers sampled over the GDB stub:
+
+| Frame | `SOUNDCNT_L` | `SOUNDCNT_X` | `SOUND1CNT_H` | Reading                                       |
+| ----- | ------------ | ------------ | ------------- | --------------------------------------------- |
+| 100   | `0xFF77`     | `0x0084`     | —             | gbt owns all four channels (the control case) |
+| 131   | `0x1177`     | `0x0087`     | `0xF080`      | our channel 1, routed L+R, running            |
+| 402   | `0x1177`     | `0x0087`     | `0xF080`      | unchanged — nothing took the PSG back         |
+
+**Route C is viable.** But the first attempt wrote channel 1 in the _same frame_ as the stop,
+and `SOUNDCNT_L` read back `0x0077` — the channel ran, routed to neither speaker, i.e.
+silently. The cause is one layer above the code the section above reasoned about:
+
+- **`bn::dmg_music::stop()` does not stop.** It queues a `DMG_MUSIC_STOP` command
+  (`bn_audio_manager.bn_noflto.cpp`, `stop_dmg_music()`), which `execute_commands()` runs
+  during the frame's `bn::core::update()`. That queued `gbt_stop()` lands after any PSG write
+  made earlier in the same frame and clears its routing bits.
+
+So the rule for M14b: **stop the GBT track, then take the PSG from the next frame on** — never
+in the same frame. Moving the probe's write to frame 122 is the whole difference between the
+two runs above.
+
+Two more things the probe showed, both for M14b:
+
+- **Released channels keep running.** `SOUNDCNT_X = 0x0087` still flags channels 2 and 3 as on
+  after the stop — gbt-player's documented caveat. They are inaudible only because their
+  routing bits happen to be clear. The ported player must explicitly claim (and silence) all
+  four channels on takeover rather than assume they are quiet.
+- **Still owed: an ears-on listen.** Every register says an A440 tone is playing on both
+  speakers; nobody has heard it yet.
+
 ## Slice plan
 
-| Slice    | Scope                                                                                                                                                                                                             | Verify                                                                             |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **M14a** | **Confirm PSG handover at runtime** (mostly answered by source, see above). With `bn::dmg_music` stopped, write a note to channel 1 directly; confirm the registers hold across frames and nothing clobbers them. | GDB stub register reads over a frame walk, plus an ears-on listen.                 |
-| M14b     | Port the hUGE tick/player to C++ against the PSG, consuming the song structure `exportToC` already produces. Start with note playback on the two pulse channels.                                                  | Frame-level register trace vs. the GB build playing the same track.                |
-| M14c     | Effects, wave channel, noise.                                                                                                                                                                                     | Same trace, per effect.                                                            |
-| M14d     | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                                                     | The stock `gbs2` sample's music plays.                                             |
-| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                                                                  | The attached script runs; GDB assert on the handle, like the input-attach fixture. |
-| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                                                    | Ears-on plus register asserts.                                                     |
-| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them.                                     | —                                                                                  |
+| Slice    | Scope                                                                                                                                                                         | Verify                                                                             |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                     |
+| **M14b** | Port the hUGE tick/player to C++ against the PSG, consuming the song structure `exportToC` already produces. Start with note playback on the two pulse channels.              | Frame-level register trace vs. the GB build playing the same track.                |
+| M14c     | Effects, wave channel, noise.                                                                                                                                                 | Same trace, per effect.                                                            |
+| M14d     | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                             |
+| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture. |
+| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                     |
+| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                  |
 
 ## Verification
 
