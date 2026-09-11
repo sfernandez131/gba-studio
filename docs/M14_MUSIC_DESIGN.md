@@ -202,17 +202,39 @@ order, row, channel, and value.
 SM83 CPU, so there is no headless way to capture one — which is why the check above uses an
 independent reference instead, and why an ears-on listen still matters.
 
+## M14c1 result (2026-09-11): wave and noise
+
+The wave and noise channels (gbavm#80) complete the tick-0 path on all four channels, so
+songs now have their bass and drums.
+
+- **The wave channel could not be ported literally.** The GB restarts CH3 with
+  `NR30 = 0xFF`, and on the GB only bit 7 of `NR30` means anything. The GBA's
+  `SOUND3CNT_L` uses bit 6 for the wave **bank** and bit 5 for 64-sample mode, so `0xFF`
+  would switch banks and double the wave; and the CPU can only write the wave-RAM bank that
+  is _not_ playing. The player follows gbt-player's GBA recipe instead.
+- **The noise polynomial needs a real Z80 `SWAP`**, not a shift: notes 64+ wrap
+  `note + 192` and produce values where the two disagree.
+- **A debugger cannot check wave RAM.** mGBA's GDB stub reads it as zero and does not pass
+  IO writes through. Under the verification trace, the player reads the bytes back through
+  the emulated bus instead; the result is byte-exact.
+
+Verified: 460 writes across two songs, all four channels, every write type — all match the
+reference. Known gap: `Rulz_BattleTheme`'s noise instrument 1 carries a subpattern, so those
+drum hits play their first tick but not their table until M14c3.
+
 ## Slice plan
 
-| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                      |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
-| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
-| **M14c** | Effects, subpattern tables, wave channel, noise. Extend `scripts/huge/reference.py` with each rule, read from the asm.                                                        | The same probe-and-reference diff, per effect and channel.                                                                  |
-| M14d     | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
-| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
-| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
-| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
+| Slice     | Scope                                                                                                                                                                         | Verify                                                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| M14a      | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
+| M14b      | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
+| M14c1     | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                            |
+| **M14c2** | Effects: the 16 hUGE effects, most of which run on every tick, not just tick 0.                                                                                               | Extend the probe-and-reference diff to non-zero ticks, per effect.                                                          |
+| M14c3     | Subpattern tables (instrument tables, e.g. BattleTheme's noise instrument 1).                                                                                                 | The same diff, per table row.                                                                                               |
+| M14d      | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
+| M14e      | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
+| M14f      | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
+| —         | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
 
 ## Verification
 
