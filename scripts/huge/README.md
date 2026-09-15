@@ -3,17 +3,21 @@
 How the GBA hUGE player (`gbavm/src/huge_player.cpp`) is checked against real songs.
 Background and design: `docs/M14_MUSIC_DESIGN.md`.
 
-The method: run a real `gbs2` song on the GBA with a throwaway probe that records every
-note write, then diff that trace against an independent reference which predicts every
-write from the song data and hUGEDriver's rules.
+The method: run a real song on the GBA with a throwaway probe that records every Game Boy
+sound-register write the player makes, then diff that trace against an independent
+reference which predicts every write from the song data and hUGEDriver's rules.
 
 ## What it proves, and what it does not
 
 `reference.py` parses the song's C, applies the driver's rules **as read from
 `hUGEDriver.asm`** (not from the C++), and runs GB Studio's 64 Hz tick schedule through
-the GBA's frame clock. A match on every field — frame, tick, order, row, channel,
+the GBA's frame clock. A match on every field — frame, tick, order, row, register,
 value — proves the C++ is a faithful transcription of those rules: pattern decoding,
-instruments, the note table, row/order advance, and the tick accumulator.
+instruments, the note table, every effect, row/order advance, and the tick accumulator.
+
+A match only means something if a wrong rule would fail. `mutations.py` checks that: it
+breaks the reference in 23 small, plausible ways and confirms each one produces
+mismatches against a real trace.
 
 It cannot prove the rules were _read_ correctly, because both implementations share that
 reading. That needs an ears-on listen and, eventually, a trace from the GB build itself.
@@ -33,9 +37,21 @@ scratch directory.
    node <work>/export-uge.js appData/templates/gbs2/assets/music/Rulz_BattleTheme.uge song_Rulz_BattleTheme <work>/BattleTheme.c
    ```
 
+   To exercise every effect, build the synthetic effects song instead (it borrows a real
+   song's instruments):
+
+   ```bash
+   npx esbuild scripts/huge/make-effects-song.ts --bundle --platform=node --tsconfig=tsconfig.json --outfile=<work>/make-effects-song.js
+   ```
+
+   ```bash
+   node <work>/make-effects-song.js appData/templates/gbs2/assets/music/Rulz_GonaSpace.uge <work>/Effects.c
+   ```
+
 2. **Make it compile for the GBA.** `gbaify.py` strips the two SDCC-isms the exporter
-   emits (`#pragma bank`, and `__at(...)`, which is a hard GCC error). This is the same
-   post-process the eject will apply in M14d.
+   emits (`#pragma bank`, and `__at(...)`, which is a hard GCC error), and pads each
+   instrument table to 15 slots so pattern data naming an undefined instrument cannot read
+   out of bounds. This is the same post-process the eject will apply in M14d.
 
    ```bash
    python scripts/huge/gbaify.py <work>/BattleTheme.c <work>/BattleTheme.gba.c
@@ -51,25 +67,30 @@ scratch directory.
    ```
 
 4. **Build any project against that engine, and dump the trace over the GDB stub.**
-   Build with `GBAVM_ROOT` pointing at the probed checkout, launch mGBA with `-g`, then
-   walk frames and print each of the `huge_trace_n` entries of `huge_trace` as one line:
+   Build with `GBAVM_ROOT` pointing at the probed checkout, launch mGBA with `-g`, and run
+   `dump-trace.gdb` against the build's ELF (from PowerShell on Windows). It writes
+   `trace.bin`: one 12-byte record per write — frame, tick, order, row, register, value.
 
-   ```
-   T <frame> <tick> <order> <row> <channel> <what> <value>
-   ```
+   The register is the GB address's low byte (`0x10` = NR10 ... `0x25` = NR51), exactly as
+   the driver's `ldh` writes it — every write, routing mutes and DAC toggles included. Two
+   pseudo-registers stand for events that are not one byte: `0x30` a wave loaded into wave
+   RAM (value = wave index) and `0x40` a "call routine" (value = channel << 8 | param).
 
-   `what` is 1 sweep, 2 length/envelope, 3 note, 4 wave load (the value is then the wave
-   index). Only writes carrying musical state are traced — not routing mutes or DAC
-   toggles.
-
-   Walk far enough to cross an order boundary (64 rows × the song's tempo, in ticks).
+   Check the reference's `orders reached` line: the walk should cross an order boundary.
 
 5. **Diff against the reference.** The last argument is the frame of the first write —
    the play frame plus one, because the PSG is only claimed on the frame after a
    `huge_play()` (M14a: `bn::dmg_music::stop()` is deferred to the frame commit).
 
    ```bash
-   python scripts/huge/reference.py <work>/BattleTheme.gba.c <work>/trace.txt 31
+   python scripts/huge/reference.py <work>/BattleTheme.gba.c <work>/trace.bin 31
+   ```
+
+   It also prints which effects ran on the compared rows, so you can see what a song
+   actually exercised. Then, against the effects song's trace, check the diff has teeth:
+
+   ```bash
+   python scripts/huge/mutations.py <work>/Effects.gba.c <work>/trace.bin 31
    ```
 
 6. **Revert the probe** — with the script, never with git:
@@ -100,8 +121,28 @@ bytes back through the emulated bus while their bank is still writable, into
 | M14c1 | `Rulz_BattleTheme` | 3     | 221    | all match — all 4 channels, every write type; wave readback byte-exact |
 | M14c1 | `Rulz_GonaSpace`   | 7     | 239    | all match — all 4 channels, every write type                           |
 
+From M14c2 the trace records register bytes rather than paired writes, so the counts are not
+comparable with the rows above. All nine songs below match, each run for ~567 ticks:
+
+| Song                     | Tempo | Writes | Effects run on compared rows     |
+| ------------------------ | ----- | ------ | -------------------------------- |
+| synthetic (`Effects`)    | 6     | 1753   | all 16; 23/23 mutations caught   |
+| `Coffee Bat - Wyrmhole`  | 2     | 2739   | 2, C                             |
+| `zilog_headbang_routine` | 7     | 1969   | 0, 2, 4, 6, B, C, E              |
+| `unreal_superhero2`      | 7     | 1843   | 3, C (sweep byte patched, below) |
+| `Rulz_BattleTheme`       | 3     | 2109   | C, E                             |
+| `Rulz_GonaSpace`         | 7     | 1726   | 2, A, C, E                       |
+| `dizzy`                  | 7     | 1466   | 0, 4, C (instruments padded)     |
+| `Rulz_SpaceEmergency`    | 8     | 923    | 1, 8, C, E                       |
+| `Rulz_Into the woods`    | 7     | 631    | B, C, F                          |
+
+`unreal_superhero2` does not compile as exported: the exporter writes `0x-4` for a duty
+instrument whose sweep time loads as -1, which no C compiler accepts (the GB build's either).
+Its byte was patched to `0x00` for this run; sweep does not affect any effect.
+
 ## Extending it
 
-The reference now predicts every tick-0 write on all four channels. Effects (M14c2) and
-subpattern tables (M14c3) write on other ticks too; each needs its rule added to
-`reference.py` — read from the asm again, not from whatever the C++ ended up doing.
+The reference now predicts every write on every tick, for all four channels and all 16
+effects. Subpattern tables (M14c3) are next; their rules get added to `reference.py` — read
+from the asm again, not from whatever the C++ ended up doing — along with mutations for
+them in `mutations.py` and cases in the effects song.

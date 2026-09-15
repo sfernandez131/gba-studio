@@ -222,6 +222,45 @@ Verified: 460 writes across two songs, all four channels, every write type — a
 reference. Known gap: `Rulz_BattleTheme`'s noise instrument 1 carries a subpattern, so those
 drum hits play their first tick but not their table until M14c3.
 
+## M14c2 result (2026-09-15): all 16 effects
+
+The player runs every hUGEDriver effect (gbavm#81), on tick 0 and on every later tick.
+
+- **The port now writes the PSG a Game Boy register byte at a time**, mirroring each `ldh`
+  in the driver, instead of M14b/c1's paired halfwords. The effects write registers alone:
+  set duty writes `NR11` without `NR12`, and a halfword would rewrite the neighbour too,
+  reloading a length counter the GB never touched. The GBA exposes each GB byte at a fixed
+  offset, and mGBA dispatches those byte writes straight to its `NRxx` handlers. Two
+  registers still need mapping: `NR30` keeps bit 7 only, and `NR32` drops bit 7, which
+  forces 75% volume on the GBA.
+- **The driver reads registers back and depends on the GB's read masks.** Vol slide, for
+  example, ORs `0x80` into a read of `NRx4` (which reads back ORed with `0xBF`), and on the
+  wave channel does arithmetic on `NR32` as read through its `0x9F` mask. The GBA's masks
+  differ, so reads come from a shadow of the GB registers.
+- **Driver quirks are kept, not fixed.** Pitch effects on CH4 hand a _period's_ low byte to
+  the note-to-poly formula; toneporta stores the period even on a muted channel; tick 0 runs
+  an effect whose param is 0 (so `E00` cuts at once) while later ticks skip it.
+- **Where the GB would read past a table, the GBA holds the value in range instead**: a note
+  past the note table plays the top note; an out-of-range break row, jump order or wave
+  index is clamped. And pattern data can name an instrument the song never defined: `dizzy`
+  plays wave instrument 3 on 307 cells but defines two. `hUGESong_t` carries no counts to
+  check against, so the GBA post-process (`scripts/huge/gbaify.py`, which the M14d eject
+  absorbs) pads each instrument table to 15 silent slots. The channel stays quiet, as it
+  does on the GB, and nothing reads out of bounds.
+
+Verified: **15,159 register writes across nine songs match the reference** — a synthetic
+song (`scripts/huge/make-effects-song.ts`) that runs all 16 effects on all four channels,
+including the awkward cases, and eight real songs that between them exercise 12 of the 16.
+**All 23 deliberate mutations of the reference are caught** (`scripts/huge/mutations.py`), so
+a wrong rule would have failed the diff; the first run had five survivors, which exposed
+three gaps in the synthetic song (now filled) and two mutations that could never fail (now
+documented). Known gap: subpattern tables, M14c3. First ears-on candidate with no tables at
+all: `zilog_headbang_routine`.
+
+Found on the way, not an M14 issue: the editor's exporter writes `0x-4` for a duty
+instrument whose sweep time loads as -1 (`unreal_superhero2`), which no C compiler accepts —
+on the GB build either.
+
 ## Slice plan
 
 | Slice     | Scope                                                                                                                                                                         | Verify                                                                                                                      |
@@ -229,8 +268,8 @@ drum hits play their first tick but not their table until M14c3.
 | M14a      | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
 | M14b      | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
 | M14c1     | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                            |
-| **M14c2** | Effects: the 16 hUGE effects, most of which run on every tick, not just tick 0.                                                                                               | Extend the probe-and-reference diff to non-zero ticks, per effect.                                                          |
-| M14c3     | Subpattern tables (instrument tables, e.g. BattleTheme's noise instrument 1).                                                                                                 | The same diff, per table row.                                                                                               |
+| M14c2     | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                    |
+| **M14c3** | Subpattern tables (instrument tables, e.g. BattleTheme's noise instrument 1).                                                                                                 | The same diff, per table row.                                                                                               |
 | M14d      | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
 | M14e      | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
 | M14f      | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
