@@ -1,60 +1,65 @@
-"""Add the M14 note-write probe to a gbavm checkout - a THROWAWAY, never to be committed.
+"""Turn on the hUGE player's verification trace in a gbavm checkout - a THROWAWAY, never
+to be committed.
 
-Compiles one song into the engine, starts it at a given frame, and records every
-pulse-channel note write (frame, tick, order, row, channel, value) into an exported
-buffer that the GDB stub can dump. `git checkout -- src && rm src/probe_song.c` in the
-gbavm checkout reverts it.
+The player routes every PSG write that carries musical state through one helper, and
+logs it when HUGE_TRACE is defined (gbavm/src/huge_player.cpp). So this only has to:
+  1. define HUGE_TRACE at the top of huge_player.cpp,
+  2. compile one song into the engine (as src/probe_song.c), and
+  3. start it at a given frame from main.cpp.
+It deliberately does not reach into the player's internals, so it keeps working as the
+player grows.
+
+Revert with `add_probe.py <gbavm root> --revert`. That removes exactly the lines tagged
+`// PROBE` and the song file, and nothing else. Do NOT revert with `git checkout -- src`:
+that also throws away any uncommitted work on the player - which is how M14c1's first draft
+was lost (it was rebuilt from the session transcript).
 
 usage: add_probe.py <gbavm root> <song.gba.c> <song symbol> <play frame>
+       add_probe.py <gbavm root> --revert
   e.g. add_probe.py ../gbavm work/BattleTheme.gba.c song_Rulz_BattleTheme_Data 30
 
 See scripts/huge/README.md.
 """
 import io
+import os
 import shutil
 import sys
 
-root, song_c, symbol, frame = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
-root = root.rstrip("/\\") + "/"
+root = sys.argv[1].rstrip("/\\") + "/"
+
+if len(sys.argv) == 3 and sys.argv[2] == "--revert":
+    for name in ("src/huge_player.cpp", "src/main.cpp"):
+        p = root + name
+        s = io.open(p, encoding="utf-8").read()
+        kept = [line for line in s.split("\n") if "// PROBE" not in line]
+        io.open(p, "w", encoding="utf-8", newline="").write("\n".join(kept))
+    if os.path.exists(root + "src/probe_song.c"):
+        os.remove(root + "src/probe_song.c")
+    print("probe removed")
+    sys.exit(0)
+
+song_c, symbol, frame = sys.argv[2], sys.argv[3], int(sys.argv[4])
 
 shutil.copy(song_c, root + "src/probe_song.c")
 
 p = root + "src/huge_player.cpp"
 s = io.open(p, encoding="utf-8").read()
-s = s.replace(
-    "namespace\n{\n    // ---- GBA PSG registers",
-    """// ---- M14 PROBE (throwaway) ----
-extern "C" {
-struct huge_trace_t { uint16_t frame; uint16_t tick; uint8_t order; uint8_t row; uint8_t ch; uint8_t pad; uint16_t value; };
-huge_trace_t huge_trace[256];
-uint16_t huge_trace_n = 0;
-uint16_t huge_ticks = 0;
-}
-// ---- end probe ----
-
-namespace
-{
-    // ---- GBA PSG registers""", 1)
-s = s.replace(
-    "        reg(c == 0 ? SOUND1CNT_X : SOUND2CNT_H) = x;\n",
-    "        reg(c == 0 ? SOUND1CNT_X : SOUND2CNT_H) = x;\n"
-    "        if(huge_trace_n < 256) { huge_trace[huge_trace_n++] = "
-    "{ sys_time, huge_ticks, s.current_order, s.row, uint8_t(c), 0, x }; } // PROBE\n", 1)
-s = s.replace("        dosound();\n", "        dosound();\n        ++huge_ticks; // PROBE\n", 1)
-if s.count("PROBE") < 3:
-    sys.exit("huge_player.cpp did not match the probe anchors - has the player changed?")
+if "#define HUGE_TRACE" not in s:
+    s = "#define HUGE_TRACE 1 // PROBE\n" + s
 io.open(p, "w", encoding="utf-8", newline="").write(s)
 
+# Work in whole lines, and only ever ADD lines. Inserting mid-line would push part of an
+# existing line onto a `// PROBE` line, and --revert would then delete it (an early version
+# of this script ate main.cpp's include comment that way).
 p = root + "src/main.cpp"
-s = io.open(p, encoding="utf-8").read()
-s = s.replace(
-    '#include "huge_player.h" // M14: .uge music on the Game Boy PSG\n',
-    '#include "huge_player.h" // M14: .uge music on the Game Boy PSG\n'
-    f'extern "C" const hUGESong_t {symbol}; // PROBE\n', 1)
-s = s.replace(
-    "        huge_update();",
-    f"        if(sys_time == {frame}) huge_play(&{symbol}); // PROBE\n        huge_update();", 1)
-if s.count("PROBE") != 2:
-    sys.exit("main.cpp did not match the probe anchors")
-io.open(p, "w", encoding="utf-8", newline="").write(s)
-print("probe added - revert with: git checkout -- src && rm src/probe_song.c")
+lines = io.open(p, encoding="utf-8").read().split("\n")
+inc = next((i for i, l in enumerate(lines) if l.startswith('#include "huge_player.h"')), None)
+upd = next((i for i, l in enumerate(lines) if l.strip() == "huge_update();"
+            or l.strip().startswith("huge_update();")), None)
+if inc is None or upd is None:
+    sys.exit("main.cpp no longer includes huge_player.h / calls huge_update() - update this probe")
+indent = lines[upd][: len(lines[upd]) - len(lines[upd].lstrip())]
+lines.insert(upd, f"{indent}if(sys_time == {frame}) huge_play(&{symbol}); // PROBE")
+lines.insert(inc + 1, f'extern "C" const hUGESong_t {symbol}; // PROBE')
+io.open(p, "w", encoding="utf-8", newline="").write("\n".join(lines))
+print(f"probe added - revert with: add_probe.py {root} --revert")

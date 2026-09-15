@@ -41,7 +41,10 @@ scratch directory.
    python scripts/huge/gbaify.py <work>/BattleTheme.c <work>/BattleTheme.gba.c
    ```
 
-3. **Add the probe to the gbavm checkout** (never commit it).
+3. **Add the probe to the gbavm checkout** (never commit it). It only defines
+   `HUGE_TRACE` — which switches on the player's own compiled-out trace hook — compiles the
+   song in, and starts it at the given frame. It never splices code into the player, so it
+   keeps working as the player grows. **Commit your player changes before probing.**
 
    ```bash
    python scripts/huge/add_probe.py ../gbavm <work>/BattleTheme.gba.c song_Rulz_BattleTheme_Data 30
@@ -52,8 +55,12 @@ scratch directory.
    walk frames and print each of the `huge_trace_n` entries of `huge_trace` as one line:
 
    ```
-   T <frame> <tick> <order> <row> <channel> <value>
+   T <frame> <tick> <order> <row> <channel> <what> <value>
    ```
+
+   `what` is 1 sweep, 2 length/envelope, 3 note, 4 wave load (the value is then the wave
+   index). Only writes carrying musical state are traced — not routing mutes or DAC
+   toggles.
 
    Walk far enough to cross an order boundary (64 rows × the song's tempo, in ticks).
 
@@ -65,18 +72,36 @@ scratch directory.
    python scripts/huge/reference.py <work>/BattleTheme.gba.c <work>/trace.txt 31
    ```
 
-6. **Revert the probe:** `git checkout -- src && rm src/probe_song.c` in gbavm.
+6. **Revert the probe** — with the script, never with git:
+
+   ```bash
+   python scripts/huge/add_probe.py ../gbavm --revert
+   ```
+
+   That removes exactly the `// PROBE` lines and the song file. `git checkout -- src`
+   also throws away any uncommitted player work — which is how M14c1's first draft was
+   lost (and rebuilt from the session transcript).
+
+## Checking wave RAM
+
+The trace logs _which_ wave loaded, not whether its bytes landed — and a debugger cannot
+tell you: **mGBA's GDB stub reads wave RAM as zero and does not pass IO writes through**
+(writing `0xBEEF` there over GDB reads back `0`). So under `HUGE_TRACE` the player reads the
+bytes back through the emulated bus while their bank is still writable, into
+`huge_wave_readback[16]`, which GDB can read like any RAM. Compare it to the song's
+`waves[]`, and check `SOUND3CNT_L` reads `0x0080` (playing bank 0).
 
 ## Results so far
 
-| Slice | Song               | Tempo | Writes | Result                              |
-| ----- | ------------------ | ----- | ------ | ----------------------------------- |
-| M14b  | `Rulz_BattleTheme` | 3     | 56     | all match, across an order boundary |
-| M14b  | `Rulz_GonaSpace`   | 7     | 52     | all match, across an order boundary |
+| Slice | Song               | Tempo | Writes | Result                                                                 |
+| ----- | ------------------ | ----- | ------ | ---------------------------------------------------------------------- |
+| M14b  | `Rulz_BattleTheme` | 3     | 56     | all match, across an order boundary                                    |
+| M14b  | `Rulz_GonaSpace`   | 7     | 52     | all match, across an order boundary                                    |
+| M14c1 | `Rulz_BattleTheme` | 3     | 221    | all match — all 4 channels, every write type; wave readback byte-exact |
+| M14c1 | `Rulz_GonaSpace`   | 7     | 239    | all match — all 4 channels, every write type                           |
 
 ## Extending it
 
-M14b covers tick-0 note writes on the two pulse channels, so the reference predicts only
-those. As M14c adds effects and the wave/noise channels, the probe needs to record their
-writes too, and `reference.py` needs the matching rules — read from the asm again, not
-from whatever the C++ ended up doing.
+The reference now predicts every tick-0 write on all four channels. Effects (M14c2) and
+subpattern tables (M14c3) write on other ticks too; each needs its rule added to
+`reference.py` — read from the asm again, not from whatever the C++ ended up doing.
