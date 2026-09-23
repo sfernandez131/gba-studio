@@ -168,6 +168,10 @@ const MACRO_TO_OP: Record<string, number> = {
   // The masks are the editor's 10-bit KEY_BITS values (M8a added L/R at bits 8/9), so
   // the GBA operand is a u16 where GB packs a byte.
   VM_CONTEXT_PREPARE: 0x55,
+  // Music routines (M14e): VM_MUSIC_ROUTINE routine, bank, addr attaches a script to one
+  // of four music-event slots. The hUGE player's routine effect raises them; the engine
+  // runs slot `param & 3` with `param >> 4` as the argument, as gbvm's music_manager does.
+  VM_MUSIC_ROUTINE: 0x6b,
   VM_INPUT_ATTACH: 0x53,
   VM_INPUT_DETACH: 0x5f,
   VM_INPUT_WAIT: 0x52,
@@ -422,14 +426,6 @@ const SKIP_MACROS = new Set<string>([
   // feature that silently does nothing. Dropped with a note instead: text renders
   // left-to-right, and implementing RTL is engine work in its own right.
   "VM_SET_PRINT_DIR",
-  // Music routines (matrix slice G). VM_MUSIC_ROUTINE attaches a script to one of four
-  // music-event slots, but the events themselves come from hUGEDriver's routine effect
-  // in .uge PATTERN DATA - the tracker raises them, not the VM. gbavm plays .uge tracks
-  // on its hUGE player since M14d, which raises the routine effect, but nothing routes
-  // it to a script yet - that is M14e. Attaching a script to a callback that cannot fire
-  // would claim a feature that silently does nothing, so this drops with a note until
-  // then.
-  "VM_MUSIC_ROUTINE",
   // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
   // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,
   // so per-channel music muting is not needed - dropped.

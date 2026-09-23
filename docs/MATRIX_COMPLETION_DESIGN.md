@@ -158,3 +158,9 @@ nothing.
 The sentence this milestone was aiming at — _the stock `gbs2` sample builds and plays on
 GBA_ — is closer but not provable without exporting and running that sample end to end.
 That is worth doing on its own, and is not a bridging task.
+
+### Addendum (2026-09-23): `VM_MUSIC_ROUTINE` closed by M14e
+
+The music-callback gap slice G left open is closed: M14 ported the hUGE player, and M14e
+bridges `VM_MUSIC_ROUTINE` to it. The matrix is now **121/151 bridgeable (80%)**. See
+`docs/M14_MUSIC_DESIGN.md`.

@@ -26,7 +26,8 @@
 #      "If Device GBA" check, which must take its true path (matrix slice F),
 #   9. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
 #  10. opens a six-item Menu (count=6).
-# Throughout, the main scene plays a .uge track on the hUGE player (M14d).
+# Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
+# routine" effects run scripts attached with the Music Routine event (M14e).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -119,6 +120,10 @@ gdb-multiarch -batch \
   -ex "echo \n@NPC2\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH2\n" -ex "print script_memory[5]" \
   -ex "echo \n@HUGE2\n" -ex "print huge_ticks" \
+  -ex "echo \n@ROUTINE1\n" -ex "print script_memory[8]" \
+  -ex "echo \n@ROUTINE3\n" -ex "print script_memory[9]" \
+  -ex "echo \n@ROUTINE2\n" -ex "print script_memory[12]" \
+  -ex "echo \n@ROUTINE2PC\n" -ex "print/d vm_music_events[2].pc != 0" \
   -ex "echo \n@PRINTPATH\n" -ex "print script_memory[6]" \
   -ex "echo \n@ISGBA\n" -ex "print script_memory[7]" \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
@@ -268,4 +273,17 @@ HUGE2=$(val_after "@HUGE2" '^\$' | sed 's/.*= //')
 HUGE_DELTA=$(( HUGE2 - HUGE1 ))
 [ "$HUGE_DELTA" -eq 65 ] || [ "$HUGE_DELTA" -eq 66 ] || fail ".uge track ticked $HUGE_DELTA times in 61 frames, expected 65-66 (64 Hz)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz)"
+# Music routines (M14e). The fixture song (scripts/huge/make-routines-fixture.ts) raises
+# routine effects 0x21 twice and 0x13 twice in its first 15 rows, plus two on slot 0, which
+# has no script. The scene attaches counting scripts to routines 1, 3 and 2. gbvm runs slot
+# `param & 3`, so 0x21 must count on slot 1 and 0x13 on slot 3 - once or twice each, since
+# events raised while a choice/menu locks the VM wait in a 4-entry queue. Slot 2 has a script
+# attached but is never raised; a count there would mean the slot came from the high nibble.
+ROUTINE1=$(val_after "@ROUTINE1" '^\$' | sed 's/.*= //')
+ROUTINE3=$(val_after "@ROUTINE3" '^\$' | sed 's/.*= //')
+[ "${ROUTINE1:-0}" -ge 1 ] && [ "${ROUTINE1:-0}" -le 2 ] || fail "music routine 1 ran ${ROUTINE1:-?} times, expected 1-2"
+[ "${ROUTINE3:-0}" -ge 1 ] && [ "${ROUTINE3:-0}" -le 2 ] || fail "music routine 3 ran ${ROUTINE3:-?} times, expected 1-2"
+val_after "@ROUTINE2PC" '^\$' | grep -q "= 1$" || fail "music routine 2 has no script attached (VM_MUSIC_ROUTINE not bridged?)"
+val_after "@ROUTINE2" '^\$' | grep -q "= 0$" || fail "music routine 2 ran, but nothing raises it (slot taken from the wrong nibble?)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines)"

@@ -28,10 +28,70 @@
   "autoFadeSpeed": 1,
   "script": [
     {
+      "id": "b0000000-0000-4000-8000-00000000e010",
+      "command": "EVENT_SET_MUSIC_ROUTINE",
+      "args": {
+        "routine": 1,
+        "__scriptTabs": "trigger"
+      },
+      "symbol": "music_routine_1",
+      "children": {
+        "true": [
+          {
+            "id": "b0000000-0000-4000-8000-00000000e011",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "b0000000-0000-4000-8000-00000000e020",
+      "command": "EVENT_SET_MUSIC_ROUTINE",
+      "args": {
+        "routine": 3,
+        "__scriptTabs": "trigger"
+      },
+      "symbol": "music_routine_3",
+      "children": {
+        "true": [
+          {
+            "id": "b0000000-0000-4000-8000-00000000e021",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "9"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "b0000000-0000-4000-8000-00000000e030",
+      "command": "EVENT_SET_MUSIC_ROUTINE",
+      "args": {
+        "routine": 2,
+        "__scriptTabs": "trigger"
+      },
+      "symbol": "music_routine_2",
+      "children": {
+        "true": [
+          {
+            "id": "b0000000-0000-4000-8000-00000000e031",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "12"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "b0000000-0000-4000-8000-00000000d014",
       "command": "EVENT_MUSIC_PLAY",
       "args": {
-        "musicId": "c0febeef-0000-4000-8000-00000000d014"
+        "musicId": "c0febeef-0000-4000-8000-00000000e014"
       }
     },
     {

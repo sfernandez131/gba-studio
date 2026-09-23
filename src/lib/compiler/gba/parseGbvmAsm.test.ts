@@ -438,15 +438,16 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       expect(Array.from(bytes)).toEqual([0x67, 0x03, 0x10]);
     });
 
-    // The events these attach to come from hUGEDriver's routine effect in .uge pattern
-    // data. gbavm plays .uge tracks since M14d, but routing the effect to a script is
-    // M14e - until then nothing would ever fire.
-    test("VM_MUSIC_ROUTINE is dropped with a note rather than bridged", () => {
+    // M14e: the hUGE player raises these from a .uge's routine effect, so the attach is
+    // bridged now - to 0x6b, since gbvm's own 0x65 is CAMERA_SET_POS on gbavm.
+    test("bridges VM_MUSIC_ROUTINE to op 0x6b as routine, bank, script ptr", () => {
       const { items, skipped } = parseGbvmAsm(
-        "        VM_MUSIC_ROUTINE 0, ___bank_rtn, _rtn\n",
+        "        VM_MUSIC_ROUTINE 3, ___bank_rtn, _rtn\n",
       );
-      expect(items).toEqual([]);
-      expect(skipped[0]).toMatch(/^VM_MUSIC_ROUTINE/);
+      expect(skipped).toEqual([]);
+      expect(items).toEqual([
+        { kind: "op", op: 0x6b, operands: [3, 0, { label: "_rtn" }] },
+      ]);
     });
   });
 
