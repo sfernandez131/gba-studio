@@ -7,9 +7,10 @@
 // engine animations: idle/moving x Down/Right/Up/Left (left often a flipped
 // right). See shared/lib/sprites/helpers.ts.
 //
-// We assemble every engine animation's frames into a single canvasW x
-// (canvasH * frameCount) indexed image (frames stacked top-to-bottom) plus the
-// per-animation frame ranges. ejectGbaBuild turns the image into a Butano
+// We assemble every engine animation's frames into a single frameW x
+// (frameH * frameCount) indexed image (frames stacked top-to-bottom) plus the
+// per-animation frame ranges, where frameW x frameH is the GBA sprite shape the
+// GB canvas is centred in (gbaSpriteFrameSize). ejectGbaBuild turns the image into a Butano
 // sprite_item BMP (index 0 stays transparent, as GBA sprites require) and emits
 // the ranges so the engine can pick a frame by the actor's facing direction.
 
@@ -61,6 +62,52 @@ export interface SpriteSheet {
   // doesn't define reuses the default state's row, so switching to it is a
   // safe no-op (M10c).
   animRanges: AnimRange[];
+  // True when the GB canvas was larger than any GBA sprite and lost pixels
+  // (see gbaSpriteFrameSize).
+  cropped: boolean;
+}
+
+// The GBA's sprite (OBJ) shapes - the only frame sizes Butano accepts.
+const GBA_SPRITE_SIZES: [number, number][] = [
+  [8, 8],
+  [16, 16],
+  [32, 32],
+  [64, 64],
+  [16, 8],
+  [32, 8],
+  [32, 16],
+  [64, 32],
+  [8, 16],
+  [8, 32],
+  [16, 32],
+  [32, 64],
+];
+
+/**
+ * The GBA sprite shape a GB Studio canvas is drawn into.
+ *
+ * GB Studio canvases are any multiple of 8 (gbs2's elephant is 80x48); a GBA
+ * sprite is one of twelve fixed shapes, at most 64x64. The canvas goes into the
+ * smallest shape that holds it, CENTRED - the engine positions a sprite by its
+ * centre, so centring keeps the art where it was. A canvas wider or taller than
+ * 64 cannot fit any shape and is cropped (centred) to 64 on that axis; drawing
+ * it whole would take several sprites per actor, which the engine does not do.
+ */
+export function gbaSpriteFrameSize(
+  canvasWidth: number,
+  canvasHeight: number,
+): { width: number; height: number; cropped: boolean } {
+  const w = Math.min(canvasWidth, 64);
+  const h = Math.min(canvasHeight, 64);
+  let best: [number, number] = [64, 64];
+  for (const [sw, sh] of GBA_SPRITE_SIZES) {
+    if (sw >= w && sh >= h && sw * sh < best[0] * best[1]) best = [sw, sh];
+  }
+  return {
+    width: best[0],
+    height: best[1],
+    cropped: canvasWidth > 64 || canvasHeight > 64,
+  };
 }
 
 // Assemble one frame's canvasW x canvasH indexed image from its metasprite tiles.
@@ -97,16 +144,20 @@ export function dominantPaletteIndex(input: {
 const assembleFrame = (
   frame: SpriteFrame,
   src: IndexedImage,
-  fw: number,
+  canvasW: number, // the GB canvas the tile offsets are relative to
+  canvasH: number,
+  fw: number, // the GBA frame it is centred in (gbaSpriteFrameSize)
   fh: number,
   tileW: number,
   tileH: number,
   mirror: boolean, // whole-frame horizontal flip (left-facing from right)
 ): IndexedImage => {
   const out = makeIndexedImage(fw, fh);
+  const offX = (fw - canvasW) / 2;
+  const offY = (fh - canvasH) / 2;
   for (const tile of frame.tiles) {
     const flipX = tile.flipX !== mirror;
-    const baseX = mirror ? fw - tileW - tile.x : tile.x;
+    const baseX = offX + (mirror ? canvasW - tileW - tile.x : tile.x);
     for (let ty = 0; ty < tileH; ty++) {
       for (let tx = 0; tx < tileW; tx++) {
         const sx = tile.sliceX + tx;
@@ -114,7 +165,7 @@ const assembleFrame = (
         if (sx < 0 || sx >= src.width || sy < 0 || sy >= src.height) continue;
         const value = src.data[sy * src.width + sx];
         const dx = baseX + (flipX ? tileW - 1 - tx : tx);
-        const dy = tile.y + (tile.flipY ? tileH - 1 - ty : ty);
+        const dy = offY + tile.y + (tile.flipY ? tileH - 1 - ty : ty);
         if (dx >= 0 && dx < fw && dy >= 0 && dy < fh) {
           out.data[dy * fw + dx] = value;
         }
@@ -134,8 +185,13 @@ export function buildSpriteSheet(
   spriteMode: string,
   statesOrder: string[] = [""],
 ): SpriteSheet {
-  const fw = sprite.canvasWidth;
-  const fh = sprite.canvasHeight;
+  const canvasW = sprite.canvasWidth;
+  const canvasH = sprite.canvasHeight;
+  const {
+    width: fw,
+    height: fh,
+    cropped,
+  } = gbaSpriteFrameSize(canvasW, canvasH);
   const tileW = 8;
   const tileH = spriteMode === "8x16" ? 16 : 8;
 
@@ -161,7 +217,17 @@ export function buildSpriteSheet(
       } else {
         for (const frame of frameList) {
           frames.push(
-            assembleFrame(frame, src, fw, fh, tileW, tileH, !!(ea && ea.flip)),
+            assembleFrame(
+              frame,
+              src,
+              canvasW,
+              canvasH,
+              fw,
+              fh,
+              tileW,
+              tileH,
+              !!(ea && ea.flip),
+            ),
           );
         }
       }
@@ -204,5 +270,6 @@ export function buildSpriteSheet(
     frameHeight: fh,
     frameCount: frames.length,
     animRanges,
+    cropped,
   };
 }

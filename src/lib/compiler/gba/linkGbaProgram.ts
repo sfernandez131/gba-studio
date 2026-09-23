@@ -170,12 +170,22 @@ export function formatLinkedC(
   // Engine RAM variables scripts write via VM_SET_CONST_INT8/16. Allocated here as
   // 16-bit storage (covers both 8- and 16-bit writes); engine systems that consume
   // them extern these symbols.
+  //
+  // WEAK, because the engine already defines some of them itself - the platformer's
+  // fields live in hw.cpp (extern "C" plat_vel_y, plat_walk_vel...), and gbs2's
+  // turnips launch the player by writing plat_vel_y. A strong definition here is a
+  // duplicate-symbol link error; a weak one yields to the engine's, so the script
+  // writes the variable the engine actually reads. The write width comes from the
+  // RPN op (GB's declared width), not from this storage type.
   if (engineVars.length > 0) {
     out.push(
       "// Engine RAM variables (written by scripts; consumed by engine systems).",
+      "// Weak: an engine-owned definition of the same name takes precedence.",
     );
     for (const v of engineVars) {
-      out.push(`short ${v} = ${ENGINE_VAR_INITIALISERS[v] ?? 0};`);
+      out.push(
+        `__attribute__((weak)) short ${v} = ${ENGINE_VAR_INITIALISERS[v] ?? 0};`,
+      );
     }
     out.push("");
   }

@@ -201,7 +201,10 @@ describe("formatGbaProgramC", () => {
     ]);
     expect(prog.relocations.length).toBe(0);
     const c = formatGbaProgramC("test_prog", prog);
-    expect(c).toContain("unsigned char test_prog[] = {");
+    // EWRAM, not .data (IWRAM): a real project's scripts overflow the 32 KB IWRAM.
+    expect(c).toContain(
+      '__attribute__((section(".ewram"))) unsigned char test_prog[] = {',
+    );
     expect(c).toContain("const unsigned int test_prog_relocs_count = 0;");
     // Must not produce `..._relocs[] = {};` (a zero-size array, which fails to compile).
     expect(c).not.toMatch(/test_prog_relocs\[\]\s*=\s*\{\s*\};/);

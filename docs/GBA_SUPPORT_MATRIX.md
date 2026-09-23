@@ -77,6 +77,17 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 | `VM_SET_TEXT_SOUND` |
 | `VM_SWITCH_TEXT_LAYER` |
 
+## Native calls dropped with a warning
+
+`VM_CALL_NATIVE` is bridged, but these engine natives are not: the bridge drops the whole block their GB Studio event emits (the pushes, the call and the pop), logs it during eject, and fails the build if one is called in any other shape.
+
+| Native | Why |
+|---|---|
+| `_plat_callback_attach` | platformer state scripts are not supported on GBA yet |
+| `_plat_callback_detach` | platformer state scripts are not supported on GBA yet |
+| `_adv_callback_attach` | adventure state scripts are not supported on GBA yet |
+| `_adv_callback_detach` | adventure state scripts are not supported on GBA yet |
+
 ## Encoded directly
 
 One-to-one macro → gbavm opcode.
