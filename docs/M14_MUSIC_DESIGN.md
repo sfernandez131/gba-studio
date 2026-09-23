@@ -296,19 +296,60 @@ into rows that looked the same as its empty last row. Giving that last row a not
 the gap. No real song runs an effect from a table, so the synthetic song is the only
 coverage there.
 
+## M14d result (2026-09-23): `.uge` tracks play in games
+
+The eject compiles every `.uge` track into the engine, and the music ops reach the hUGE
+player (gbavm#83). A project's `.uge` music no longer gets the "skipping music" warning.
+
+- **The editor's own exporter, adapted for GCC.** `src/lib/compiler/gba/gbaHugeSong.ts`
+  runs `exportToC` - the C the GB build compiles - then strips the two SDCC-isms and pads
+  the instrument tables to 15 slots, as `scripts/huge/gbaify.py` did during verification.
+  Each song becomes one translation unit, `src/gba_song_<symbol>.c`. The track lookup gains
+  a third backend, `2` = hUGE, beside gbt-player and Maxmod.
+- **The music ops follow GBVM's `music_manager`**, not Butano's players:
+  - Playing the track that is already playing does nothing, so music carries on across
+    scenes that start the same track.
+  - `VM_MUSIC_SETPOS` is `hUGE_set_position`, which ignores the row, as GBVM does.
+  - `VM_SOUND_MASTERVOL` is a raw NR50 write that persists across songs. GBVM's sound cut
+    resets NR51 on every track change but never touches NR50.
+- **The bundled engine was still pinned before M14b**, so this is the first editor build that
+  contains the hUGE player at all.
+
+Verified:
+
+- **CI now covers it.** The runtime-test fixture (`examples/gba_actor_test`) plays
+  `Rulz_BattleTheme.uge` from its main scene, and `gba-runtime-test.sh` asserts that
+  `huge_ticks` advances 65-66 across its 61-frame walk. That is 64 Hz; ticking once per
+  frame would give 61. The assert fails on both "not playing" and "per-frame ticking". My
+  first version expected 64-65 for a walk I had counted as 60 frames, and the run said 66.
+  `ignore 9 60` stops on the 61st crossing.
+- **The ejected song matches the reference end to end.** A traced build of that fixture
+  produced 3,374 register writes across all four orders, compared against the C exactly as
+  the eject wrote it. All match.
+
+**Not verified: the stock `gbs2` sample**, which this slice's plan named. It does not build
+for the GBA at all, for a reason unrelated to music: its scripts reference the platformer
+knockback callback `_plat_callback_PLATFORM_KNOCKBACK_INIT`, which the GBA linker does not
+know. That is a separate gap, recorded for follow-up. All 12 of its songs were verified
+through the player in M14c3.
+
+Known difference: a GB project whose music driver is hUGE plays its `.mod` tracks through
+hUGE, converted with `convertMODDataToUGESong`. On the GBA, `.mod` tracks still go to
+gbt-player or Maxmod, per track, as before M14.
+
 ## Slice plan
 
-| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                      |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
-| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
-| M14c1    | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                            |
-| M14c2    | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                    |
-| M14c3    | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                         |
-| **M14d** | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
-| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
-| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
-| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
+| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                                                                              |
+| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB).                                                 |
+| M14c1    | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                                                                            |
+| M14c2    | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                                                                    |
+| M14c3    | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                                                                         |
+| M14d     | **Done (2026-09-23), gbavm#83.** `.uge` tracks eject and play; see "M14d result" above.                                                                                       | CI asserts a fixture's `.uge` plays at 64 Hz; the ejected song's trace matches (3,374 writes). The stock gbs2 sample does not build for GBA (unrelated knockback callback). |
+| **M14e** | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                                                                          |
+| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                                                                              |
+| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                                                                           |
 
 ## Verification
 
