@@ -12,19 +12,26 @@ written with the write-only bits reading as 1. Two pseudo-registers stand for ev
 are not one byte: 0x30 a wave loaded into wave RAM (value = wave index), and 0x40 a "call
 routine" (value = channel << 8 | param).
 
-Covers: tick 0 on all four channels (M14b, M14c1) and all 16 effects on every tick (M14c2).
-Not yet: subpattern tables (M14c3) - the reference and the player both skip do_table, so a
-song with tables still diffs cleanly, it just is not the whole song.
+Covers the whole driver: tick 0 on all four channels (M14b, M14c1), all 16 effects on every
+tick (M14c2), and instrument subpattern tables, including effects run from a table (M14c3).
+
+Effects run from a table enter their routine one byte past its start (do_effect's
+.no_set_offset). What that does depends on each routine's first instruction, so the model
+below tracks it per routine. For toneporta and note delay the skipped byte is the opcode of
+a two-byte `jr z`, and the CPU then executes the jump's OPERAND as an instruction; those
+operands (0x55 `ld d, l` and 0xBD `cp l`) were read from GBVM's assembled
+lib/hUGEDriver.lib, and neither changes anything the next instruction does not overwrite.
 
 What this independently checks: DN() decoding, instruments, the note table, the noise
 polynomial, wave switching, each effect's arithmetic and timing, row/order advance, breaks
 and jumps, and the tick accumulator. What it cannot check: whether I read the driver's rules
 right - both implementations share that reading. That is what an ears-on listen is for.
 
-Two things are GBA-side decisions, not driver rules, and both implementations make them the
-same way: a note past the end of the note table plays the top note (the GB would read
-whatever ROM follows the table), and an out-of-range break row, jump order, or wave index
-is held in range (the GB would read past the pattern, order table, or waves).
+Some things are GBA-side decisions, not driver rules, and both implementations make them the
+same way. Where the GB would read past a table: a note past the top of the note table plays
+the top note, and one below the bottom (a subpattern offset, wrapped) the bottom note; an
+out-of-range break row, jump order, or wave index is held in range; and a subpattern row
+past the 32 the exporter writes reads as empty.
 
 usage: reference.py <song.gba.c> <trace.bin> <first-write frame>
 """
@@ -36,6 +43,7 @@ song_c, trace_bin, takeover_frame = sys.argv[1], sys.argv[2], int(sys.argv[3])
 
 LAST_NOTE = 72
 NO_WAVE = 100
+NO_NOTE = 90
 PATTERN_LENGTH = 64
 TRACE_WAVE, TRACE_ROUTINE = 0x30, 0x40
 
@@ -85,7 +93,10 @@ def get_note_poly(a):
 
 
 def get_note_period(a):
-    return NOTE_TABLE[min(a, LAST_NOTE - 1)]   # past the table: GBA-side decision (see top)
+    i = ((a * 2) & 0xFF) // 2                   # add a / add LOW(note_table): index a mod 128
+    if i < LAST_NOTE:
+        return NOTE_TABLE[i]
+    return NOTE_TABLE[LAST_NOTE - 1] if a < 128 else NOTE_TABLE[0]   # GBA-side decision (top)
 
 
 # ---- parse the song -------------------------------------------------------------------
@@ -102,6 +113,22 @@ for m in re.finditer(r"static const unsigned char (song_pattern_\d+)\[\] = \{(.*
                       eff & 0xFF))
     patterns[m.group(1)] = cells
 
+TABLE_LENGTH = 32
+tables = {}
+for m in re.finditer(r"static const unsigned char (subpattern_\d+)\[\] = \{(.*?)\};", text, re.S):
+    rows = []
+    for dn in re.finditer(r"DN\((\w+), (\d+), 0x([0-9A-F]+)\)", m.group(2)):
+        note = 90 if dn.group(1) == "___" else int(dn.group(1))
+        jump, eff = int(dn.group(2)), int(dn.group(3), 16)
+        rows.append((note | ((jump & 0x10) << 3), ((jump << 4) & 0xFF) | (eff >> 8), eff & 0xFF))
+    assert len(rows) == TABLE_LENGTH, m.group(1)
+    tables[m.group(1)] = rows
+
+
+def table_ref(name):
+    return None if name == "0" else name
+
+
 orders = {int(m.group(1)): [x.strip() for x in m.group(2).split(",")]
           for m in re.finditer(r"order(\d)\[\] = \{(.*?)\};", text)}
 
@@ -110,12 +137,12 @@ def block(name):
     return re.search(name + r"\[\] = \{(.*?)\};", text, re.S).group(1)
 
 
-duty = [dict(sweep=int(a, 16), len_duty=int(b, 16), env=int(c, 16), highmask=int(e, 16))
-        for a, b, c, _d, e in re.findall(rf"\{{ {H}, {H}, {H}, (\w+), {H} \}}", block("duty_instruments"))]
-wave = [dict(length=int(a, 16), volume=int(b, 16), waveform=int(c, 16), highmask=int(e, 16))
-        for a, b, c, _d, e in re.findall(rf"\{{ {H}, {H}, {H}, (\w+), {H} \}}", block("wave_instruments"))]
-noise = [dict(env=int(a, 16), highmask=int(c, 16))
-         for a, _b, c in re.findall(rf"\{{ {H}, (\w+), {H}, 0, 0 \}}", block("noise_instruments"))]
+duty = [dict(sweep=int(a, 16), len_duty=int(b, 16), env=int(c, 16), table=table_ref(d), highmask=int(e, 16))
+        for a, b, c, d, e in re.findall(rf"\{{ {H}, {H}, {H}, (\w+), {H} \}}", block("duty_instruments"))]
+wave = [dict(length=int(a, 16), volume=int(b, 16), waveform=int(c, 16), table=table_ref(d), highmask=int(e, 16))
+        for a, b, c, d, e in re.findall(rf"\{{ {H}, {H}, {H}, (\w+), {H} \}}", block("wave_instruments"))]
+noise = [dict(env=int(a, 16), table=table_ref(b), highmask=int(c, 16))
+         for a, b, c in re.findall(rf"\{{ {H}, (\w+), {H}, 0, 0 \}}", block("noise_instruments"))]
 
 tempo = int(re.search(r"_Data = \{\s*(\d+),", text).group(1))
 order_cnt = int(re.search(r"order_cnt = (\d+);", text).group(1))   # in words, as the GB keeps it
@@ -132,8 +159,12 @@ channel_period = [0, 0, 0, 0]
 toneporta_target = [0, 0, 0, 0]
 channel_note = [0, 0, 0, 0]
 highmask = [0, 0, 0, 0]
+table = [None, None, None, None]     # tableN: which subpattern, or none
+table_row = [0, 0, 0, 0]
 out = []   # (reg, value) writes for the current tick
 fx_rows = {}   # effect code -> rows it ran on, for the coverage line
+table_fx = {}  # effect code -> times a table ran it
+table_ticks = 0
 
 
 def ldh(reg, value):
@@ -203,15 +234,19 @@ def mute_bit_clear(b):
 
 
 # ---- the effects, each as the asm does it ----------------------------------------------
-def do_effect(b_fx, c, e, zf):
-    """Returns False for ret_dont_play_note."""
+def do_effect(b_fx, c, e, zf, d=0):
+    """Returns False for ret_dont_play_note. d=1 is .no_set_offset (from do_table): `inc hl`
+    enters the routine one byte in, so its first instruction - `first` below - never runs."""
     global ticks_per_row, row_break, next_order
     if (b_fx & 0x0F) | c == 0:
         return True
     code = b_fx & 0x0F
     a = tick
     b = e
-    if zf:
+    first = d == 0
+    if d:
+        table_fx[code] = table_fx.get(code, 0) + 1
+    elif zf:
         fx_rows[code] = fx_rows.get(code, 0) + 1
 
     if code == 0x0:                                     # fx_arpeggio: nop
@@ -227,13 +262,13 @@ def do_effect(b_fx, c, e, zf):
             a = d                                       # .reset_arp
         update_channel_freq(b, get_note_period(a))
     elif code == 0x1:                                   # fx_porta_up: ret z
-        if not zf:
+        if not (first and zf):
             update_channel_freq(b, (channel_period[b] + c) & 0xFFFF)
     elif code == 0x2:                                   # fx_porta_down: ret z
-        if not zf:
+        if not (first and zf):
             update_channel_freq(b, (channel_period[b] - c) & 0xFFFF)
-    elif code == 0x3:                                   # fx_toneporta
-        if zf:                                          # .setup
+    elif code == 0x3:                                   # fx_toneporta: jr z, .setup (28 55)
+        if first and zf:                                # .setup; skipped: `ld d, l`, then d reloaded
             toneporta_target[b] = get_note_period(channel_note[b])
             return False                                # ret_dont_play_note
         de, hl = channel_period[b], toneporta_target[b]
@@ -250,26 +285,27 @@ def do_effect(b_fx, c, e, zf):
         highmask[b] &= 0x7F
         update_channel_freq(b, de, h)
     elif code == 0x4:                                   # fx_vibrato: ret z
-        if not zf:
+        if not (first and zf):
             hl = get_note_period(channel_note[b])
             if counter & (c >> 4) == 0:
                 hl = (hl + (c & 0x0F)) & 0xFFFF         # .go_up
             update_channel_freq(b, hl)
     elif code == 0x5:                                   # fx_set_master_volume: ret nz
-        if zf:
+        if zf or not first:
             ldh(rAUDVOL, c)
     elif code == 0x6:                                   # fx_call_routine: nop
         out.append((TRACE_ROUTINE, (b << 8) | c))
-    elif code == 0x7:                                   # fx_note_delay
-        if zf:
-            return False
+    elif code == 0x7:                                   # fx_note_delay: jr z (28 BD)
+        if first and zf:
+            return False                                # ret_dont_play_note
+        # skipped: `cp l`, whose flags the `cp c` below replaces
         if a == c:
             play_chN_note(b)
     elif code == 0x8:                                   # fx_set_pan: ret nz
-        if zf:
+        if zf or not first:
             ldh(rAUDTERM, c)
     elif code == 0x9:                                   # fx_set_duty: ret nz
-        if zf and not retMute(b):
+        if (zf or not first) and not retMute(b):
             if b == 0:
                 ldh(rAUD1LEN, c)
             elif b == 1:
@@ -280,7 +316,7 @@ def do_effect(b_fx, c, e, zf):
                 update_ch3_waveform(c)
                 play_chN_note(2)
     elif code == 0xA:                                   # fx_vol_slide: ret nz
-        if zf and mute_bit_clear(b):
+        if (zf or not first) and mute_bit_clear(b):
             d, e_up = c & 0x0F, swap(c & 0xF0)
             reg = rAUD1ENV + 5 * b
             a = swap(ldh_read(reg) & 0xF0)
@@ -292,12 +328,12 @@ def do_effect(b_fx, c, e, zf):
             ldh(reg + 2, ldh_read(reg + 2) | 0x80)
             play_chN_note(b)
     elif code == 0xB:                                   # fx_pos_jump: ret nz
-        if zf:
-            if row_break == 0:
+        if zf or not first:
+            if (a | row_break) == 0:                    # or [hl], with A = the tick
                 row_break = 1
             next_order = c
     elif code == 0xC:                                   # fx_set_volume: ret nz
-        if zf and not retMute(b):
+        if (zf or not first) and not retMute(b):
             c = swap(c)
             if b < 2:
                 reg = rAUD1ENV + 5 * b
@@ -317,17 +353,45 @@ def do_effect(b_fx, c, e, zf):
                 ldh(rAUD4ENV, c)
                 play_chN_note(3)
     elif code == 0xD:                                   # fx_pattern_break: ret nz
-        if zf:
+        if zf or not first:
             row_break = c
     elif code == 0xE:                                   # fx_note_cut: cp c / ret nz
-        if a == c and mute_bit_clear(b):
+        z = (a == c) if first else zf                   # skipped `cp c`: Z is still `or a`'s
+        if z and mute_bit_clear(b):
             ldh(rAUD1ENV + 5 * b, 0)
             if b != 2:
                 ldh(rAUD1HIGH + 5 * b, 0xFF)
     else:                                               # fx_set_speed: ret nz
-        if zf:
+        if zf or not first:
             ticks_per_row = c
     return True
+
+
+# ---- do_table ---------------------------------------------------------------------------
+def do_table(e):
+    global table_ticks
+    table_ticks += 1
+    a = table_row[e]                                    # ld a, [hl]
+    table_row[e] = (a + 1) & 0xFF                       # inc [hl]
+    rows = tables[table[e]]
+    a, b, c = rows[a] if a < TABLE_LENGTH else (NO_NOTE, 0, 0)   # past the end: GBA-side decision
+    d = a
+    a = b & 0xF0
+    if d & 0x80:                                        # bit 7, d
+        d &= 0x7F                                       # res 7, d
+        a |= 1                                          # set 0, a
+    a = swap(a)
+    if a:                                               # jr z, .no_jump
+        table_row[e] = (a - 1) & 0xFF
+    if d != NO_NOTE:                                    # cp NO_NOTE
+        a = (d - 36) & 0xFF                             # sub 36
+        a = (a + channel_note[e]) & 0xFF                # add [hl]: channel_noteN
+        h = highmask[e] & 0x7F                          # ld h, c / res 7, h
+        if e == 3:
+            update_channel_freq(3, a, h)                # .is_ch4: E is the note
+        else:
+            update_channel_freq(e, get_note_period(a), h)
+    do_effect(b, c, e, tick == 0, d=1)                  # ld d, 1 / jr do_effect.no_set_offset
 
 
 # ---- hUGE_dosound -----------------------------------------------------------------------
@@ -353,6 +417,7 @@ def tick_zero_channel(ch):
                     pass                                # `inc hl`: CH2 skips the sweep byte
                 ldh(rAUD1LEN + 5 * ch, ins["len_duty"])
                 ldh(rAUD1ENV + 5 * ch, ins["env"])
+                table[ch], table_row[ch] = ins["table"], 0
                 highmask[ch] = ins["highmask"]
             elif ch == 2:
                 ins = wave[iid - 1]
@@ -360,10 +425,12 @@ def tick_zero_channel(ch):
                 ldh(rAUD3LEVEL, ins["volume"])
                 if ins["waveform"] != current_wave:     # cp [hl]
                     update_ch3_waveform(ins["waveform"])
+                table[2], table_row[2] = ins["table"], 0
                 highmask[2] = ins["highmask"]
             else:
                 ins = noise[iid - 1]
                 ldh(rAUD4ENV, ins["env"])
+                table[3], table_row[3] = ins["table"], 0
                 ldh(rAUD4LEN, ins["highmask"] & 0b00111111)
                 step_width4 = swap(ins["highmask"] & 0b10000000)
                 channel_period[3] = (channel_period[3] & 0xFF00) | ((channel_period[3] & 0xFF) | step_width4)
@@ -372,16 +439,18 @@ def tick_zero_channel(ch):
         carry = False
     if carry:
         play_chN_note(ch)                               # call c, play_chN_note
+    if table[ch]:
+        do_table(ch)                                    # call nz, do_table
 
 
 def process_effects():
     for ch in range(4):
-        if retMute(ch):                                 # checkMute N, .after_effectN
-            continue
-        _a, b_fx, c = get_current_row(ch)
-        if c == 0:                                      # ld a, c / or a / jr z
-            continue
-        do_effect(b_fx, c, ch, False)
+        if not retMute(ch):                             # checkMute N, .after_effectN
+            _a, b_fx, c = get_current_row(ch)
+            if c != 0:                                  # ld a, c / or a / jr z
+                do_effect(b_fx, c, ch, False)
+        if table[ch]:                                   # .after_effectN: tables run regardless
+            do_table(ch)
 
 
 def tick_time():
@@ -455,6 +524,8 @@ for f, t, o, r, reg, v in trace:
 print(f"song: tempo={tempo} orders={order_cnt // 2}")
 print(f"compared {len(trace)} writes (frame, tick, order, row, register, value) over "
       f"{last[1] + 1} ticks; orders reached: {orders_seen}")
+print(f"  tables: {len(tables)} defined, {table_ticks} table rows run; effects from tables: "
+      + (", ".join(f"{c:X}={n}" for c, n in sorted(table_fx.items())) or "none"))
 print("  effects, by rows run: " + (", ".join(f"{c:X}={n}" for c, n in sorted(fx_rows.items())) or "none"))
 print("  by register: " + ", ".join(f"{reg:02X}={n}" for reg, n in sorted(kinds.items())))
 if mismatches:
