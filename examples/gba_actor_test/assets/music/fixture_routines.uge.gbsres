@@ -1,0 +1,9 @@
+{
+  "_resourceType": "music",
+  "id": "c0febeef-0000-4000-8000-00000000e014",
+  "name": "fixture_routines",
+  "symbol": "song_fixture_routines",
+  "settings": {},
+  "filename": "fixture_routines.uge",
+  "type": "uge"
+}

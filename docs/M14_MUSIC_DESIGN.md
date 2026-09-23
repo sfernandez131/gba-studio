@@ -337,6 +337,46 @@ Known difference: a GB project whose music driver is hUGE plays its `.mod` track
 hUGE, converted with `convertMODDataToUGESong`. On the GBA, `.mod` tracks still go to
 gbt-player or Maxmod, per track, as before M14.
 
+## M14e result (2026-09-23): music routines
+
+A `.uge` song's "call routine" effect now runs the scripts attached with the Music Routine
+event (gbavm#84). This closes the gap matrix slice G left: `VM_MUSIC_ROUTINE` is bridged, and
+the matrix moves to 121/151 bridgeable (80%).
+
+The port follows gbvm's `music_manager.c`:
+
+- **Raising.** The routine callback queues the effect param on tick 0 only, into a 4-entry
+  ring where the newest overwrites the oldest.
+- **Running.** Each frame, while the VM is not locked, slot `param & 3` runs with
+  `param >> 4` as its one argument, if its previous run has finished.
+- **An empty slot.** A slot with no script consumes its event and ends that frame's drain.
+
+It is a new gbavm opcode, 0x6B, because gbvm's own 0x65 is `CAMERA_SET_POS` on gbavm.
+
+- **The operand length had to be added too.** gbavm steps the VM with an operand-length
+  table, `vm_args_len`, and my first build left 0x6B out of it. The VM then ran the
+  operand bytes as opcodes, and the fixture's scene script died before its first event.
+  The runtime test caught that: the run hung waiting for the first breakpoint.
+
+Verified:
+
+- **CI asserts the mapping.** The fixture now plays `fixture_routines.uge`, which is
+  BattleTheme with routine effects added (`scripts/huge/make-routines-fixture.ts`):
+  - `0x21` (slot 1), `0x13` (slot 3), and two raises on slot 0, which has no script.
+  - The scene attaches counters to slots 1, 3 and 2. Slots 1 and 3 must count and slot 2
+    must not. A port that took the slot from the high nibble would count on slot 2.
+  - Both counts are 1, not 2. Six routines are raised while a Choice dialog locks the VM,
+    and the ring keeps only the last three: `0x21`, `0x13`, `0x00`. Those run slot 1, then
+    slot 3, then reach the unscripted slot 0.
+- **The script arguments were checked once, by probe.** A temporary probe line recorded
+  each dispatch's argument: 2 for slot 1 and 1 for slot 3 (`param >> 4`). It has been
+  reverted.
+
+Found on the way, not a product issue: two sessions on this machine share mGBA's GDB stub
+port. The concurrent gbs2 task's builds also shared `%TEMP%/_gbsbuild` with mine, and my
+`Stop-Process mGBA` killed its emulator. Verification now builds in its own temp directory,
+starts and stops only its own mGBA, and waits for the port to be idle.
+
 ## Slice plan
 
 | Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                                                                      |
@@ -347,8 +387,8 @@ gbt-player or Maxmod, per track, as before M14.
 | M14c2    | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                                                                    |
 | M14c3    | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                                                                         |
 | M14d     | **Done (2026-09-23), gbavm#83.** `.uge` tracks eject and play; see "M14d result" above.                                                                                       | CI asserts a fixture's `.uge` plays at 64 Hz; the ejected song's trace matches (3,374 writes). The stock gbs2 sample does not build for GBA (unrelated knockback callback). |
-| **M14e** | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                                                                          |
-| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                                                                              |
+| M14e     | **Done (2026-09-23), gbavm#84.** Music routines; see "M14e result" above.                                                                                                     | CI asserts slots 1 and 3 run and slot 2 does not; a probe confirmed the arguments.                                                                                          |
+| **M14f** | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                                                                              |
 | —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                                                                           |
 
 ## Verification

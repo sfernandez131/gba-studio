@@ -143,6 +143,7 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   // (resolved like BEGINTHREAD). The masks are u16 because the editor's KEY_BITS
   // carry the GBA-only L/R at bits 8/9; ATTACH's slot packs .OVERRIDE_DEFAULT (0x80).
   0x55: ["u8", "u8", "ptr"], // CONTEXT_PREPARE slot, bank, addr
+  0x6b: ["u8", "u8", "ptr"], // MUSIC_ROUTINE routine, bank, addr (M14e; gbvm's 0x65 is CAMERA_SET_POS here)
   0x53: ["u16", "u8"], // INPUT_ATTACH mask, slot
   0x5f: ["u16"], // INPUT_DETACH mask
   0x52: ["u16"], // INPUT_WAIT mask
