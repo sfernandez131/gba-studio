@@ -439,7 +439,8 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
 
     // The events these attach to come from hUGEDriver's routine effect in .uge pattern
-    // data, and gbavm cannot play .uge tracks at all yet - so nothing would ever fire.
+    // data. gbavm plays .uge tracks since M14d, but routing the effect to a script is
+    // M14e - until then nothing would ever fire.
     test("VM_MUSIC_ROUTINE is dropped with a note rather than bridged", () => {
       const { items, skipped } = parseGbvmAsm(
         "        VM_MUSIC_ROUTINE 0, ___bank_rtn, _rtn\n",

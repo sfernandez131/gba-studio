@@ -232,8 +232,8 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
   VM_FADE_OUT: () => [{ kind: "op", op: 0x57, operands: [0x00] }],
   // Music (M5a): VM_MUSIC_PLAY <bank>, <_<sym>_Data>, <loop> -> op 0x60 [track, loop];
   // the track symbol resolves to the emitted DMG track index via dataSymbols (the bank
-  // operand is dropped - GBA is flat). Drop the op if the track isn't emitted (e.g. an
-  // unsupported .uge track) so the project still builds. VM_MUSIC_STOP -> op 0x61.
+  // operand is dropped - GBA is flat). Drop the op if the track isn't emitted (e.g. a
+  // track the eject could not read) so the project still builds. VM_MUSIC_STOP -> op 0x61.
   VM_MUSIC_PLAY: (a, ev) => {
     let track: number;
     try {
@@ -424,11 +424,11 @@ const SKIP_MACROS = new Set<string>([
   "VM_SET_PRINT_DIR",
   // Music routines (matrix slice G). VM_MUSIC_ROUTINE attaches a script to one of four
   // music-event slots, but the events themselves come from hUGEDriver's routine effect
-  // in .uge PATTERN DATA - the tracker raises them, not the VM. gbavm plays DMG music
-  // through Butano's player and cannot play .uge tracks at all yet (the eject skips
-  // them; that is M14), so there is no source for these events. Attaching a script to a
-  // callback that can never fire would claim a feature that silently does nothing, so
-  // this drops with a note until M14 gives it something to listen to.
+  // in .uge PATTERN DATA - the tracker raises them, not the VM. gbavm plays .uge tracks
+  // on its hUGE player since M14d, which raises the routine effect, but nothing routes
+  // it to a script yet - that is M14e. Attaching a script to a callback that cannot fire
+  // would claim a feature that silently does nothing, so this drops with a note until
+  // then.
   "VM_MUSIC_ROUTINE",
   // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
   // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,

@@ -26,6 +26,7 @@
 #      "If Device GBA" check, which must take its true path (matrix slice F),
 #   9. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
 #  10. opens a six-item Menu (count=6).
+# Throughout, the main scene plays a .uge track on the hUGE player (M14d).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -112,10 +113,12 @@ gdb-multiarch -batch \
   -ex "echo \n@GETFRAME\n" -ex "print script_memory[3]" \
   -ex "echo \n@NPC1\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH1\n" -ex "print script_memory[5]" \
+  -ex "echo \n@HUGE1\n" -ex "print huge_ticks" \
   -ex "ignore 9 60" \
   -ex "continue" \
   -ex "echo \n@NPC2\n" -ex "print script_memory[4]" \
   -ex "echo \n@WATCH2\n" -ex "print script_memory[5]" \
+  -ex "echo \n@HUGE2\n" -ex "print huge_ticks" \
   -ex "echo \n@PRINTPATH\n" -ex "print script_memory[6]" \
   -ex "echo \n@ISGBA\n" -ex "print script_memory[7]" \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
@@ -252,4 +255,17 @@ val_after "@PRINTPATH" '^\$' | grep -q "= 42$" || fail "Print event did not take
 # ...and _is_GBA must read 1, or every "If Device GBA" branch silently inverts.
 val_after "@ISGBA" '^\$' | grep -q "= 1$" || fail "If Device GBA took the false path (_is_GBA != 1)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks)"
+# .uge music (M14d). The scene starts a .uge track, which the eject compiles into the
+# engine and VM_MUSIC_PLAY routes to the hUGE player. Between @HUGE1 and @HUGE2 is exactly
+# 61 frames (both stops are on hw_render, and `ignore 9 60` skips 60 then stops on the
+# 61st). At GB Studio's 64 Hz that is 61 * 64 / 59.7275 = 65.4 driver ticks - 65 or 66 by
+# accumulator phase - where ticking once per frame would give 61. So this proves the track
+# is playing AND at the right speed.
+HUGE1=$(val_after "@HUGE1" '^\$' | sed 's/.*= //')
+HUGE2=$(val_after "@HUGE2" '^\$' | sed 's/.*= //')
+[ -n "$HUGE1" ] && [ -n "$HUGE2" ] || fail "could not read huge_ticks (is the .uge track playing?)"
+[ "$HUGE1" -gt 0 ] || fail ".uge track not playing (huge_ticks = $HUGE1)"
+HUGE_DELTA=$(( HUGE2 - HUGE1 ))
+[ "$HUGE_DELTA" -eq 65 ] || [ "$HUGE_DELTA" -eq 66 ] || fail ".uge track ticked $HUGE_DELTA times in 61 frames, expected 65-66 (64 Hz)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz)"
