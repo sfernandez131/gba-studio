@@ -451,6 +451,50 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // Sound effects and music muting (M14f).
+  describe("sound effects (M14f)", () => {
+    const PSG = 0x100; // PSG_SFX_FLAG, as the eject registers a PSG effect's index
+
+    test("a .wav sound stays on op 0x66, dropping mask and priority", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_SFX_PLAY ___bank_sound_beep, _sound_beep, ___mute_mask_sound_beep, .SFX_PRIORITY_NORMAL\n",
+        { dataSymbols: { ["_sound_beep"]: 2 } },
+      );
+      expect(items).toEqual([{ kind: "op", op: 0x66, operands: [2] }]);
+    });
+
+    test("a PSG effect goes to op 0x6c with its index, mute mask and priority", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_SFX_PLAY ___bank_sound_fx_03, _sound_fx_03, ___mute_mask_sound_fx_03, .SFX_PRIORITY_HIGH\n",
+        {
+          dataSymbols: {
+            ["_sound_fx_03"]: 3 | PSG,
+            ["___mute_mask_sound_fx_03"]: 0x0a,
+          },
+        },
+      );
+      expect(items).toEqual([{ kind: "op", op: 0x6c, operands: [3, 0x0a, 8] }]);
+      const { bytes } = emitGbaBytecode(items);
+      expect(Array.from(bytes)).toEqual([0x6c, 0x03, 0x0a, 0x08]);
+    });
+
+    test("an unresolved sound is dropped, so the project still builds", () => {
+      const { items } = parseGbvmAsm(
+        "        VM_SFX_PLAY ___bank_sound_gone, _sound_gone, ___mute_mask_sound_gone, .SFX_PRIORITY_NORMAL\n",
+      );
+      expect(items).toEqual([]);
+    });
+
+    test("VM_MUSIC_MUTE keeps gbvm's 0x62 and evaluates the editor's mask expression", () => {
+      // What musicSetMuteMask emits for "duty 1 and noise active": 0x0F & 0x0E & 0x07.
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_MUSIC_MUTE ^/(0x0F & 0x0E & 0x07)/\n",
+      );
+      expect(skipped).toEqual([]);
+      expect(items).toEqual([{ kind: "op", op: 0x62, operands: [0x06] }]);
+    });
+  });
+
   // Overlay window family (matrix slice F2).
   describe("overlay window (slice F2)", () => {
     test("VM_OVERLAY_SETPOS becomes an instant OVERLAY_MOVE_TO", () => {

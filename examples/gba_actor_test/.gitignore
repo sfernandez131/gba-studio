@@ -3,6 +3,8 @@ cache/
 
 *.bak
 *.sav
+# ...except FX Hammer sound banks, which use the same extension (M14f)
+!assets/sounds/*.sav
 *.icloud
 
 user_settings.gbsres

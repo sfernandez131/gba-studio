@@ -100,6 +100,8 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x60: ["u8", "u8"], // MUSIC_PLAY track, loop (M5a)
   0x61: [], // MUSIC_STOP (M5a)
   0x66: ["u8"], // SFX_PLAY sfx index (M5b)
+  0x6c: ["u8", "u8", "u8"], // SFX_PLAY for a PSG effect: index, mute mask, priority (M14f)
+  0x62: ["u8"], // MUSIC_MUTE channel mask (M14f; gbvm's own number)
   0x63: ["u8"], // SOUND_MASTERVOL vol (M5c)
   0x67: ["u8", "u8"], // MUSIC_SETPOS pattern, row (slice G)
   // SRAM save (M6a). SAVE_PEEK macro args are RES, DEST, SOUR, COUNT, SLOT.

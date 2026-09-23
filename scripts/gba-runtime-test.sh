@@ -27,7 +27,8 @@
 #   9. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
 #  10. opens a six-item Menu (count=6).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
-# routine" effects run scripts attached with the Music Routine event (M14e).
+# routine" effects run scripts attached with the Music Routine event (M14e); and it plays
+# an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
 # Selections are forced with GDB `return` (no key injection over the stub); the
 # results must land in script_memory[0] and [1].
 #
@@ -124,6 +125,8 @@ gdb-multiarch -batch \
   -ex "echo \n@ROUTINE3\n" -ex "print script_memory[9]" \
   -ex "echo \n@ROUTINE2\n" -ex "print script_memory[12]" \
   -ex "echo \n@ROUTINE2PC\n" -ex "print/d vm_music_events[2].pc != 0" \
+  -ex "echo \n@SFXDONE\n" -ex "print/d psg_sfx_done" \
+  -ex "echo \n@SFXTICKS\n" -ex "print/d psg_sfx_ticks" \
   -ex "echo \n@PRINTPATH\n" -ex "print script_memory[6]" \
   -ex "echo \n@ISGBA\n" -ex "print script_memory[7]" \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
@@ -286,4 +289,12 @@ ROUTINE3=$(val_after "@ROUTINE3" '^\$' | sed 's/.*= //')
 val_after "@ROUTINE2PC" '^\$' | grep -q "= 1$" || fail "music routine 2 has no script attached (VM_MUSIC_ROUTINE not bridged?)"
 val_after "@ROUTINE2" '^\$' | grep -q "= 0$" || fail "music routine 2 ran, but nothing raises it (slot taken from the wrong nibble?)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines)"
+# PSG sound effects (M14f). Right after the music starts, the scene plays FX Hammer effect 3
+# of the gbs2 sample's Tronimal_Sound_Effects.sav, on gbavm's port of gbvm's sfx_player. An
+# effect's length is fixed by its data - effect 3 is 57 ticks of gbvm's 256 Hz sound clock
+# - so the effect must have played to its end, exactly once, in exactly 57 ticks. Ticking
+# per frame, or at the music's 64 Hz, or misreading the stream, all change that number.
+val_after "@SFXDONE" '^\$' | grep -q "= 1$" || fail "the FX Hammer effect did not play to its end exactly once"
+val_after "@SFXTICKS" '^\$' | grep -q "= 57$" || fail "the FX Hammer effect ran $(val_after "@SFXTICKS" '^\$' | sed 's/.*= //') ticks, expected 57 (256 Hz)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects)"

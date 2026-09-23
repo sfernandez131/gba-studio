@@ -18,6 +18,7 @@
 // genuinely unknown macros throw so surprises surface instead of silently vanishing.
 
 import { GbaItem, GBA_OPCODE_SPECS, GbaOperandType } from "./emitGbaBytecode";
+import { PSG_SFX_FLAG } from "./gbaPsgSfx";
 
 // VM_* macro name -> gbavm opcode. Operand kinds come from GBA_OPCODE_SPECS[op],
 // which is already in signature (== gbavm read) order, so this is just the map of
@@ -172,6 +173,9 @@ const MACRO_TO_OP: Record<string, number> = {
   // of four music-event slots. The hUGE player's routine effect raises them; the engine
   // runs slot `param & 3` with `param >> 4` as the argument, as gbvm's music_manager does.
   VM_MUSIC_ROUTINE: 0x6b,
+  // VM_MUSIC_MUTE mask (M14f): mute music channels - gbvm's vm_music_mute, now that PSG
+  // sound effects share the Game Boy channels with the hUGE player. gbvm's own 0x62.
+  VM_MUSIC_MUTE: 0x62,
   VM_INPUT_ATTACH: 0x53,
   VM_INPUT_DETACH: 0x5f,
   VM_INPUT_WAIT: 0x52,
@@ -254,18 +258,34 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     ];
   },
   VM_MUSIC_STOP: () => [{ kind: "op", op: 0x61, operands: [] }],
-  // Sound effects (M5b): VM_SFX_PLAY <bank>, _<sym>, <mute_mask>, <prio> -> op 0x66
-  // [sfx]; the sound symbol resolves to the emitted bn::sound index via dataSymbols
-  // (bank/mute_mask/priority dropped - Butano mixes DirectSound itself). Drop the op
-  // if the sound isn't emitted (e.g. an unsupported vgm/fxhammer effect).
+  // Sound effects: VM_SFX_PLAY <bank>, _<sym>, <mute_mask>, <prio>. The sound symbol
+  // resolves via dataSymbols, and says which player the sound is for:
+  //  - a .wav (M5b) -> op 0x66 [sfx], a bn::sound index; bank, mask and priority are
+  //    dropped - Butano mixes DirectSound itself, off the Game Boy channels.
+  //  - a PSG effect (M14f: .vgm, FX Hammer, tones), whose index carries PSG_SFX_FLAG ->
+  //    op 0x6c [sfx, mute_mask, priority], because gbvm's rules need both: the mask is
+  //    the music channels it borrows, and a lower priority than the playing effect's
+  //    is ignored. The mask symbol `___mute_mask_<sym>` resolves via dataSymbols too.
+  // Drop the op if the sound isn't emitted, so the project still builds.
   VM_SFX_PLAY: (a, ev) => {
     let sfx: number;
     try {
-      sfx = ev(a[1]) & 0xff;
+      sfx = ev(a[1]);
     } catch {
       return null;
     }
-    return [{ kind: "op", op: 0x66, operands: [sfx] }];
+    if (sfx & PSG_SFX_FLAG) {
+      let mask: number;
+      let priority: number;
+      try {
+        mask = ev(a[2]) & 0xff;
+        priority = ev(a[3]) & 0xff;
+      } catch {
+        return null;
+      }
+      return [{ kind: "op", op: 0x6c, operands: [sfx & 0xff, mask, priority] }];
+    }
+    return [{ kind: "op", op: 0x66, operands: [sfx & 0xff] }];
   },
   // Projectiles (M10f): VM_PROJECTILE_LOAD_TYPE <dest>, <src>, <bank>,
   // _global_projectiles_<n> -> op 0x81 [dest, src, base]; the table symbol
@@ -426,10 +446,6 @@ const SKIP_MACROS = new Set<string>([
   // feature that silently does nothing. Dropped with a note instead: text renders
   // left-to-right, and implementing RTL is engine work in its own right.
   "VM_SET_PRINT_DIR",
-  // M5c: VM_MUSIC_MUTE mutes individual DMG channels (a GB channel-sharing concern so
-  // SFX can borrow a music channel). On GBA our SFX run on a separate DirectSound mixer,
-  // so per-channel music muting is not needed - dropped.
-  "VM_MUSIC_MUTE",
 ]);
 
 /**
@@ -484,6 +500,10 @@ export const TARGET_NA_MACROS: Record<
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
 // in the .s are layered on top of these.
 const BASE_CONSTS: Record<string, number> = {
+  // VM_SFX_PLAY priorities (M14f)
+  ".SFX_PRIORITY_MINIMAL": 0,
+  ".SFX_PRIORITY_NORMAL": 4,
+  ".SFX_PRIORITY_HIGH": 8,
   // sprite mode
   ".MODE_8X8": 0,
   ".MODE_8X16": 1,
@@ -867,16 +887,26 @@ function makeEvaluator(consts: Record<string, number>) {
     let s = raw.trim();
     const wrapped = s.match(/^\^\/\((.*)\)\/$/) || s.match(/^\^!(.*)!$/);
     if (wrapped) s = wrapped[1].trim();
-    // Substitute identifiers (.NAME or NAME) with their constant values.
-    s = s.replace(/\.?[A-Za-z_][A-Za-z0-9_]*/g, (tok) => {
-      if (tok in consts) return `(${consts[tok]})`;
-      // Bank-number linker symbols: the long `___bank_<symbol>` form and the short
-      // `b_<symbol>` form (e.g. VM_INVOKE's bank operand, `b_wait_frames`). The GBA
-      // is flat (no banking) and every engine handler ignores the bank operand, so
-      // any bank symbol folds to 0.
-      if (tok.startsWith("___bank_") || tok.startsWith("b_")) return "(0)";
-      throw new Error(`Unknown symbol "${tok}" in expression "${raw}"`);
-    });
+    // Substitute identifiers (.NAME or NAME) with their constant values. Numbers are
+    // matched in the same pass, so a hex literal's letter digits are never taken for an
+    // identifier - `0x0F` used to read as 0 followed by an unknown symbol `x0F`, which
+    // broke every mask the editor writes in hex (VM_MUSIC_MUTE's, M14f). Hex and
+    // binary literals become decimal so the safety check below stays digits-only.
+    s = s.replace(
+      /0[xX][0-9A-Fa-f]+|0[bB][01]+|\d+|\.?[A-Za-z_][A-Za-z0-9_]*/g,
+      (tok) => {
+        if (/^0[xX]/.test(tok)) return `${parseInt(tok.slice(2), 16)}`;
+        if (/^0[bB]/.test(tok)) return `${parseInt(tok.slice(2), 2)}`;
+        if (/^\d/.test(tok)) return tok;
+        if (tok in consts) return `(${consts[tok]})`;
+        // Bank-number linker symbols: the long `___bank_<symbol>` form and the short
+        // `b_<symbol>` form (e.g. VM_INVOKE's bank operand, `b_wait_frames`). The GBA
+        // is flat (no banking) and every engine handler ignores the bank operand, so
+        // any bank symbol folds to 0.
+        if (tok.startsWith("___bank_") || tok.startsWith("b_")) return "(0)";
+        throw new Error(`Unknown symbol "${tok}" in expression "${raw}"`);
+      },
+    );
     if (!/^[-+*/%|&^<>()~\s0-9xX]+$/.test(s)) {
       throw new Error(`Unsafe/unsupported expression "${raw}" -> "${s}"`);
     }
