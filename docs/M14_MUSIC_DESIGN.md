@@ -377,19 +377,68 @@ port. The concurrent gbs2 task's builds also shared `%TEMP%/_gbsbuild` with mine
 `Stop-Process mGBA` killed its emulator. Verification now builds in its own temp directory,
 starts and stops only its own mGBA, and waits for the port to be idle.
 
+## M14f result (2026-09-23): PSG sound effects
+
+GB Studio's non-`.wav` sounds now play on the GBA's Game Boy channels (gbavm#85): `.vgm`, FX
+Hammer, and the Play Tone / Beep / Crash events. The GB compile turns all of them into gbvm's
+`sfx_player` stream, so the eject reuses that output. It lifts each effect array and mute
+mask out of the compiled `sounds/*.c` files (`src/lib/compiler/gba/gbaPsgSfx.ts`), and gbavm
+plays the stream with a port of `sfx_play_isr` and of `music_manager`'s sound-effect half.
+`.wav` stays on DirectSound, as since M5b.
+
+- **Timing:** gbvm's 256 Hz sound clock, four times the music's rate, run from the frame loop
+  by the same cycle accumulator as the hUGE player. Effects step before the music, as in the
+  timer interrupt.
+- **Sharing with music:**
+  - A lower-priority effect is ignored.
+  - A replaced effect's channels are cut.
+  - While an effect plays, the hUGE player is muted on the channels it borrows; on release,
+    the player's wave reloads.
+  - `VM_MUSIC_MUTE` is bridged too, to gbvm's own `0x62`. The matrix moves to 122/151
+    bridgeable (81%).
+- **The bridge tells the two players apart by index:**
+  - A PSG effect's index carries `PSG_SFX_FLAG` (`0x100`), so `VM_SFX_PLAY` emits `0x6C`
+    (index, mute mask, priority).
+  - A `.wav` stays on `0x66`.
+- **The Game Boy register shadow belongs to the machine now, not the song**, because the
+  player and the effects share it.
+- **NR52 is never written.** The stream's master-register group can reach it, and on the
+  GBA it would also switch off DirectSound.
+- **Found by a new test, fixed:** the bridge's expression evaluator read `0x0F` as `0`
+  followed by an unknown symbol `x0F`. Every mask the editor writes in hex failed, including
+  every `VM_MUSIC_MUTE`. Numbers and identifiers are now tokenised in a single pass.
+
+Verified:
+
+- **Exact against a reference.** A probed build played FX Hammer effect 5 (`gba_demo`, no
+  hUGE song, so the trace is the effect's alone). All 70 register writes match
+  `scripts/huge/reference_sfx.py`, frame for frame; the reference is built from
+  `sfx_player.c`. Six deliberate breaks of the reference are all caught, from ticking per
+  frame down to a tick phase off by one frame.
+- **CI now covers it.** The fixture plays effect 3 right after its `.uge` starts, and the
+  runtime test asserts it played to its end exactly once, in exactly 57 ticks: the length
+  its data defines at 256 Hz.
+
+Known limits:
+
+- Over a gbt-player `.mod` track, effects and music collide, because Butano's gbt player
+  cannot be muted per channel. With hUGE music the channels are shared as on the GB.
+- Not checked at runtime: the tone/beep events end to end (their parsing is unit-tested and
+  they use the same player), and the music mute while an effect plays (a direct port).
+
 ## Slice plan
 
-| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                                                                      |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                                                                              |
-| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB).                                                 |
-| M14c1    | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                                                                            |
-| M14c2    | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                                                                    |
-| M14c3    | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                                                                         |
-| M14d     | **Done (2026-09-23), gbavm#83.** `.uge` tracks eject and play; see "M14d result" above.                                                                                       | CI asserts a fixture's `.uge` plays at 64 Hz; the ejected song's trace matches (3,374 writes). The stock gbs2 sample does not build for GBA (unrelated knockback callback). |
-| M14e     | **Done (2026-09-23), gbavm#84.** Music routines; see "M14e result" above.                                                                                                     | CI asserts slots 1 and 3 run and slot 2 does not; a probe confirmed the arguments.                                                                                          |
-| **M14f** | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                                                                              |
-| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                                                                           |
+| Slice | Scope                                                                                                                                                                         | Verify                                                                                                                                                                      |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M14a  | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                                                                              |
+| M14b  | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB).                                                 |
+| M14c1 | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                                                                            |
+| M14c2 | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                                                                    |
+| M14c3 | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                                                                         |
+| M14d  | **Done (2026-09-23), gbavm#83.** `.uge` tracks eject and play; see "M14d result" above.                                                                                       | CI asserts a fixture's `.uge` plays at 64 Hz; the ejected song's trace matches (3,374 writes). The stock gbs2 sample does not build for GBA (unrelated knockback callback). |
+| M14e  | **Done (2026-09-23), gbavm#84.** Music routines; see "M14e result" above.                                                                                                     | CI asserts slots 1 and 3 run and slot 2 does not; a probe confirmed the arguments.                                                                                          |
+| M14f  | **Done (2026-09-23), gbavm#85.** PSG sound effects (.vgm, FX Hammer, tones) and `VM_MUSIC_MUTE`; see "M14f result" above.                                                     | 70 writes exact against a reference; CI asserts an FX Hammer effect runs 57 ticks.                                                                                          |
+| —     | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                                                                           |
 
 ## Verification
 

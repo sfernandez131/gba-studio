@@ -176,3 +176,24 @@ The reference covers the whole driver. If the player ever changes — or the ven
 hUGEDriver is updated — change `reference.py` from the asm, not from whatever the C++ ended
 up doing, and add a mutation and a synthetic-song case for each new rule. A mutation that
 survives means the songs never exercised that rule.
+
+## Sound effects (M14f)
+
+`reference_sfx.py` does the same for gbavm's PSG sound-effect player. It reads one effect's
+array from any compiled `sounds/*.c`, applies `sfx_play_isr` as read from gbvm's
+`sfx_player.c`, runs the 256 Hz clock through the frame clock, and diffs every register
+write, frame for frame.
+
+Probe it like a song, but in a project with no hUGE song playing, so the trace is the
+effect's alone. Define `HUGE_TRACE` (the trace hook logs every PSG write, whoever makes it),
+compile the effect's array into the engine, and call `psg_sfx_play(<array>, <mask>,
+<priority>)` from `main.cpp` at a fixed `sys_time`, just before `psg_sfx_update()`. Then
+diff:
+
+```bash
+python scripts/huge/reference_sfx.py <sound.c> <symbol> <work>/trace.bin <play frame>
+```
+
+Result: FX Hammer effect 5 of the gbs2 sample's `Tronimal_Sound_Effects.sav`, played at frame
+30 in `gba_demo`: 153 ticks, 70 register writes, all match. Six deliberate breaks of the
+reference are all caught.

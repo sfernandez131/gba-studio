@@ -95,6 +95,16 @@
       }
     },
     {
+      "id": "b0000000-0000-4000-8000-00000000f014",
+      "command": "EVENT_SOUND_PLAY_EFFECT",
+      "args": {
+        "type": "c0febeef-0000-4000-8000-00000000f014",
+        "priority": "high",
+        "effect": 3,
+        "wait": false
+      }
+    },
+    {
       "id": "b0000000-0000-4000-8000-00000000b001",
       "command": "EVENT_REPLACE_TILE_XY",
       "args": {

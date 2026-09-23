@@ -1,0 +1,9 @@
+{
+  "_resourceType": "sound",
+  "id": "c0febeef-0000-4000-8000-00000000f014",
+  "name": "Tronimal_Sound_Effects.sav",
+  "symbol": "sound_tronimal_sfx",
+  "type": "fxhammer",
+  "numEffects": 10,
+  "filename": "Tronimal_Sound_Effects.sav"
+}
