@@ -261,19 +261,54 @@ Found on the way, not an M14 issue: the editor's exporter writes `0x-4` for a du
 instrument whose sweep time loads as -1 (`unreal_superhero2`), which no C compiler accepts —
 on the GB build either.
 
+## M14c3 result (2026-09-23): subpattern tables — the whole driver
+
+Instrument subpattern tables run (gbavm#82), which completes the port: every note,
+instrument, effect and table rule in hUGEDriver.
+
+- **Tables run one row per tick**, on every tick including 0. On tick 0 the table runs after
+  the row's note. Tables also run on a muted channel. A table row reuses the instrument slot
+  as a 5-bit jump, offsets the channel's note without retriggering, and runs an effect.
+- **An effect run from a table enters its routine one byte in** (`do_effect.no_set_offset`).
+  For most effects that skips the tick test, so from a table they run on every tick. For
+  toneporta and note delay, the skipped byte is the opcode of a two-byte `jr z`, and the CPU
+  runs its _operand_ as an instruction. What that does depends on the assembled bytes, so
+  they were read from GBVM's `lib/hUGEDriver.lib` rather than counted by hand. A hand count
+  of note delay's operand was off by three, which would have predicted `ret nz` (`C0`) where
+  the real byte is `cp l` (`BD`). Both real operands turn out to be harmless:
+  - Toneporta slides every tick and never sets its target.
+  - Note delay plays when the tick equals its param.
+  - Note cut, with its `cp c` skipped, cuts on tick 0 whatever its param.
+- **A position jump from a table on a later tick sets `next_order` without arming the
+  break**, because `or [hl]` assumes A is 0, which only holds on tick 0.
+- **The driver's note lookup is really `note mod 128`** (`add a` doubles it in 8 bits), which
+  the port now matches.
+- **GBA-side decisions:**
+  - A table offset below note 0 holds the bottom note.
+  - Rows past the 32 the exporter writes read as empty. The editor can make a table whose
+    last row has no jump, which on the GB reads whatever data follows.
+
+Verified: **37,340 register writes across 18 songs match** the reference. That covers a
+synthetic tables song (`scripts/huge/make-tables-song.ts`), the M14c2 effects song, and 16
+real songs, including all 12 in the gbs2 template. **15/15 table mutations** and 23/23
+effect mutations are caught. The first table run had one survivor: a table ran off its end
+into rows that looked the same as its empty last row. Giving that last row a note closed
+the gap. No real song runs an effect from a table, so the synthetic song is the only
+coverage there.
+
 ## Slice plan
 
-| Slice     | Scope                                                                                                                                                                         | Verify                                                                                                                      |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| M14a      | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
-| M14b      | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
-| M14c1     | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                            |
-| M14c2     | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                    |
-| **M14c3** | Subpattern tables (instrument tables, e.g. BattleTheme's noise instrument 1).                                                                                                 | The same diff, per table row.                                                                                               |
-| M14d      | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
-| M14e      | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
-| M14f      | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
-| —         | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
+| Slice    | Scope                                                                                                                                                                         | Verify                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| M14a     | **Done (2026-09-11).** PSG handover confirmed at runtime; see "M14a result" above for the one-frame ordering rule. Ears-on listen still owed.                                 | GDB stub register reads over a 400-frame walk.                                                                              |
+| M14b     | **Done (2026-09-11), gbavm#79.** Tick/row/order machinery and pulse-channel notes; see "M14b result" above.                                                                   | 108 note writes across two songs match an independent reference exactly. The GB-build trace was not feasible (no SM83 GDB). |
+| M14c1    | **Done (2026-09-11), gbavm#80.** Wave and noise channels; see "M14c1 result" above.                                                                                           | 460 writes across two songs match; wave RAM readback byte-exact.                                                            |
+| M14c2    | **Done (2026-09-15), gbavm#81.** All 16 effects, over a GB register layer; see "M14c2 result" above.                                                                          | 15,159 writes across nine songs match; 23/23 reference mutations caught.                                                    |
+| M14c3    | **Done (2026-09-23), gbavm#82.** Subpattern tables; the port is now the whole driver. See "M14c3 result" above.                                                               | 37,340 writes across 18 songs match; 15/15 table and 23/23 effect mutations caught.                                         |
+| **M14d** | Eject `.uge` tracks (drop the skip warning) and route them to the new player.                                                                                                 | The stock `gbs2` sample's music plays.                                                                                      |
+| M14e     | `VM_MUSIC_ROUTINE` — raise the routine effect as a music event and close the matrix slice G gap.                                                                              | The attached script runs; GDB assert on the handle, like the input-attach fixture.                                          |
+| M14f     | `.vgm` SFX, and music events beyond play/stop.                                                                                                                                | Ears-on plus register asserts.                                                                                              |
+| —        | If M14a says the PSG cannot be shared after all, fall back to Route A and **guard every crash path it opens** (volume change, `SETPOS` with a row) rather than shipping them. | —                                                                                                                           |
 
 ## Verification
 

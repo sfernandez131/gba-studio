@@ -6,10 +6,11 @@ mutation below is a mistake a port could plausibly make - an off-by-one tick, a 
 mask, a nibble swapped - and each should produce mismatches. A mutation that still matches
 means the song never exercised that rule, and the song needs a case for it.
 
-Run it against the synthetic effects song (make-effects-song.ts), which is built to exercise
-every one of these:
+There are two sets, one per synthetic song: `effects` for make-effects-song.ts (M14c2) and
+`tables` for make-tables-song.ts (M14c3). Each song is built to exercise every mutation in
+its set.
 
-usage: mutations.py <song.gba.c> <trace.bin> <first-write frame>
+usage: mutations.py <effects|tables> <song.gba.c> <trace.bin> <first-write frame>
 
 Two mutations that LOOK meaningful but cannot fail are deliberately left out:
   - NR14's read mask 0xBF -> 0x3F: vol slide ORs 0x80 into the read anyway.
@@ -21,9 +22,9 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-song_c, trace_bin, frame = sys.argv[1], sys.argv[2], sys.argv[3]
+which, song_c, trace_bin, frame = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
-MUTATIONS = [
+EFFECTS = [
     ("arpeggio phase ignores the -1", "a = (counter - 1) & 0xFF", "a = counter & 0xFF"),
     ("arpeggio reads the wrong nibble", "a = ((swap(c) & 0x0F) + d) & 0xFF", "a = ((c & 0x0F) + d) & 0xFF"),
     ("vibrato bends on the wrong phase", "if counter & (c >> 4) == 0:", "if counter & (c >> 4) != 0:"),
@@ -42,15 +43,48 @@ MUTATIONS = [
     ("CH3 set volume: 100% threshold", "if c >= 10 << 4:", "if c >= 11 << 4:"),
     ("pattern break row not one-based", "b = row_break - 1", "b = row_break"),
     ("position jump order not one-based", "a = ((next_order - 1) * 2) & 0xFF", "a = (next_order * 2) & 0xFF"),
-    ("later ticks run param-0 effects", "if c == 0:                                      # ld a, c",
-     "if False:                                      # ld a, c"),
+    ("later ticks run param-0 effects", "if c != 0:                                  # ld a, c",
+     "if True:                                    # ld a, c"),
     ("routine call loses the channel", "(TRACE_ROUTINE, (b << 8) | c)", "(TRACE_ROUTINE, c)"),
     ("master volume drops the Vin bits", "ldh(rAUDVOL, c)", "ldh(rAUDVOL, c & 0x77)"),
     ("set speed off by one", "ticks_per_row = c", "ticks_per_row = c + 1"),
     ("CH4 set duty never clears bit 3", "(ldh_read(rAUD4POLY) & ~0x08 & 0xFF) | c)", "ldh_read(rAUD4POLY) | c)"),
     ("vol slide clamps at 14", "a = 0x0F", "a = 0x0E"),
-    ("past the note table holds the wrong note", "NOTE_TABLE[min(a, LAST_NOTE - 1)]", "NOTE_TABLE[min(a, LAST_NOTE - 2)]"),
+    ("past the note table holds the wrong note", "return NOTE_TABLE[LAST_NOTE - 1] if a < 128",
+     "return NOTE_TABLE[LAST_NOTE - 2] if a < 128"),
 ]
+
+TABLES = [
+    ("table jump not one-based", "table_row[e] = (a - 1) & 0xFF", "table_row[e] = a & 0xFF"),
+    ("table jump drops bit 4", "        a |= 1                                          # set 0, a",
+     "        pass                                            # set 0, a"),
+    ("table rows advance per row, not per tick", "table_row[e] = (a + 1) & 0xFF                       # inc [hl]",
+     "table_row[e] = (a + (1 if tick == 0 else 0)) & 0xFF   # inc [hl]"),
+    ("table note offset base 35", "a = (d - 36) & 0xFF                             # sub 36",
+     "a = (d - 35) & 0xFF                             # sub 36"),
+    ("table note retriggers", "h = highmask[e] & 0x7F                          # ld h, c / res 7, h",
+     "h = highmask[e]                                 # ld h, c / res 7, h"),
+    ("CH4 table note turned into a period", "            update_channel_freq(3, a, h)                # .is_ch4: E is the note",
+     "            update_channel_freq(3, get_note_period(a), h)"),
+    ("table effects keep their tick tests", "    first = d == 0\n", "    first = True\n"),
+    ("table note cut still compares its param", "z = (a == c) if first else zf", "z = a == c"),
+    ("table toneporta sets up on tick 0", "if first and zf:                                # .setup",
+     "if zf:                                          # .setup"),
+    ("table note delay suppresses on tick 0", "        if first and zf:\n            return False                                # ret_dont_play_note",
+     "        if zf:\n            return False                                # ret_dont_play_note"),
+    ("table position jump arms the break on later ticks", "if (a | row_break) == 0:                    # or [hl], with A = the tick",
+     "if row_break == 0:                          # or [hl], with A = the tick"),
+    ("instrument does not restart its table", "table[ch], table_row[ch] = ins[\"table\"], 0\n                highmask[ch]",
+     "table[ch] = ins[\"table\"]\n                highmask[ch]"),
+    ("table runs before the note is played", "    if carry:\n        play_chN_note(ch)                               # call c, play_chN_note\n    if table[ch]:\n        do_table(ch)                                    # call nz, do_table",
+     "    if table[ch]:\n        do_table(ch)                                    # call nz, do_table\n    if carry:\n        play_chN_note(ch)                               # call c, play_chN_note"),
+    ("rows past the end repeat the last row", "rows[a] if a < TABLE_LENGTH else (NO_NOTE, 0, 0)",
+     "rows[min(a, TABLE_LENGTH - 1)]"),
+    ("below note 0 holds the wrong note", "else NOTE_TABLE[0]   # GBA-side decision (top)",
+     "else NOTE_TABLE[1]   # GBA-side decision (top)"),
+]
+
+MUTATIONS = {"effects": EFFECTS, "tables": TABLES}[which]
 
 source = open(os.path.join(HERE, "reference.py"), encoding="utf-8").read()
 baseline = subprocess.run([sys.executable, os.path.join(HERE, "reference.py"), song_c, trace_bin, frame],

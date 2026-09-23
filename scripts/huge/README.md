@@ -13,11 +13,12 @@ reference which predicts every write from the song data and hUGEDriver's rules.
 `hUGEDriver.asm`** (not from the C++), and runs GB Studio's 64 Hz tick schedule through
 the GBA's frame clock. A match on every field — frame, tick, order, row, register,
 value — proves the C++ is a faithful transcription of those rules: pattern decoding,
-instruments, the note table, every effect, row/order advance, and the tick accumulator.
+instruments, the note table, every effect, subpattern tables, row/order advance, and the
+tick accumulator. That is the whole of hUGEDriver.
 
 A match only means something if a wrong rule would fail. `mutations.py` checks that: it
-breaks the reference in 23 small, plausible ways and confirms each one produces
-mismatches against a real trace.
+breaks the reference in small, plausible ways — 23 for effects, 15 for tables — and
+confirms each one produces mismatches against a real trace.
 
 It cannot prove the rules were _read_ correctly, because both implementations share that
 reading. That needs an ears-on listen and, eventually, a trace from the GB build itself.
@@ -37,8 +38,9 @@ scratch directory.
    node <work>/export-uge.js appData/templates/gbs2/assets/music/Rulz_BattleTheme.uge song_Rulz_BattleTheme <work>/BattleTheme.c
    ```
 
-   To exercise every effect, build the synthetic effects song instead (it borrows a real
-   song's instruments):
+   To exercise every effect, or every table path, build one of the two synthetic songs
+   instead. Both borrow a real song's instruments; `make-tables-song.ts` works the same
+   way, writing `<work>/Tables.c`:
 
    ```bash
    npx esbuild scripts/huge/make-effects-song.ts --bundle --platform=node --tsconfig=tsconfig.json --outfile=<work>/make-effects-song.js
@@ -86,11 +88,12 @@ scratch directory.
    python scripts/huge/reference.py <work>/BattleTheme.gba.c <work>/trace.bin 31
    ```
 
-   It also prints which effects ran on the compared rows, so you can see what a song
-   actually exercised. Then, against the effects song's trace, check the diff has teeth:
+   It also prints which effects ran on the compared rows and from tables, so you can see
+   what a song actually exercised. Then, against a synthetic song's trace, check the diff
+   has teeth — `effects` for the effects song, `tables` for the tables song:
 
    ```bash
-   python scripts/huge/mutations.py <work>/Effects.gba.c <work>/trace.bin 31
+   python scripts/huge/mutations.py effects <work>/Effects.gba.c <work>/trace.bin 31
    ```
 
 6. **Revert the probe** — with the script, never with git:
@@ -136,13 +139,40 @@ comparable with the rows above. All nine songs below match, each run for ~567 ti
 | `Rulz_SpaceEmergency`    | 8     | 923    | 1, 8, C, E                       |
 | `Rulz_Into the woods`    | 7     | 631    | B, C, F                          |
 
+From M14c3 every song runs its subpattern tables too. All 18 below match against the same
+engine (gbavm#82), each run for up to ~567 ticks or the trace's 4096 writes:
+
+| Song                     | Tempo | Writes | Tables (rows run) | Effects on compared rows         |
+| ------------------------ | ----- | ------ | ----------------- | -------------------------------- |
+| synthetic (`Tables`)     | 5     | 4096   | 6 (1212)          | all 16 from tables; 15/15 caught |
+| synthetic (`Effects`)    | 6     | 1753   | 0                 | all 16; 23/23 mutations caught   |
+| `Rulz_BattleTheme`       | 3     | 3195   | 1 (567)           | C, E                             |
+| `Rulz_FastPaceSpeedRace` | 6     | 2341   | 1 (375)           | 2, B, E                          |
+| `Rulz_GonaSpace`         | 7     | 2424   | 1 (385)           | 2, A, C, E                       |
+| `Rulz_Into the woods`    | 7     | 631    | 0                 | B, C, F                          |
+| `Rulz_Intro`             | 7     | 1926   | 1 (567)           | C, E                             |
+| `Rulz_LightMood`         | 4     | 1632   | 2 (567)           | C, E                             |
+| `Rulz_Outside`           | 8     | 1663   | 1 (567)           | 0, C, E                          |
+| `Rulz_Pause_Underground` | 8     | 1801   | 1 (567)           | 2, C, E                          |
+| `Rulz_SpaceEmergency`    | 8     | 1997   | 1 (559)           | 1, 8, C, E                       |
+| `Rulz_UndergroundCave`   | 15    | 1672   | 1 (567)           | 0, C, E                          |
+| `Tronimal_DrumsExample`  | 5     | 1892   | 3 (567)           | 2, C, E                          |
+| `Tronimal_EchoExample`   | 6     | 1346   | 1 (519)           | C, E                             |
+| `Coffee Bat - Wyrmhole`  | 2     | 3693   | 3 (567)           | 2, C                             |
+| `zilog_headbang_routine` | 7     | 1969   | 0                 | 0, 2, 4, 6, B, C, E              |
+| `unreal_superhero2`      | 7     | 1843   | 0                 | 3, C (sweep byte patched, below) |
+| `dizzy`                  | 7     | 1466   | 0                 | 0, 4, C (instruments padded)     |
+
+"Tables" counts the tables the song defines and the table rows the compared ticks ran. No
+real song runs an effect from a table; the synthetic song is the only coverage for that.
+
 `unreal_superhero2` does not compile as exported: the exporter writes `0x-4` for a duty
 instrument whose sweep time loads as -1, which no C compiler accepts (the GB build's either).
 Its byte was patched to `0x00` for this run; sweep does not affect any effect.
 
 ## Extending it
 
-The reference now predicts every write on every tick, for all four channels and all 16
-effects. Subpattern tables (M14c3) are next; their rules get added to `reference.py` — read
-from the asm again, not from whatever the C++ ended up doing — along with mutations for
-them in `mutations.py` and cases in the effects song.
+The reference covers the whole driver. If the player ever changes — or the vendored
+hUGEDriver is updated — change `reference.py` from the asm, not from whatever the C++ ended
+up doing, and add a mutation and a synthetic-song case for each new rule. A mutation that
+survives means the songs never exercised that rule.
