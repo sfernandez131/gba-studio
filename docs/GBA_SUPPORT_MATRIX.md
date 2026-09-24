@@ -7,11 +7,11 @@ use, so this table is exact, not aspirational.
 
 | Category | Count |
 |---|---|
-| Encoded directly to a gbavm opcode | 98 |
-| Expanded to equivalent gbavm sequences | 23 |
+| Encoded directly to a gbavm opcode | 99 |
+| Expanded to equivalent gbavm sequences | 24 |
 | Special-cased parser handling | 1 |
-| **Supported total** | **122 / 151 bridgeable (81%)** |
-| Skipped with a warning (safe no-op) | 10 |
+| **Supported total** | **124 / 151 bridgeable (82%)** |
+| Skipped with a warning (safe no-op) | 8 |
 | Unbridged (build fails on use) | 19 |
 | Not applicable to the GBA | 5 |
 | _All GBVM macros_ | _156_ |
@@ -69,11 +69,9 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 | `VM_OVERLAY_SET_SCROLL` |
 | `VM_OVERLAY_SET_SUBMAP` |
 | `VM_OVERLAY_SET_SUBMAP_EX` |
-| `VM_RANDOMIZE` |
 | `VM_SET_FONT` |
 | `VM_SET_PRINT_DIR` |
 | `VM_SET_TEXT_SOUND` |
-| `VM_SWITCH_TEXT_LAYER` |
 
 ## Native calls dropped with a warning
 
@@ -167,6 +165,7 @@ One-to-one macro → gbavm opcode.
 | `VM_PUSH_VALUE_IND` |
 | `VM_RAISE` |
 | `VM_RAND` |
+| `VM_RANDOMIZE` |
 | `VM_RATE_LIMIT_CONST` |
 | `VM_RESERVE` |
 | `VM_SAVE_CLEAR` |
@@ -220,6 +219,7 @@ Rewritten by the bridge into equivalent gbavm sequences.
 | `VM_SET_INT8` |
 | `VM_SET_UINT8` |
 | `VM_SFX_PLAY` |
+| `VM_SWITCH_TEXT_LAYER` |
 
 ## Special-cased
 

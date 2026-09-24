@@ -176,6 +176,10 @@ const MACRO_TO_OP: Record<string, number> = {
   // VM_MUSIC_MUTE mask (M14f): mute music channels - gbvm's vm_music_mute, now that PSG
   // sound effects share the Game Boy channels with the hUGE player. gbvm's own 0x62.
   VM_MUSIC_MUTE: 0x62,
+  // VM_RANDOMIZE (gbs2 G1, the "Seed RNG" event): gbvm's macro seeds from an RPN read of
+  // the GB-only _DIV_REG and _game_time. gbavm computes the same `DIV + game_time * 256`
+  // itself - a Butano timer standing in for DIV, sys_time for game_time - behind op 0x6d.
+  VM_RANDOMIZE: 0x6d,
   VM_INPUT_ATTACH: 0x53,
   VM_INPUT_DETACH: 0x5f,
   VM_INPUT_WAIT: 0x52,
@@ -287,6 +291,12 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
     }
     return [{ kind: "op", op: 0x66, operands: [sfx & 0xff] }];
   },
+  // VM_SWITCH_TEXT_LAYER <layer> (gbs2 G1): gbvm points its text renderer at the window
+  // or the background tilemap. gbavm always draws text in its overlay, which IS the window
+  // layer, so .TEXT_LAYER_WIN - what every GB Studio text event emits - is already true
+  // and needs no op. .TEXT_LAYER_BKG, text drawn into the scene itself, is not supported
+  // and drops with a note.
+  VM_SWITCH_TEXT_LAYER: (a, ev) => (ev(a[0]) === 1 ? [] : null),
   // Projectiles (M10f): VM_PROJECTILE_LOAD_TYPE <dest>, <src>, <bank>,
   // _global_projectiles_<n> -> op 0x81 [dest, src, base]; the table symbol
   // resolves to its base index in the engine's flattened
@@ -417,9 +427,6 @@ const EXPAND_MACROS: Record<string, ExpandFn> = {
 // Dropping is safe for these specific ops on gbavm's stubbed scaffold; each drop
 // is reported so nothing disappears silently.
 const SKIP_MACROS = new Set<string>([
-  // VM_RANDOMIZE expands to an RPN read of GB-only _DIV_REG/_game_time; gbavm seeds
-  // its RNG once at boot from a hardware timer instead (P0).
-  "VM_RANDOMIZE",
   // M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT/_EX are handled specially (the text is captured
   // from the inline .asciz and rendered via op 0x90/0x95); VM_OVERLAY_SHOW/MOVE_TO/HIDE
   // /WAIT are bridged (M4d box + M4q wait). The remaining overlay/window ops are
@@ -440,7 +447,6 @@ const SKIP_MACROS = new Set<string>([
   "VM_OVERLAY_SET_SUBMAP",
   "VM_SET_TEXT_SOUND",
   "VM_SET_FONT",
-  "VM_SWITCH_TEXT_LAYER",
   // Right-to-left text. The macro is a write to _vwf_direction, which would compile
   // fine, but gbavm's text renderer does not read it - so bridging it would claim a
   // feature that silently does nothing. Dropped with a note instead: text renders
@@ -610,6 +616,9 @@ function findDroppedNativeCalls(
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
 // in the .s are layered on top of these.
 const BASE_CONSTS: Record<string, number> = {
+  // VM_SWITCH_TEXT_LAYER layers (gbs2 G1)
+  ".TEXT_LAYER_BKG": 0,
+  ".TEXT_LAYER_WIN": 1,
   // VM_SFX_PLAY priorities (M14f)
   ".SFX_PRIORITY_MINIMAL": 0,
   ".SFX_PRIORITY_NORMAL": 4,
