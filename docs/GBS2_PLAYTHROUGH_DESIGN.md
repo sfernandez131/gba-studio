@@ -100,12 +100,31 @@ gbavm#86 and gba-studio#127.
 The gbs2 build now drops only the scroll region (69) and the two platformer state scripts
 (G3). Matrix: 124/151 bridgeable (82%).
 
+## G2 result (2026-09-24): the player exists, and point-and-click works
+
+gbavm#87 and gba-studio#128.
+
+- **No gbs2 scene had a player.** In GB Studio, a scene with no player sprite of its own
+  uses the project's default for its scene type. The GBA eject read only the scene's own
+  override, and none of the sample's 17 scenes sets one. So the sample had no player
+  anywhere. The scene smoke test above could not see it, because a scene with no player
+  still boots. The eject now applies GB Studio's rule, and all 17 scenes boot with a
+  player.
+- **Point-and-click.** gbvm's `pointnclick.c` is ported: 8-way cursor movement by angle,
+  gbvm's clamp arithmetic, the bounding-box hover test against triggers and actors, and A
+  to run the hit's script. That arithmetic is 16-bit and unsigned, as SDCC does it. Actors
+  now carry their sprite's bounding box, which the editor converts exactly as GB Studio's
+  `compileBounds` does.
+- **Verified** on Player's House with a temporary input probe. The cursor's position
+  matched gbvm's arithmetic to the subpixel (x 880, y 897 after 40 frames moving
+  diagonally), it hovered the (4,4) text trigger, and A opened that trigger's dialogue.
+
 ## Slice plan
 
 | Slice  | Scope                                                                                                                                                                   | Verify                                                                                                                                          |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | G1     | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                           | Unit tests; seed checked on the title (23,269 at frame 90).                                                                                     |
-| **G2** | Point-and-click: the cursor, moving freely; A runs the actor or trigger under it, gbvm's hit rules.                                                                     | Fixture: a POINTNCLICK scene, cursor driven by a forced-input probe onto a trigger; GDB asserts its script ran. Then Player's House by hand.    |
+| G2     | **Done (2026-09-24), gbavm#87 / gba-studio#128.** Point-and-click, and the player-sprite default: gbs2 had no player in any scene. See "G2 result".                     | Cursor position exact against gbvm's arithmetic; a trigger hovered and fired on Player's House.                                                 |
 | **G3** | Platformer knockback + blank: the two states, `plat_next_state`, their start/end scripts (unblocks #123's dropped callbacks), and `plat_blank_grav` / knockback fields. | Fixture: set knockback, assert the state sequence knockback → blank → ground and the callback runs; then the turnip hit in Path to Sample Town. |
 | **G4** | Parallax bands via H-blank effects.                                                                                                                                     | GDB: per-band scroll values vs the camera; eyes-on in Parallax Example.                                                                         |
 | **G5** | Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it.            | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                                    |
