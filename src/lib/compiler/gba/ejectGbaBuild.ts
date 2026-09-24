@@ -919,6 +919,26 @@ const ejectGbaBuild = async ({
   const spriteIncludes: string[] = [];
   const spriteTables: string[] = [];
   const spriteCases: string[] = [];
+  // A sheet bigger than any GBA sprite loses its edges (gbaSpriteFrameSize); say
+  // so once per sheet, not once per scene that uses it.
+  const croppedSprites = new Set<string>();
+  const warnIfCropped = (
+    sprite: {
+      id: string;
+      name: string;
+      canvasWidth: number;
+      canvasHeight: number;
+    },
+    sheet: { cropped: boolean; frameWidth: number; frameHeight: number },
+  ) => {
+    if (!sheet.cropped || croppedSprites.has(sprite.id)) return;
+    croppedSprites.add(sprite.id);
+    warnings(
+      `GBA: sprite "${sprite.name}" is ${sprite.canvasWidth}x${sprite.canvasHeight}, but a GBA ` +
+        `sprite is at most 64x64 - it is cropped around its centre ` +
+        `(drawn ${sheet.frameWidth}x${sheet.frameHeight})`,
+    );
+  };
   const affineIncludes: string[] = [];
   const affineCases: string[] = [];
 
@@ -1063,6 +1083,7 @@ const ejectGbaBuild = async ({
         spriteMode,
         statesOrder,
       );
+      warnIfCropped(sprite, sheet);
       const palSlot = dominantPaletteIndex(
         sprite as Parameters<typeof dominantPaletteIndex>[0],
       );
@@ -1152,6 +1173,7 @@ const ejectGbaBuild = async ({
       spriteMode,
       statesOrder,
     );
+    warnIfCropped(sprite, sheet);
     const name = `global_sprite_${pi}`;
     await writeFile(
       Path.join(engineRoot, "graphics", `${name}.bmp`),

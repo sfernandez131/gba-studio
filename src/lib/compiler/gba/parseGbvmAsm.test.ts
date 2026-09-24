@@ -1064,3 +1064,127 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     expect(relocations).toEqual([]);
   });
 });
+
+// GB Studio 4's "Set/Remove Platformer Script" (and Adventure) events, verbatim from
+// gbs2's path_to_sample_town scene init. gbavm has no state-callback table, so each
+// block drops whole - pushes, native call and pop - leaving the stack balanced.
+describe("state-machine script callbacks (DROPPED_NATIVE_CALLS)", () => {
+  const globals = { PLATFORM_KNOCKBACK_INIT: 12, PLATFORM_BLANK_INIT: 14 };
+  const SET_TWO_CALLBACKS = `
+_scene_path_to_sample_town_init::
+        VM_IDLE
+
+        ; Set Platformer Script
+        VM_PUSH_CONST           PLATFORM_KNOCKBACK_INIT
+        VM_PUSH_CONST           ___bank_plat_callback_PLATFORM_KNOCKBACK_INIT
+        VM_PUSH_CONST           _plat_callback_PLATFORM_KNOCKBACK_INIT
+        VM_CALL_NATIVE          b_plat_callback_attach, _plat_callback_attach
+        VM_POP                  3
+        ; Set Platformer Script
+        VM_PUSH_CONST           PLATFORM_BLANK_INIT
+        VM_PUSH_CONST           ___bank_plat_callback_PLATFORM_BLANK_INIT
+        VM_PUSH_CONST           _plat_callback_PLATFORM_BLANK_INIT
+        VM_CALL_NATIVE          b_plat_callback_attach, _plat_callback_attach
+        VM_POP                  3
+        ; Stop Script
+        VM_STOP
+`;
+
+  test("drops each attach block whole and names the state in the note", () => {
+    const { items, skipped } = parseGbvmAsm(SET_TWO_CALLBACKS, { globals });
+    // Only the surrounding ops survive: no pushes, no native call, no pop - and
+    // the script ADDRESS operand (unknown to the bridge) is never evaluated.
+    expect(items).toEqual([
+      { kind: "label", name: "_scene_path_to_sample_town_init" },
+      { kind: "op", op: 0x18, operands: [] },
+      { kind: "stop" },
+    ]);
+    expect(skipped).toEqual([
+      "VM_CALL_NATIVE _plat_callback_attach PLATFORM_KNOCKBACK_INIT (platformer state scripts are not supported on GBA yet; the script is not attached)",
+      "VM_CALL_NATIVE _plat_callback_attach PLATFORM_BLANK_INIT (platformer state scripts are not supported on GBA yet; the script is not attached)",
+    ]);
+  });
+
+  test("drops the Remove (detach) block and the Adventure equivalents", () => {
+    const { items, skipped } = parseGbvmAsm(
+      [
+        "        ; Remove Platformer State Script",
+        "        VM_PUSH_CONST           PLATFORM_FALL_INIT",
+        "        VM_CALL_NATIVE          b_plat_callback_detach, _plat_callback_detach",
+        "        VM_POP                  1",
+        "        ; Set Adventure Script",
+        "        VM_PUSH_CONST           ADVENTURE_GROUND_INIT",
+        "        VM_PUSH_CONST           ___bank_adv_callback_ADVENTURE_GROUND_INIT",
+        "        VM_PUSH_CONST           _adv_callback_ADVENTURE_GROUND_INIT",
+        "        VM_CALL_NATIVE          b_adv_callback_attach, _adv_callback_attach",
+        "        VM_POP                  3",
+        "        VM_PUSH_CONST           ADVENTURE_GROUND_INIT",
+        "        VM_CALL_NATIVE          b_adv_callback_detach, _adv_callback_detach",
+        "        VM_POP                  1",
+        "        VM_STOP",
+      ].join("\n"),
+      { globals: { PLATFORM_FALL_INIT: 0, ADVENTURE_GROUND_INIT: 0 } },
+    );
+    expect(items).toEqual([{ kind: "stop" }]);
+    expect(skipped).toHaveLength(3);
+    expect(skipped[0]).toContain("_plat_callback_detach PLATFORM_FALL_INIT");
+    expect(skipped[1]).toContain("_adv_callback_attach ADVENTURE_GROUND_INIT");
+    expect(skipped[1]).toContain("adventure state scripts");
+    expect(skipped[2]).toContain("_adv_callback_detach ADVENTURE_GROUND_INIT");
+  });
+
+  test("leaves the ops around a dropped block in place (stack stays balanced)", () => {
+    const { items } = parseGbvmAsm(
+      [
+        "        VM_PUSH_CONST           7",
+        "        VM_PUSH_CONST           PLATFORM_FALL_INIT",
+        "        VM_CALL_NATIVE          b_plat_callback_detach, _plat_callback_detach",
+        "        VM_POP                  1",
+        "        VM_POP                  1",
+      ].join("\n"),
+      { globals: { PLATFORM_FALL_INIT: 0 } },
+    );
+    // The unrelated push and pop around the block survive untouched.
+    expect(items).toEqual([
+      { kind: "op", op: 0x01, operands: [7] },
+      { kind: "op", op: 0x02, operands: [1] },
+    ]);
+  });
+
+  test("fails the build when a callback native is called in any other shape", () => {
+    // e.g. a GBVM Script event calling it with a pointer pushed some other way.
+    expect(() =>
+      parseGbvmAsm(
+        [
+          "        VM_PUSH_CONST           PLATFORM_FALL_INIT",
+          "        VM_PUSH_VALUE           .ARG0",
+          "        VM_PUSH_CONST           0",
+          "        VM_CALL_NATIVE          b_plat_callback_attach, _plat_callback_attach",
+          "        VM_POP                  3",
+        ].join("\n"),
+        { globals: { PLATFORM_FALL_INIT: 0 } },
+      ),
+    ).toThrow(/_plat_callback_attach" is only supported in the block/);
+    // ...or with a pop that doesn't match the pushes.
+    expect(() =>
+      parseGbvmAsm(
+        [
+          "        VM_PUSH_CONST           PLATFORM_FALL_INIT",
+          "        VM_CALL_NATIVE          b_plat_callback_detach, _plat_callback_detach",
+          "        VM_POP                  2",
+        ].join("\n"),
+        { globals: { PLATFORM_FALL_INIT: 0 } },
+      ),
+    ).toThrow(/_plat_callback_detach" is only supported in the block/);
+  });
+
+  test("other VM_CALL_NATIVE targets are untouched", () => {
+    const { items, skipped } = parseGbvmAsm(
+      "        VM_CALL_NATIVE ___bank_fn, _native_fn\n",
+    );
+    expect(items).toEqual([
+      { kind: "op", op: 0x2d, operands: [0, { label: "_native_fn" }] },
+    ]);
+    expect(skipped).toEqual([]);
+  });
+});

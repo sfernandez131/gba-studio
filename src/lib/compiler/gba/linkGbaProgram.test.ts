@@ -93,7 +93,11 @@ describe("linkGbaProgram", () => {
     expect(procs[0].symRelocs).toEqual([
       { at: 5, expr: "(const unsigned char *)&fade_frames_per_step" },
     ]);
-    expect(source).toContain("short fade_frames_per_step = 0;");
+    // Weak, so an engine-owned variable of the same name (e.g. the platformer's
+    // plat_vel_y in hw.cpp) wins at link time instead of colliding with it.
+    expect(source).toContain(
+      "__attribute__((weak)) short fade_frames_per_step = 0;",
+    );
     expect(source).toContain(
       "{ 5, (const unsigned char *)&fade_frames_per_step },",
     );
