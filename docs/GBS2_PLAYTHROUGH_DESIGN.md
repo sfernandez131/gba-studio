@@ -84,11 +84,27 @@ The build drops these with a warning (counts are occurrences in the sample):
    the camera. On the GB this is a mid-frame SCX change per band; on the GBA it maps
    naturally onto Butano's H-blank effects (`regular_bg_position_hbe`).
 
+## G1 result (2026-09-23): the small bridges
+
+gbavm#86 and gba-studio#127.
+
+- **`VM_SWITCH_TEXT_LAYER .TEXT_LAYER_WIN` is handled, and emits nothing.** gbavm's overlay is
+  the window layer, so this is already true. `.TEXT_LAYER_BKG` still drops with a note.
+- **`VM_RANDOMIZE` is op `0x6D`.** The engine seeds with gbvm's `DIV + game_time * 256`, using
+  a Butano timer for `DIV` and `sys_time` for `game_time`. Checked on the gbs2 title with a
+  temporary probe pressing Start at frame 90: the seed was 23,269 = 229 + 90 × 256.
+- **`VM_OVERLAY_SET_SCROLL` stays dropped, because gbs2 never needs it.** Its dialogue pages
+  are at most 3 lines, in a 5-line text region, so no text overflows its box. It can be
+  bridged when a project does overflow.
+
+The gbs2 build now drops only the scroll region (69) and the two platformer state scripts
+(G3). Matrix: 124/151 bridgeable (82%).
+
 ## Slice plan
 
 | Slice  | Scope                                                                                                                                                                   | Verify                                                                                                                                          |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **G1** | The small bridges: `.TEXT_LAYER_WIN` as a no-op; `VM_RANDOMIZE` reseeds; find out whether long texts overflow, and bridge `VM_OVERLAY_SET_SCROLL` if they do.           | Unit tests; a long gbs2 text read back from the overlay over GDB; the sample builds with those drops gone.                                      |
+| G1     | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                           | Unit tests; seed checked on the title (23,269 at frame 90).                                                                                     |
 | **G2** | Point-and-click: the cursor, moving freely; A runs the actor or trigger under it, gbvm's hit rules.                                                                     | Fixture: a POINTNCLICK scene, cursor driven by a forced-input probe onto a trigger; GDB asserts its script ran. Then Player's House by hand.    |
 | **G3** | Platformer knockback + blank: the two states, `plat_next_state`, their start/end scripts (unblocks #123's dropped callbacks), and `plat_blank_grav` / knockback fields. | Fixture: set knockback, assert the state sequence knockback → blank → ground and the callback runs; then the turnip hit in Path to Sample Town. |
 | **G4** | Parallax bands via H-blank effects.                                                                                                                                     | GDB: per-band scroll values vs the camera; eyes-on in Parallax Example.                                                                         |
