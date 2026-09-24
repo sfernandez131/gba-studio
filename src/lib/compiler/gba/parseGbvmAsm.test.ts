@@ -451,6 +451,33 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     });
   });
 
+  // The gbs2 sample's small bridges (G1).
+  describe("gbs2 small bridges (G1)", () => {
+    test("VM_SWITCH_TEXT_LAYER .TEXT_LAYER_WIN is handled and emits nothing", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_SWITCH_TEXT_LAYER .TEXT_LAYER_WIN\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped).toEqual([]);
+    });
+
+    test("VM_SWITCH_TEXT_LAYER .TEXT_LAYER_BKG is dropped with a note", () => {
+      const { items, skipped } = parseGbvmAsm(
+        "        VM_SWITCH_TEXT_LAYER .TEXT_LAYER_BKG\n",
+      );
+      expect(items).toEqual([]);
+      expect(skipped).toEqual(["VM_SWITCH_TEXT_LAYER .TEXT_LAYER_BKG"]);
+    });
+
+    test("VM_RANDOMIZE becomes op 0x6d with no operands", () => {
+      const { items, skipped } = parseGbvmAsm("        VM_RANDOMIZE\n");
+      expect(skipped).toEqual([]);
+      expect(items).toEqual([{ kind: "op", op: 0x6d, operands: [] }]);
+      const { bytes } = emitGbaBytecode(items);
+      expect(Array.from(bytes)).toEqual([0x6d]);
+    });
+  });
+
   // Sound effects and music muting (M14f).
   describe("sound effects (M14f)", () => {
     const PSG = 0x100; // PSG_SFX_FLAG, as the eject registers a PSG effect's index
@@ -685,12 +712,6 @@ describe("parseGbvmAsm — P0 opcodes", () => {
       const { bytes } = emitGbaBytecode(items);
       expect(Array.from(bytes)).toEqual([0x53, 0x00, 0x03, 0x81]);
     });
-  });
-
-  test("drops VM_RANDOMIZE (no GBA equivalent) and reports it skipped", () => {
-    const { items, skipped } = parseGbvmAsm("        VM_RANDOMIZE\n");
-    expect(items).toEqual([]);
-    expect(skipped).toContain("VM_RANDOMIZE");
   });
 
   test("M4: VM_LOAD_TEXT + VM_DISPLAY_TEXT -> op 0x90 with the captured inline text", () => {
