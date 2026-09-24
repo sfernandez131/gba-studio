@@ -251,6 +251,9 @@ export interface GbaSceneEntry {
     interact: string;
     moveSpeed: number; // M10a: subpixels/frame (32 = 1px); 0 = engine default
     collisionGroup: number; // M10f: GB group bit (player 0x01, "1" 0x02, "2" 0x04, "3" 0x08)
+    // gbs2 G2: sprite bounding box in subpixels, [left, right, top, bottom]; absent = the
+    // engine's default 16x16 box.
+    bounds?: [number, number, number, number];
   }[];
   playerMove: number; // 1 = built-in top-down d-pad control of the player (actor 0)
   sceneType: number; // M13a: GBA_SCENE_* (0 TOPDOWN, 1 PLATFORM, 2 ADVENTURE, 3 SHMUP, 4 POINTNCLICK, 5 LOGO)
@@ -338,10 +341,10 @@ export function formatGbaScenesC(
       ? s.actorsInit
           .map(
             (a) =>
-              `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact}, ${a.moveSpeed}, ${a.collisionGroup} }`,
+              `{ ${a.index}, ${a.dir}, ${a.x}, ${a.y}, ${a.interact}, ${a.moveSpeed}, ${a.collisionGroup}, { ${(a.bounds ?? [0, 0, 0, 0]).join(", ")} } }`,
           )
           .join(", ")
-      : "{ 0, 0, 0, 0, 0, 0, 0 }";
+      : "{ 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 } }";
     out.push(
       `static const GbaActorInit scene${i}_actors_init[] = { ${inits} };`,
     );
