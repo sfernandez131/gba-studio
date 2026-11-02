@@ -30,6 +30,7 @@ import { walkScenesScripts, walkSceneScripts } from "shared/lib/scripts/walk";
 import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import { compileGbaHugeSong } from "./gbaHugeSong";
 import { playerSpriteSheetIdFor, spriteBoundsSubpx } from "./gbaPlayerSprite";
+import { platStateAnimRows } from "./gbaPlatformAnims";
 import { collectPsgSfx, psgSfxC, PSG_SFX_FLAG } from "./gbaPsgSfx";
 import { loadUGESong } from "shared/lib/uge/ugeHelper";
 import {
@@ -119,6 +120,11 @@ const ejectGbaBuild = async ({
     compiledData.statesOrder && compiledData.statesOrder.length
       ? compiledData.statesOrder
       : [""];
+  // gbs2 G3: the platformer's per-state animation overrides, read from the same
+  // states_defines.h the GB build compiles (rows index statesOrder too).
+  const platStateAnims = platStateAnimRows(
+    compiledData.files["states_defines.h"] ?? "",
+  );
 
   // Music: each project track plays on one of three GBA audio paths.
   //  - .uge (M14d): gbavm's hUGE player, a port of GB Studio's own driver, on the 4 Game
@@ -1239,6 +1245,12 @@ const ejectGbaBuild = async ({
     ...affineIncludes,
     ...spriteIncludes,
     `static const int GBA_ANIM_STATES = ${statesOrder.length};`,
+    "// gbs2 G3: per platformer state (GB's state_e order), the animation-state row its",
+    "// PLATFORM_*_ANIM override selects, or -1 for none.",
+    `static const int GBA_PLAT_STATES = ${platStateAnims.length};`,
+    `static const signed char GBA_PLAT_STATE_ANIM[GBA_PLAT_STATES] = { ${platStateAnims.join(
+      ", ",
+    )} };`,
     "struct GbaActorSprite {",
     "    const bn::sprite_item* item;",
     "    const unsigned char* anim_start; // [GBA_ANIM_STATES][8]",

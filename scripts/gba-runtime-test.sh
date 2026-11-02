@@ -25,7 +25,11 @@
 #   8. runs a Print (GB Printer) event, which must take its printer-missing path, and an
 #      "If Device GBA" check, which must take its true path (matrix slice F),
 #   9. opens a two-option Choice (options=3: LAST_0|CANCEL_B, count=2),
-#  10. opens a six-item Menu (count=6).
+#  10. opens a six-item Menu (count=6),
+#  11. arms a timer that, 160 frames later, enters the PLATFORM scene, whose init attaches
+#      platformer state scripts and sets the KNOCKBACK state (gbs2 G3). It is a timer, not
+#      a Wait, because a scene init runs under VM_LOCK: waiting there would stall every
+#      other thread through the checks above.
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -131,6 +135,28 @@ gdb-multiarch -batch \
   -ex "echo \n@ISGBA\n" -ex "print script_memory[7]" \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
   -ex "echo \n@CAMLOCKY\n" -ex "print/d gba_camera_lock_y" \
+  -ex "delete" \
+  -ex "break *plat_callback_execute if \$r0 == 12" \
+  -ex "continue" \
+  -ex "echo \n@KBENTER\n" \
+  -ex "print/d plat_state" \
+  -ex "print/d plat_vel_x" \
+  -ex "print/d plat_vel_y" \
+  -ex "print/d plat_knockback_timer" \
+  -ex "delete" \
+  -ex "break hw_render" \
+  -ex "ignore 11 120" \
+  -ex "continue" \
+  -ex "echo \n@PLATSEQ\n" \
+  -ex "print script_memory[13]" \
+  -ex "print script_memory[14]" \
+  -ex "print script_memory[15]" \
+  -ex "print script_memory[16]" \
+  -ex "print script_memory[17]" \
+  -ex "echo \n@PLATEND\n" \
+  -ex "print/d plat_state" \
+  -ex "print/d plat_knockback_timer" \
+  -ex "print/d vm_plat_events[12].pc != 0" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -297,4 +323,23 @@ val_after "@ROUTINE2" '^\$' | grep -q "= 0$" || fail "music routine 2 ran, but n
 val_after "@SFXDONE" '^\$' | grep -q "= 1$" || fail "the FX Hammer effect did not play to its end exactly once"
 val_after "@SFXTICKS" '^\$' | grep -q "= 57$" || fail "the FX Hammer effect ran $(val_after "@SFXTICKS" '^\$' | sed 's/.*= //') ticks, expected 57 (256 Hz)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects)"
+# Platformer states and their scripts (gbs2 G3). After the menu, the main scene enters the
+# PLATFORM scene facing left, whose init attaches scripts to four state slots and sets the
+# state to KNOCKBACK. Each script counts itself into variable 20 (script_memory[13]) and
+# keeps its place in the order: knockback start [14], end [15], blank start [16], end [17].
+# They chain as gbs2's do: knockback's end sets BLANK, and blank's start waits 10 frames and
+# sets GROUND. Entering knockback (slot 12 = PLATFORM_KNOCKBACK_INIT) launches the player
+# away from its facing with GB's engine.json defaults, before the slot's script is started.
+val_after "@KBENTER" '^\$' | grep -q "= 6$" || fail "plat_state != 6 (KNOCKBACK) on entering knockback"
+KB_VX=$(awk '/@KBENTER/{f=1;next} f && /^\$/{n++; if(n==2){print; exit}}' "$LOG" | sed 's/.*= //')
+KB_VY=$(awk '/@KBENTER/{f=1;next} f && /^\$/{n++; if(n==3){print; exit}}' "$LOG" | sed 's/.*= //')
+KB_T=$(awk '/@KBENTER/{f=1;next} f && /^\$/{n++; if(n==4){print; exit}}' "$LOG" | sed 's/.*= //')
+[ "$KB_VX" = "8192" ] || fail "knockback plat_vel_x = $KB_VX, expected 8192 (facing left -> pushed right)"
+[ "$KB_VY" = "-16384" ] || fail "knockback plat_vel_y = $KB_VY, expected -16384"
+[ "$KB_T" = "30" ] || fail "plat_knockback_timer = $KB_T, expected 30"
+PLAT_SEQ=$(awk '/@PLATSEQ/{f=1;next} /@PLATEND/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
+[ "$PLAT_SEQ" = "4 1 2 3 4 " ] || fail "state scripts ran as [count kb-start kb-end blank-start blank-end] = [$PLAT_SEQ], expected [4 1 2 3 4]"
+PLAT_END=$(awk '/@PLATEND/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
+[ "$PLAT_END" = "1 0 1 " ] || fail "after the chain [plat_state timer slot-12-attached] = [$PLAT_END], expected [1 0 1] (GROUND)"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, platformer states + state scripts)"

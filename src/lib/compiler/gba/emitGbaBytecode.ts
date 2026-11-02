@@ -155,6 +155,10 @@ export const GBA_OPCODE_SPECS: Record<number, GbaOperandType[]> = {
   0x71: ["u8", "u8"], // TIMER_SET context, interval (ticks)
   0x72: ["u8"], // TIMER_STOP context
   0x73: ["u8"], // TIMER_RESET context
+  // Platformer state scripts (gbs2 G3): the bridge's rewrite of GB's
+  // plat_callback_attach / _detach native blocks. The addr is the state script proc.
+  0x9d: ["u8", "u8", "ptr"], // PLAT_CALLBACK_ATTACH slot, bank, addr
+  0x9e: ["u8"], // PLAT_CALLBACK_DETACH slot
 };
 
 export const GBA_OP_STOP = 0x00;
