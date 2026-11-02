@@ -145,7 +145,11 @@ gdb-multiarch -batch \
   -ex "print/d plat_knockback_timer" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 11 120" \
+  -ex "continue" \
+  -ex "echo \n@PLATSTEP\n" \
+  -ex "print/d gba_plat_step_x" \
+  -ex "print/d gba_plat_step_y" \
+  -ex "ignore 11 119" \
   -ex "continue" \
   -ex "echo \n@PLATSEQ\n" \
   -ex "print script_memory[13]" \
@@ -213,7 +217,7 @@ val_after "@PLATFORM" '= 4000$'  | grep -q "= 4000$"  || fail "plat_climb_vel !=
 val_after "@PLATFORM" '= 2$'     | grep -q "= 2$"     || fail "plat_coyote_frames != 2"
 
 # SHMUP auto-scroll speed (M13f): the shooter_scroll_speed engine field must
-# link with GB's default (32 GB-subpx/frame = 2px/frame).
+# link with GB's default (32 subpx/frame = 1px/frame).
 val_after "@SHMUP" '= 32$' | grep -q "= 32$" || fail "shooter_scroll_speed != 32"
 
 # Input attach (matrix slice C). The fixture attaches a script to B + SELECT with
@@ -337,9 +341,16 @@ KB_T=$(awk '/@KBENTER/{f=1;next} f && /^\$/{n++; if(n==4){print; exit}}' "$LOG" 
 [ "$KB_VX" = "8192" ] || fail "knockback plat_vel_x = $KB_VX, expected 8192 (facing left -> pushed right)"
 [ "$KB_VY" = "-16384" ] || fail "knockback plat_vel_y = $KB_VY, expected -16384"
 [ "$KB_T" = "30" ] || fail "plat_knockback_timer = $KB_T, expected 30"
+# Platformer speed: that frame's step is gbvm's VEL_TO_SUBPX of the velocity after air
+# deceleration and gravity, (v >> 8) << 1 in 32/px subpixels - x 7984 -> 62, y -14592 ->
+# -114. A step of twice that is the old 2x-speed bug.
+KB_DX=$(awk '/@PLATSTEP/{f=1;next} f && /^\$/{n++; if(n==1){print; exit}}' "$LOG" | sed 's/.*= //')
+KB_DY=$(awk '/@PLATSTEP/{f=1;next} f && /^\$/{n++; if(n==2){print; exit}}' "$LOG" | sed 's/.*= //')
+[ "$KB_DX" = "62" ] || fail "first knockback step x = $KB_DX subpx, expected 62"
+[ "$KB_DY" = "-114" ] || fail "first knockback step y = $KB_DY subpx, expected -114"
 PLAT_SEQ=$(awk '/@PLATSEQ/{f=1;next} /@PLATEND/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
 [ "$PLAT_SEQ" = "4 1 2 3 4 " ] || fail "state scripts ran as [count kb-start kb-end blank-start blank-end] = [$PLAT_SEQ], expected [4 1 2 3 4]"
 PLAT_END=$(awk '/@PLATEND/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
 [ "$PLAT_END" = "1 0 1 " ] || fail "after the chain [plat_state timer slot-12-attached] = [$PLAT_END], expected [1 0 1] (GROUND)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, platformer states + state scripts)"
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, platformer states + state scripts + speed)"
