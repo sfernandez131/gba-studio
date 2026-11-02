@@ -30,8 +30,13 @@
 #      platformer state scripts and sets the KNOCKBACK state (gbs2 G3). It is a timer, not
 #      a Wait, because a scene init runs under VM_LOCK: waiting there would stall every
 #      other thread through the checks above.
-#  12. That init also arms a timer that, 160 frames later, puts the player on the Hazard,
-#      an actor in collision group 1, and leaves it there (gbs2 G3b).
+#  12. still in the PLATFORM init, after the KNOCKBACK request: arms a 16-frame timer that
+#      counts its runs, stores the player's position, opens a Choice that the test holds
+#      for 41 frames, and stores the position again. The init holds the VM lock
+#      throughout, so the player must not move (no knockback, no gravity) and the timer
+#      must not count down until the init ends.
+#  13. Last in that init, arms timer 2, which 160 frames later puts the player on the
+#      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -51,7 +56,9 @@ MGBA_PID=$!
 trap 'kill $MGBA_PID 2>/dev/null || true' EXIT
 sleep 3
 
-gdb-multiarch -batch \
+# A run that misses a breakpoint would wait on it forever; the timeout turns that into a
+# log with markers missing, which the asserts below then report.
+timeout 300 gdb-multiarch -batch \
   -ex "set pagination off" \
   -ex "set confirm off" \
   -ex "target remote localhost:2345" \
@@ -138,6 +145,13 @@ gdb-multiarch -batch \
   -ex "echo \n@CAMLOCKX\n" -ex "print/d gba_camera_lock_x" \
   -ex "echo \n@CAMLOCKY\n" -ex "print/d gba_camera_lock_y" \
   -ex "delete" \
+  -ex "break hw_choice_step" \
+  -ex "continue" \
+  -ex "echo \n@LOCKCHOICE\n" -ex "info registers r1" \
+  -ex "ignore 10 40" \
+  -ex "continue" \
+  -ex "return (int)1" \
+  -ex "delete" \
   -ex "break *plat_callback_execute if \$r0 == 12" \
   -ex "continue" \
   -ex "echo \n@KBENTER\n" \
@@ -145,10 +159,22 @@ gdb-multiarch -batch \
   -ex "print/d plat_vel_x" \
   -ex "print/d plat_vel_y" \
   -ex "print/d plat_knockback_timer" \
+  -ex "echo \n@LOCKPROBE\n" \
+  -ex "print script_memory[18]" \
+  -ex "print script_memory[19]" \
+  -ex "print script_memory[20]" \
+  -ex "print script_memory[21]" \
+  -ex "print script_memory[22]" \
+  -ex "print script_memory[23]" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 11 120" \
   -ex "continue" \
+  -ex "echo \n@PLATSTEP\n" \
+  -ex "print/d gba_plat_step_x" \
+  -ex "print/d gba_plat_step_y" \
+  -ex "ignore 12 119" \
+  -ex "continue" \
+  -ex "echo \n@TIMERAFTER\n" -ex "print script_memory[23]" \
   -ex "echo \n@PLATSEQ\n" \
   -ex "print script_memory[13]" \
   -ex "print script_memory[14]" \
@@ -163,22 +189,22 @@ gdb-multiarch -batch \
   -ex "break hw_render if player_iframes == 20" \
   -ex "continue" \
   -ex "echo \n@HIT1\n" \
-  -ex "print script_memory[18]" \
-  -ex "print script_memory[19]" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
   -ex "print/d player_iframes" \
   -ex "delete" \
   -ex "break hw_render" \
-  -ex "ignore 13 18" \
+  -ex "ignore 14 18" \
   -ex "continue" \
   -ex "echo \n@HIT2\n" \
-  -ex "print script_memory[18]" \
-  -ex "print script_memory[19]" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
   -ex "print/d player_iframes" \
-  -ex "ignore 13 1" \
+  -ex "ignore 14 1" \
   -ex "continue" \
   -ex "echo \n@HIT3\n" \
-  -ex "print script_memory[18]" \
-  -ex "print script_memory[19]" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
   -ex "print/d player_iframes" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
@@ -236,7 +262,7 @@ val_after "@PLATFORM" '= 4000$'  | grep -q "= 4000$"  || fail "plat_climb_vel !=
 val_after "@PLATFORM" '= 2$'     | grep -q "= 2$"     || fail "plat_coyote_frames != 2"
 
 # SHMUP auto-scroll speed (M13f): the shooter_scroll_speed engine field must
-# link with GB's default (32 GB-subpx/frame = 2px/frame).
+# link with GB's default (32 subpx/frame = 1px/frame).
 val_after "@SHMUP" '= 32$' | grep -q "= 32$" || fail "shooter_scroll_speed != 32"
 
 # Input attach (matrix slice C). The fixture attaches a script to B + SELECT with
@@ -346,6 +372,30 @@ val_after "@ROUTINE2" '^\$' | grep -q "= 0$" || fail "music routine 2 ran, but n
 val_after "@SFXDONE" '^\$' | grep -q "= 1$" || fail "the FX Hammer effect did not play to its end exactly once"
 val_after "@SFXTICKS" '^\$' | grep -q "= 57$" || fail "the FX Hammer effect ran $(val_after "@SFXTICKS" '^\$' | sed 's/.*= //') ticks, expected 57 (256 Hz)"
 
+# VM lock. gbvm skips the scene type's state update - the player's control and physics -
+# and the timer tick while a script holds the VM lock. The PLATFORM init holds it while
+# the test keeps its Choice open for 41 frames, right after the init asked for KNOCKBACK,
+# so the knockback must wait for the init to end: @LOCKPROBE is read on the first frame
+# after it, as the knockback starts. The build packs the used variables in id order, so
+# vars 25-30 sit at script_memory[18..23]. The player's position before the Choice
+# ([18], [19]) must still be the spawn tile (30, 29) in pixels after it ([21], [22]) -
+# the stores also bracket the Choice box sliding in and out - and the forced selection
+# lands in [20].
+#
+# The timer armed just before the Choice counts its runs in [23]. No thread but the init
+# runs under the lock, so a countdown that kept going would show as runs queued behind
+# the init, which then all run on that first frame; a paused one has not fired yet. It
+# must be firing 121 frames later, though, or that zero would only mean it is broken.
+LOCK=$(awk '/@LOCKPROBE/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0; if(++n==6) exit}' "$LOG")
+[ -n "$LOCK" ] || fail "lock probe not reached (did the knockback start while the Choice held the VM lock?)"
+read -r X0 Y0 CHOSEN X1 Y1 TIMER_RUNS <<< "$LOCK"
+[ "$CHOSEN" = "1" ] || fail "lock probe Choice result = $CHOSEN, expected the forced 1"
+[ "$X0 $Y0" = "240 232" ] || fail "player not at its spawn (240, 232 px) before the Choice: ($X0, $Y0)"
+[ "$X1 $Y1" = "$X0 $Y0" ] || fail "the player moved from ($X0, $Y0) to ($X1, $Y1) px while a Choice held the VM lock"
+[ "$TIMER_RUNS" = "0" ] || fail "the timer ran $TIMER_RUNS times as the lock was released: its countdown kept going under the lock"
+TIMER_AFTER=$(val_after "@TIMERAFTER" '^\$' | sed 's/.*= //')
+[ "${TIMER_AFTER:-0}" -ge 1 ] || fail "the 16-frame timer never fired after the lock was released (count ${TIMER_AFTER:-?})"
+
 # Platformer states and their scripts (gbs2 G3). After the menu, the main scene enters the
 # PLATFORM scene facing left, whose init attaches scripts to four state slots and sets the
 # state to KNOCKBACK. Each script counts itself into variable 20 (script_memory[13]) and
@@ -360,6 +410,13 @@ KB_T=$(awk '/@KBENTER/{f=1;next} f && /^\$/{n++; if(n==4){print; exit}}' "$LOG" 
 [ "$KB_VX" = "8192" ] || fail "knockback plat_vel_x = $KB_VX, expected 8192 (facing left -> pushed right)"
 [ "$KB_VY" = "-16384" ] || fail "knockback plat_vel_y = $KB_VY, expected -16384"
 [ "$KB_T" = "30" ] || fail "plat_knockback_timer = $KB_T, expected 30"
+# Platformer speed: that frame's step is gbvm's VEL_TO_SUBPX of the velocity after air
+# deceleration and gravity, (v >> 8) << 1 in 32/px subpixels - x 7984 -> 62, y -14592 ->
+# -114. A step of twice that is the old 2x-speed bug.
+KB_DX=$(awk '/@PLATSTEP/{f=1;next} f && /^\$/{n++; if(n==1){print; exit}}' "$LOG" | sed 's/.*= //')
+KB_DY=$(awk '/@PLATSTEP/{f=1;next} f && /^\$/{n++; if(n==2){print; exit}}' "$LOG" | sed 's/.*= //')
+[ "$KB_DX" = "62" ] || fail "first knockback step x = $KB_DX subpx, expected 62"
+[ "$KB_DY" = "-114" ] || fail "first knockback step y = $KB_DY subpx, expected -114"
 PLAT_SEQ=$(awk '/@PLATSEQ/{f=1;next} /@PLATEND/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
 [ "$PLAT_SEQ" = "4 1 2 3 4 " ] || fail "state scripts ran as [count kb-start kb-end blank-start blank-end] = [$PLAT_SEQ], expected [4 1 2 3 4]"
 PLAT_END=$(awk '/@PLATEND/{f=1;next} /@HIT1/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
@@ -367,8 +424,8 @@ PLAT_END=$(awk '/@PLATEND/{f=1;next} /@HIT1/{f=0} f && /^\$/{sub(/.*= /,""); pri
 
 # Player-vs-actor collision (gbs2 G3b). After the chain, a timer puts the standing player on
 # the Hazard (collision group 1) and leaves it there. The hit runs two scripts: the Hazard's
-# On Hit: Player tab, which counts variable 25 (script_memory[18]), and the scene's On Hit
-# group 1 tab, which counts variable 26 ([19]). Each tab is a branch on the thread argument,
+# On Hit: Player tab, which counts variable 31 (script_memory[24]), and the scene's On Hit
+# group 1 tab, which counts variable 32 ([25]). Each tab is a branch on the thread argument,
 # so a count also proves the argument: 0 for the actor's own script, the group bit 2 for the
 # scene's. The hit makes the player invincible for 20 frames, which count down while the two
 # still touch. So the counts are [1 1] on the frame after the hit (invincibility 20) and on
@@ -382,4 +439,4 @@ HIT3=$(hit_vals "@HIT3")
 [ "$HIT2" = "1 1 1 " ] || fail "on the last invincible frame [actor-script scene-script iframes] = [$HIT2], expected [1 1 1]"
 [ "$HIT3" = "2 2 20 " ] || fail "after the invincibility ran out [actor-script scene-script iframes] = [$HIT3], expected [2 2 20]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, platformer states + state scripts, player-vs-actor collision)"
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision)"

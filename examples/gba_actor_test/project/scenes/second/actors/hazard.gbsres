@@ -23,7 +23,7 @@
       "id": "c3b30000-0000-4000-8000-000000000005",
       "command": "EVENT_INC_VALUE",
       "args": {
-        "variable": "25"
+        "variable": "31"
       }
     }
   ],
