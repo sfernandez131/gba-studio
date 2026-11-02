@@ -521,6 +521,37 @@
         "cancelOnLastOption": false,
         "cancelOnB": true
       }
+    },
+    {
+      "id": "abcdef01-0000-4000-8000-0000000000f0",
+      "command": "EVENT_SET_TIMER_SCRIPT",
+      "args": {
+        "timer": 1,
+        "units": "frames",
+        "frames": 160,
+        "__scriptTabs": "end"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "abcdef01-0000-4000-8000-0000000000f1",
+            "command": "EVENT_SWITCH_SCENE",
+            "args": {
+              "sceneId": "aaaaaaaa-0000-4000-8000-000000000002",
+              "x": {
+                "type": "number",
+                "value": 30
+              },
+              "y": {
+                "type": "number",
+                "value": 29
+              },
+              "direction": "left",
+              "fadeSpeed": 2
+            }
+          }
+        ]
+      }
     }
   ],
   "playerHit1Script": [

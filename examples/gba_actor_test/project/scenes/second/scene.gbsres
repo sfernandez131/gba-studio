@@ -93,6 +93,162 @@
       "children": {
         "true": []
       }
+    },
+    {
+      "id": "c3c30000-0000-4000-8000-000000000003",
+      "command": "EVENT_SET_PLATFORMER_CALLBACK_SCRIPT",
+      "args": {
+        "event": "knockbackStart",
+        "__scriptTabs": "scriptinput"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "c3c30000-0000-4000-8000-000000000001",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "20"
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-000000000002",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "21",
+              "value": {
+                "type": "variable",
+                "value": "20"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c3c30000-0000-4000-8000-000000000007",
+      "command": "EVENT_SET_PLATFORMER_CALLBACK_SCRIPT",
+      "args": {
+        "event": "knockbackEnd",
+        "__scriptTabs": "scriptinput"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "c3c30000-0000-4000-8000-000000000004",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "20"
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-000000000005",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "22",
+              "value": {
+                "type": "variable",
+                "value": "20"
+              }
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-000000000006",
+            "command": "EVENT_PLATFORMER_STATE_SET",
+            "args": {
+              "state": "blank"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c3c30000-0000-4000-8000-00000000000c",
+      "command": "EVENT_SET_PLATFORMER_CALLBACK_SCRIPT",
+      "args": {
+        "event": "blankStart",
+        "__scriptTabs": "scriptinput"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "c3c30000-0000-4000-8000-000000000008",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "20"
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-000000000009",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "23",
+              "value": {
+                "type": "variable",
+                "value": "20"
+              }
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-00000000000a",
+            "command": "EVENT_WAIT",
+            "args": {
+              "units": "frames",
+              "time": {
+                "type": "number",
+                "value": 0.5
+              },
+              "frames": {
+                "type": "number",
+                "value": 10
+              }
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-00000000000b",
+            "command": "EVENT_PLATFORMER_STATE_SET",
+            "args": {
+              "state": "ground"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c3c30000-0000-4000-8000-00000000000f",
+      "command": "EVENT_SET_PLATFORMER_CALLBACK_SCRIPT",
+      "args": {
+        "event": "blankEnd",
+        "__scriptTabs": "scriptinput"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "c3c30000-0000-4000-8000-00000000000d",
+            "command": "EVENT_INC_VALUE",
+            "args": {
+              "variable": "20"
+            }
+          },
+          {
+            "id": "c3c30000-0000-4000-8000-00000000000e",
+            "command": "EVENT_SET_VALUE",
+            "args": {
+              "variable": "24",
+              "value": {
+                "type": "variable",
+                "value": "20"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c3c30000-0000-4000-8000-000000000010",
+      "command": "EVENT_PLATFORMER_STATE_SET",
+      "args": {
+        "state": "knockback"
+      }
     }
   ],
   "playerHit1Script": [],

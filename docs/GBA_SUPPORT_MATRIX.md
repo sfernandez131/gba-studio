@@ -79,10 +79,17 @@ Deliberately dropped on GBA (each drop is logged during eject). Safe for the cur
 
 | Native | Why |
 |---|---|
-| `_plat_callback_attach` | platformer state scripts are not supported on GBA yet |
-| `_plat_callback_detach` | platformer state scripts are not supported on GBA yet |
 | `_adv_callback_attach` | adventure state scripts are not supported on GBA yet |
 | `_adv_callback_detach` | adventure state scripts are not supported on GBA yet |
+
+## Native calls rewritten to gbavm ops
+
+These engine natives take their arguments as a script address on the VM stack, which a 16-bit stack slot cannot hold on GBA. The bridge rewrites the whole block their GB Studio event emits into a gbavm op that carries the script as a real pointer, and fails the build if one is called in any other shape.
+
+| Native | Becomes |
+|---|---|
+| `_plat_callback_attach` | PLAT_CALLBACK_ATTACH (op 0x9d) |
+| `_plat_callback_detach` | PLAT_CALLBACK_DETACH (op 0x9e) |
 
 ## Encoded directly
 

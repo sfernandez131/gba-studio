@@ -504,7 +504,7 @@ export const TARGET_NA_MACROS: Record<
 };
 
 /**
- * Native calls the bridge drops together with the stack block around them.
+ * Native calls the bridge handles together with the stack block around them.
  *
  * These are GB Studio 4's state-machine script callbacks: the "Set/Remove
  * Platformer Script" and "Set/Remove Adventure Script" events. Each compiles to a
@@ -517,31 +517,50 @@ export const TARGET_NA_MACROS: Record<
  * and the native stores the script into the state machine's callback table, which
  * runs it when the player enters or leaves that state (platform.c / adventure.c).
  *
- * gbavm has no callback table, and its platformer only models FALL, GROUND, JUMP
- * and LADDER - GB Studio's own gbs2 sample hooks KNOCKBACK and BLANK, which it has
- * no state for at all. So the whole block drops with a note: the script is never
- * attached, which is what GB does for a state the player never enters, and the game
- * plays. The drop takes the pushes too - the third one is a script ADDRESS, which
- * has no value a 16-bit stack slot can hold on GBA - and the matching VM_POP, so the
- * stack stays balanced. Linking the native instead would leave the VM calling a
- * null function pointer.
+ * The block cannot run as written: the third push is a script ADDRESS, which has no
+ * value a 16-bit stack slot can hold on GBA, and linking the native would leave the
+ * VM calling a null function pointer. So the bridge takes the whole block - the
+ * pushes, the call and the matching VM_POP, keeping the stack balanced - and either
+ * replaces it with a gbavm op that carries the script as a real pointer
+ * (BRIDGED_NATIVE_CALLS) or drops it with a note (DROPPED_NATIVE_CALLS).
  *
  * `pushes` is how many VM_PUSH_CONSTs precede the call (and the VM_POP count after).
  * Anything that calls these natives in another shape (a GBVM Script event, a
- * plugin) fails the build rather than guessing. Exported for the support matrix.
+ * plugin) fails the build rather than guessing. Both tables are exported for the
+ * support matrix.
  */
+export const BRIDGED_NATIVE_CALLS: Record<
+  string,
+  {
+    pushes: number;
+    what: string;
+    // The op to emit, from the block's push arguments in push order.
+    item: (pushArgs: string[], ev: (s: string) => number) => GbaItem;
+  }
+> = {
+  // gbs2 G3: gbavm's platformer runs the attached script on each state change.
+  ["_plat_callback_attach"]: {
+    pushes: 3,
+    what: "PLAT_CALLBACK_ATTACH (op 0x9d)",
+    item: ([slot, bank, ptr], ev) => ({
+      kind: "op",
+      op: 0x9d,
+      operands: [ev(slot), ev(bank), { label: ptr.replace(/:+$/, "") }],
+    }),
+  },
+  ["_plat_callback_detach"]: {
+    pushes: 1,
+    what: "PLAT_CALLBACK_DETACH (op 0x9e)",
+    item: ([slot], ev) => ({ kind: "op", op: 0x9e, operands: [ev(slot)] }),
+  },
+};
+
+// gbavm has no adventure state machine, so these drop: the script is never
+// attached, which is what GB does for a state the player never enters.
 export const DROPPED_NATIVE_CALLS: Record<
   string,
   { pushes: number; reason: string }
 > = {
-  ["_plat_callback_attach"]: {
-    pushes: 3,
-    reason: "platformer state scripts are not supported on GBA yet",
-  },
-  ["_plat_callback_detach"]: {
-    pushes: 1,
-    reason: "platformer state scripts are not supported on GBA yet",
-  },
   ["_adv_callback_attach"]: {
     pushes: 3,
     reason: "adventure state scripts are not supported on GBA yet",
@@ -553,15 +572,21 @@ export const DROPPED_NATIVE_CALLS: Record<
 };
 
 /**
- * Find every DROPPED_NATIVE_CALLS block in a script. Returns the line indices to
- * drop and, keyed by the VM_CALL_NATIVE line, the note to report for each block.
+ * Find every BRIDGED_ / DROPPED_NATIVE_CALLS block in a script. Returns the line
+ * indices the block covers and, keyed by its VM_CALL_NATIVE line, the op that
+ * replaces a bridged block or the note to report for a dropped one.
  */
-function findDroppedNativeCalls(
+function findNativeCallBlocks(
   lines: string[],
   ev: (s: string) => number,
-): { drop: Set<number>; notes: Map<number, string> } {
+): {
+  drop: Set<number>;
+  notes: Map<number, string>;
+  items: Map<number, GbaItem>;
+} {
   const drop = new Set<number>();
   const notes = new Map<number, string>();
+  const items = new Map<number, GbaItem>();
   // Neighbouring instruction lines, skipping blanks and comment-only lines.
   const step = (from: number, dir: -1 | 1): number => {
     let i = from + dir;
@@ -574,14 +599,16 @@ function findDroppedNativeCalls(
     const call = stripComment(rawLine).match(/^VM_CALL_NATIVE\s+(.*)$/);
     if (!call) return;
     const fn = (splitArgs(call[1])[1] ?? "").trim();
-    const spec = DROPPED_NATIVE_CALLS[fn];
+    const bridged = BRIDGED_NATIVE_CALLS[fn];
+    const dropped = DROPPED_NATIVE_CALLS[fn];
+    const spec = bridged ?? dropped;
     if (!spec) return;
     const shapeError = () =>
       new Error(
         `GBA build: "${fn}" is only supported in the block its GB Studio event ` +
           `emits (${spec.pushes} x VM_PUSH_CONST, the call, VM_POP ${spec.pushes}); ` +
-          `found it elsewhere (line: "${stripComment(rawLine)}"). ` +
-          `${spec.reason}.`,
+          `found it elsewhere (line: "${stripComment(rawLine)}")` +
+          (dropped ? `. ${dropped.reason}.` : "."),
       );
     const pushes: number[] = [];
     let i = callIdx;
@@ -599,18 +626,24 @@ function findDroppedNativeCalls(
     for (const p of pushes) drop.add(p);
     drop.add(callIdx);
     drop.add(popIdx);
-    // The first push is the callback slot (e.g. PLATFORM_KNOCKBACK_INIT): name it,
-    // so the note says which state lost its script.
-    const slot = stripComment(lines[pushes[0]]).replace(
-      /^VM_PUSH_CONST\s+/,
-      "",
+    const pushArgs = pushes.map((p) =>
+      stripComment(lines[p])
+        .replace(/^VM_PUSH_CONST\s+/, "")
+        .trim(),
     );
+    if (bridged) {
+      items.set(callIdx, bridged.item(pushArgs, ev));
+      return;
+    }
+    if (!dropped) return;
+    // The first push is the callback slot (e.g. ADVENTURE_GROUND_INIT): name it,
+    // so the note says which state lost its script.
     notes.set(
       callIdx,
-      `VM_CALL_NATIVE ${fn} ${slot} (${spec.reason}; the script is not attached)`,
+      `VM_CALL_NATIVE ${fn} ${pushArgs[0]} (${dropped.reason}; the script is not attached)`,
     );
   });
-  return { drop, notes };
+  return { drop, notes, items };
 }
 
 // GBVM constants referenced by name in operands/RPN. Local `.X = n` defines found
@@ -1160,7 +1193,7 @@ export function parseGbvmAsm(
   }
   const ev = makeEvaluator(consts);
   const lines = asm.split(/\r?\n/);
-  const droppedCalls = findDroppedNativeCalls(lines, ev);
+  const nativeBlocks = findNativeCallBlocks(lines, ev);
 
   const items: GbaItem[] = [];
   const skipped: string[] = [];
@@ -1218,10 +1251,12 @@ export function parseGbvmAsm(
       if (!active) continue;
     }
 
-    // A state-callback block (see DROPPED_NATIVE_CALLS): drop every line of it,
-    // reporting once at the call.
-    if (droppedCalls.drop.has(lineIdx)) {
-      const note = droppedCalls.notes.get(lineIdx);
+    // A state-callback block (see BRIDGED_ / DROPPED_NATIVE_CALLS): take every line
+    // of it, emitting its replacement op or reporting the drop once, at the call.
+    if (nativeBlocks.drop.has(lineIdx)) {
+      const item = nativeBlocks.items.get(lineIdx);
+      if (item) items.push(item);
+      const note = nativeBlocks.notes.get(lineIdx);
       if (note) skipped.push(note);
       continue;
     }
