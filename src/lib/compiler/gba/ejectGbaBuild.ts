@@ -29,6 +29,7 @@ import { getPalette } from "lib/compiler/scriptBuilder/helpers";
 import { walkScenesScripts, walkSceneScripts } from "shared/lib/scripts/walk";
 import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import { compileGbaHugeSong } from "./gbaHugeSong";
+import { playerSpriteSheetIdFor, spriteBoundsSubpx } from "./gbaPlayerSprite";
 import { collectPsgSfx, psgSfxC, PSG_SFX_FLAG } from "./gbaPsgSfx";
 import { loadUGESong } from "shared/lib/uge/ugeHelper";
 import {
@@ -377,6 +378,21 @@ const ejectGbaBuild = async ({
   const sceneProjectiles = compiledData.sceneProjectiles ?? {};
   const globalProjectileTables = compiledData.globalProjectiles ?? [];
   const globalSpriteIds: string[] = [];
+  const spriteById = (id?: string) =>
+    id ? projectData.sprites.find((sp) => sp.id === id) : undefined;
+  // gbs2 G2: a scene's player sprite, with GB Studio's fallback to the project default
+  // for its scene type (see gbaPlayerSprite.ts).
+  const spriteIdSet = new Set(projectData.sprites.map((sp) => sp.id));
+  const scenePlayerSprite = (scene: {
+    type?: string;
+    playerSpriteSheetId?: string;
+  }): string | undefined =>
+    playerSpriteSheetIdFor(
+      scene,
+      projectData.settings.defaultPlayerSprites,
+      spriteIdSet,
+    );
+
   const globalSpriteIndex = (spriteSheetId: string): number => {
     let idx = globalSpriteIds.indexOf(spriteSheetId);
     if (idx < 0) {
@@ -576,11 +592,14 @@ const ejectGbaBuild = async ({
         moveSpeed: Math.max(1, Math.round((actor.moveSpeed ?? 1) * 32)),
         // M10f: authored collision group -> the GB group bit (projectile hits).
         collisionGroup: collisionGroupBit(actor.collisionGroup ?? ""),
+        // gbs2 G2: the sprite's bounding box (point-and-click hover/interact).
+        bounds: spriteBoundsSubpx(spriteById(actor.spriteSheetId)),
       };
     });
-    // Player (actor 0): if the scene has a player sprite, place it at the project
-    // start position (player position persistence across scenes is a follow-up).
-    if (scene.playerSpriteSheetId) {
+    // Player (actor 0): if the scene has a player sprite - its own override, or the
+    // project's default for its scene type (gbs2 G2) - place it at the project start
+    // position (player position persistence across scenes is a follow-up).
+    if (scenePlayerSprite(scene)) {
       actorsInit.unshift({
         index: 0,
         dir: dirCode[settings.startDirection] ?? 0,
@@ -589,13 +608,16 @@ const ejectGbaBuild = async ({
         interact: "0",
         moveSpeed: Math.max(1, Math.round((settings.startMoveSpeed ?? 1) * 32)),
         collisionGroup: 0x01, // the player group (M10f)
+        // gbs2 G2: in a POINTNCLICK scene this is the cursor's box.
+        bounds: spriteBoundsSubpx(spriteById(scenePlayerSprite(scene))),
       });
     }
     // Built-in top-down d-pad control for TOPDOWN scenes (other movement types and
     // platformer physics are later milestones).
     // M13a: scene type drives the engine's controller dispatch. Every moving
     // type gets the built-in controller (top-down until PLATFORM lands in
-    // M13b / SHMUP+ADVENTURE in M13f); POINTNCLICK and LOGO don't move.
+    // M13b / SHMUP+ADVENTURE in M13f). POINTNCLICK moves a cursor (gbs2 G2);
+    // LOGO doesn't move.
     const GBA_SCENE_TYPES: Record<string, number> = {
       TOPDOWN: 0,
       PLATFORM: 1,
@@ -605,7 +627,7 @@ const ejectGbaBuild = async ({
       LOGO: 5,
     };
     const sceneType = GBA_SCENE_TYPES[scene.type] ?? 0;
-    const playerMove = sceneType <= 3 ? 1 : 0;
+    const playerMove = sceneType <= 4 ? 1 : 0;
     // Collision grid sized to the engine's tile dims (widthPx/8 x heightPx/8),
     // copied from the scene's per-tile collision bytes. Empty when nothing is solid.
     const sceneColl: number[] = scene.collisions ?? [];
@@ -1112,8 +1134,9 @@ const ejectGbaBuild = async ({
         `Converting sprite ${sprite.filename} -> ${name} (${sheet.frameCount} frames)`,
       );
     };
-    if (scene.playerSpriteSheetId) {
-      await emitSprite(scene.playerSpriteSheetId, 0);
+    const playerSprite = scenePlayerSprite(scene);
+    if (playerSprite) {
+      await emitSprite(playerSprite, 0);
     }
     for (let i = 0; i < scene.actors.length; i++) {
       await emitSprite(scene.actors[i].spriteSheetId, i + 1);

@@ -200,7 +200,7 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 1 };",
     );
     expect(c).toContain(
-      "static const GbaActorInit scene0_actors_init[] = { { 1, 2, 2304, 2048, actor_npc_interact, 32, 2 } };",
+      "static const GbaActorInit scene0_actors_init[] = { { 1, 2, 2304, 2048, actor_npc_interact, 32, 2, { 0, 0, 0, 0 } } };",
     );
     expect(c).toContain(
       "static const unsigned char scene0_collisions[] = { 0, 15, 0, 0 };",
@@ -221,6 +221,43 @@ describe("linkGbaProgram", () => {
     );
     expect(c).toContain(
       "const unsigned int gba_global_projectile_defs_count = 0;",
+    );
+  });
+
+  // gbs2 G2: point-and-click needs each actor's sprite box. The row carries it as a
+  // trailing { left, right, top, bottom } block, in subpixels.
+  test("formatGbaScenesC emits an actor's bounding box after its collision group", () => {
+    const c = formatGbaScenesC(
+      [
+        {
+          initCName: "scene_house_init",
+          actorUpdates: [],
+          widthPx: 160,
+          heightPx: 144,
+          actorsInit: [
+            {
+              index: 0,
+              dir: 0,
+              x: 0,
+              y: 0,
+              interact: "0",
+              moveSpeed: 32,
+              collisionGroup: 1,
+              bounds: [0, 511, -256, 255],
+            },
+          ],
+          playerMove: 1,
+          sceneType: 4,
+          collisions: [],
+          triggers: [],
+          projectiles: [],
+          playerHit: "0",
+        },
+      ],
+      0,
+    );
+    expect(c).toContain(
+      "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0, 0, 32, 1, { 0, 511, -256, 255 } } };",
     );
   });
 
@@ -250,7 +287,7 @@ describe("linkGbaProgram", () => {
       "static const unsigned char scene0_update_actors[] = { 0 };",
     );
     expect(c).toContain(
-      "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0, 0, 0, 0 } };",
+      "static const GbaActorInit scene0_actors_init[] = { { 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 } } };",
     );
     expect(c).toContain(
       "{ scene_main_init, scene0_updates, scene0_update_actors, 0, 240, 160, scene0_actors_init, 0, 0, 0, 0, 0, 0, 0, 0, 4 },",
