@@ -35,6 +35,8 @@
 #      for 41 frames, and stores the position again. The init holds the VM lock
 #      throughout, so the player must not move (no knockback, no gravity) and the timer
 #      must not count down until the init ends.
+#  13. Last in that init, arms timer 2, which 160 frames later puts the player on the
+#      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -183,6 +185,27 @@ timeout 300 gdb-multiarch -batch \
   -ex "print/d plat_state" \
   -ex "print/d plat_knockback_timer" \
   -ex "print/d vm_plat_events[12].pc != 0" \
+  -ex "delete" \
+  -ex "break hw_render if player_iframes == 20" \
+  -ex "continue" \
+  -ex "echo \n@HIT1\n" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
+  -ex "print/d player_iframes" \
+  -ex "delete" \
+  -ex "break hw_render" \
+  -ex "ignore 14 18" \
+  -ex "continue" \
+  -ex "echo \n@HIT2\n" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
+  -ex "print/d player_iframes" \
+  -ex "ignore 14 1" \
+  -ex "continue" \
+  -ex "echo \n@HIT3\n" \
+  -ex "print script_memory[24]" \
+  -ex "print script_memory[25]" \
+  -ex "print/d player_iframes" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -396,7 +419,24 @@ KB_DY=$(awk '/@PLATSTEP/{f=1;next} f && /^\$/{n++; if(n==2){print; exit}}' "$LOG
 [ "$KB_DY" = "-114" ] || fail "first knockback step y = $KB_DY subpx, expected -114"
 PLAT_SEQ=$(awk '/@PLATSEQ/{f=1;next} /@PLATEND/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
 [ "$PLAT_SEQ" = "4 1 2 3 4 " ] || fail "state scripts ran as [count kb-start kb-end blank-start blank-end] = [$PLAT_SEQ], expected [4 1 2 3 4]"
-PLAT_END=$(awk '/@PLATEND/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
+PLAT_END=$(awk '/@PLATEND/{f=1;next} /@HIT1/{f=0} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
 [ "$PLAT_END" = "1 0 1 " ] || fail "after the chain [plat_state timer slot-12-attached] = [$PLAT_END], expected [1 0 1] (GROUND)"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed)"
+# Player-vs-actor collision (gbs2 G3b). After the chain, a timer puts the standing player on
+# the Hazard (collision group 1) and leaves it there. The hit runs two scripts: the Hazard's
+# On Hit: Player tab, which counts variable 31 (script_memory[24]), and the scene's On Hit
+# group 1 tab, which counts variable 32 ([25]). Each tab is a branch on the thread argument,
+# so a count also proves the argument: 0 for the actor's own script, the group bit 2 for the
+# scene's. The hit makes the player invincible for 20 frames, which count down while the two
+# still touch. So the counts are [1 1] on the frame after the hit (invincibility 20) and on
+# the last invincible frame, 19 frames later (1), and the next hit lands right after it: two
+# frames on, the counts are [2 2] and invincibility is back at 20.
+hit_vals() { awk -v m="$1" '$0 ~ m {f=1; next} /@HIT/ {f=0} f && /^\$/ {sub(/.*= /,""); printf "%s ", $0}' "$LOG"; }
+HIT1=$(hit_vals "@HIT1")
+HIT2=$(hit_vals "@HIT2")
+HIT3=$(hit_vals "@HIT3")
+[ "$HIT1" = "1 1 20 " ] || fail "on the frame after the hit [actor-script scene-script iframes] = [$HIT1], expected [1 1 20]"
+[ "$HIT2" = "1 1 1 " ] || fail "on the last invincible frame [actor-script scene-script iframes] = [$HIT2], expected [1 1 1]"
+[ "$HIT3" = "2 2 20 " ] || fail "after the invincibility ran out [actor-script scene-script iframes] = [$HIT3], expected [2 2 20]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision)"
