@@ -1,4 +1,8 @@
-# M14 — music completeness (design, 2026-09-10)
+# M14 — music completeness (design, 2026-09-10; closed 2026-09-23)
+
+> **Closed 2026-09-23.** GB Studio's own music and sound now play on the GBA. See
+> [Outcome](#outcome-2026-09-23) at the end; the sections below are the design as it was
+> written, followed by each slice's result.
 
 The roadmap states M14 as: **`.uge`→`.vgm` at build time; `.vgm` SFX; music events beyond
 play/stop.** This document scopes it against what the two codebases actually contain, and
@@ -448,3 +452,69 @@ find the player struct in `build/gbavm.map`, arm an mGBA Lua `frame` callback lo
 on-change state plus `SOUNDCNT_L`, and compare frame-by-frame against the GB build playing
 the same track. Register reads alone mislead — a non-looping song reads healthy until it
 ends — so compare _traces_, not snapshots.
+
+## Outcome (2026-09-23)
+
+M14 is closed. It shipped Route C, not the roadmap's `.uge` → `.vgm`. The recommendation
+held: M14a showed the PSG can be shared, so no crash-path guards were needed.
+
+**What shipped (a–f).** gbavm has a port of hUGEDriver, the whole driver: notes,
+instruments, all 16 effects, and subpattern tables. It ticks at GB Studio's 64 Hz. The eject
+compiles every `.uge` into the engine with the editor's own exporter. The music ops follow
+gbvm's `music_manager`: play (a no-op for the track already playing), stop, set position,
+master volume, mute, and routines raised from pattern data into attached scripts. Every
+non-`.wav` sound effect plays on the same channels through a port of gbvm's `sfx_player`,
+borrowing channels from the song as on the GB. That covers `.vgm`, FX Hammer, and the
+Tone/Beep/Crash events. The matrix went from 120 to **122/151 bridgeable (81%)**.
+
+**How it was checked.** Each layer was diffed against an independent reference built from
+the GB sources, not from the port:
+
+- **The driver:** 37,340 register writes across 18 songs (M14c3).
+- **The ejected song, end to end:** 3,374 writes (M14d).
+- **Sound effects:** 70 writes, frame for frame (M14f).
+
+Every reference was mutation-tested, because a first-try match proves nothing until a wrong
+rule is shown to fail. That turned up four coverage gaps and one real engine bug before
+anything shipped. CI's runtime test now asserts:
+
+- A `.uge` track ticks at 64 Hz.
+- Music routines 1 and 3 run and routine 2 does not.
+- An FX Hammer effect runs its exact 57 ticks.
+
+**The stock `gbs2` sample's music plays.** That was M14d's named check, and it had to wait
+for the sample to build for the GBA at all, which gba-studio#123 does. On a local merge of
+develop with #123, the title scene starts `Rulz_Intro.uge` on the hUGE backend, and it
+advances 321 driver ticks in the 300 frames after the handover: 64 Hz. It is re-checkable
+once #123 merges.
+
+**Things found along the way that were not music:**
+
+- **The editor's engine pin.** The submodule had never been bumped past pre-M14b, so M14d was
+  the first editor build that contained the player at all.
+- **The bridge's expression evaluator** could not read hex literals with letter digits
+  (`0x0F`). Every hex mask the editor writes failed, `VM_MUSIC_MUTE` among them.
+- **The exporter** writes `0x-4` for a negative sweep time (`unreal_superhero2`), which no C
+  compiler accepts, on the GB build either. Offered as a separate fix.
+- **Every new gbavm opcode needs a `vm_args_len` entry.** Without one, the VM runs the operand
+  bytes as opcodes, and the scene script dies silently.
+
+**Known limits:**
+
+- A `.mod` track on gbt-player and a PSG sound effect collide, because Butano's gbt player
+  cannot be muted per channel. `.uge` music shares the channels properly.
+- On the GB, a project using the hUGE driver converts `.mod` tracks to hUGE. The GBA still
+  plays `.mod` through gbt-player or Maxmod, per track.
+- Not checked at runtime: the Tone/Beep/Crash events end to end (their parsing is
+  unit-tested), and `VM_MUSIC_MUTE` while an effect plays (a direct port).
+
+**Still owed: ears.** Every check above is on register writes, which cannot say whether the
+music _sounds_ right. Listen ROMs, at the repos root:
+
+- `builds/m14a_psg_handover_listen.gba`
+- `builds/m14c1_battle_theme_listen.gba`
+- `builds/m14c2_zilog_headbang_listen.gba`
+- `builds/m14c3_battle_theme_listen.gba`
+- `builds/m14c3_drums_example_listen.gba`
+- `builds/m14f_sfx_over_music_listen.gba`
+- `builds/m14_gbs2_sample_listen.gba`: the whole gbs2 sample, from the local #123 merge.
