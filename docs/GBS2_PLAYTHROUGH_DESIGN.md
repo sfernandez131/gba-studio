@@ -170,16 +170,70 @@ need the same thing. Slice **G3b** below.
   (7, 0). The state change itself is right, so the by-value arguments look lost on the way
   into the custom event. G5 territory.
 
+## G3b result (2026-11-02): player-vs-actor collision
+
+gbavm#91 and gba-studio#132.
+
+- **The overlap test** is gbvm's `actor_overlapping_player`: the first actor whose box
+  overlaps the player's, skipping actors with collisions off, in 16-bit unsigned
+  arithmetic. Point-and-click now shares it.
+- **Each controller registers the hit** when that actor has a collision group: the
+  platformer in every state but BLANK, SHMUP on even frames, and TOPDOWN/ADVENTURE every
+  frame (gbvm's grid-stepped TOPDOWN tests on each tile). Registering is skipped while
+  the VM is locked, as is the rest of gbvm's state update.
+- **The hit runs from the main loop**, once a frame after `hw_render`, locked or not
+  (gbvm's `actors_handle_player_collision`). It runs the scene's player-hit script with
+  the group, then the actor's script with 0 (its On Hit: Player tab). Then come 20 frames
+  of invincibility, which count down every frame, touching or not.
+- **A-to-interact skips an actor with a collision group**, as gbvm does. In the
+  platformer A is also jump, so before this a jump beside a turnip ran its hit script.
+- **Verified.** In CI, the fixture's player stands on an actor in group 1. Both scripts
+  have run once on the frame after the hit (invincibility 20) and still once on the last
+  invincible frame (1), then twice two frames later (20 again). On a scratch copy of
+  gbs2 started in Path to Sample Town:
+  - Walking into Turnip 1 from the side starts the turnip's own script. Its Set
+    Platformer State enters KNOCKBACK (`plat_state` 6) on the next frame, pushing the
+    player back.
+  - Falling onto it from above takes the script's stomp branch: collisions off, Player
+    Bounce (the player rises), the turnip removed 30 frames later. KNOCKBACK never
+    fires.
+
+Two setup changes were needed, and each is a gap of its own (below). Turnip 1 moved from
+x=72 to x=12. The stomp's drop was placed with GDB once the scene's init had unlocked the
+VM.
+
+### Found along the way (not G3b, each a fix of its own)
+
+- **gbavm caps a scene at 512 px (64 tiles) on each axis**, and three gbs2 scenes are
+  wider: Parallax Example (80 tiles), Path to Sample Town (161) and Space Battle (255).
+  Past the cap there is no collision grid: in Path to Sample Town the player falls out of
+  the world at x=64, and all three turnips (x=72, 95, 103) are beyond it. Space Battle's
+  enemies are spread across 255 tiles. This blocks G5 in all three scenes. Lifting it
+  needs a scrolling map (Butano's regular backgrounds stop at 512 px) and a collision grid
+  of the scene's real size.
+- **The player falls during a scene's init.** That init holds the VM lock for its first
+  15 frames, and gbavm's player keeps moving (the lock gap above). Started above a turnip,
+  the player had already landed beside it when touching first registered, so the stomp
+  read as a side hit. The fix for the lock gap covers this.
+- **The turnips walk the wrong way.** On GBA, Turnip 1 walks right without stopping,
+  away from the player. Its update script should step 4 tiles toward the player, then
+  wait a second. Its hit script resolves the same "self" actor correctly. Not
+  investigated: G5 territory.
+- **Pinned actors collide.** GB Studio gives a pinned actor no collision flag; the eject
+  doesn't pass "pinned", so on GBA it collides like any other actor. gbs2's two (the
+  health display in Path to Sample Town, one in Space Battle) have no group, but as the
+  first overlapping actor one could hide a hit behind it.
+
 ## Slice plan
 
-| Slice   | Scope                                                                                                                                                                                        | Verify                                                                                                                      |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| G1      | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                                                | Unit tests; seed checked on the title (23,269 at frame 90).                                                                 |
-| G2      | **Done (2026-09-24), gbavm#87 / gba-studio#128.** Point-and-click, and the player-sprite default: gbs2 had no player in any scene. See "G2 result".                                          | Cursor position exact against gbvm's arithmetic; a trigger hovered and fired on Player's House.                             |
-| G3      | **Done (2026-11-01), gbavm#88 / gba-studio#129.** Knockback + blank, `plat_next_state`, state scripts and animation overrides. See "G3 result".                                              | CI: the scripted chain knockback → blank → ground; gbs2: a pit and a scripted knockback. The turnip hit moved to G3b.       |
-| **G3b** | Player-vs-actor collision: GB's overlap test in the player controllers and `actors_handle_player_collision` (scene player-hit script + the actor's On Hit: Player, 20 invincibility frames). | Fixture: overlap an actor with a collision group, assert both scripts ran once; then the turnip hit in Path to Sample Town. |
-| **G4**  | Parallax bands via H-blank effects.                                                                                                                                                          | GDB: per-band scroll values vs the camera; eyes-on in Parallax Example.                                                     |
-| **G5**  | Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it.                                 | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                |
+| Slice  | Scope                                                                                                                                                                                                                           | Verify                                                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| G1     | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                                                                                   | Unit tests; seed checked on the title (23,269 at frame 90).                                                                        |
+| G2     | **Done (2026-09-24), gbavm#87 / gba-studio#128.** Point-and-click, and the player-sprite default: gbs2 had no player in any scene. See "G2 result".                                                                             | Cursor position exact against gbvm's arithmetic; a trigger hovered and fired on Player's House.                                    |
+| G3     | **Done (2026-11-01), gbavm#88 / gba-studio#129.** Knockback + blank, `plat_next_state`, state scripts and animation overrides. See "G3 result".                                                                                 | CI: the scripted chain knockback → blank → ground; gbs2: a pit and a scripted knockback. The turnip hit moved to G3b.              |
+| G3b    | **Done (2026-11-02), gbavm#91 / gba-studio#132.** Player-vs-actor collision: the overlap test in each controller, then the scene's player-hit script, the actor's On Hit: Player and 20 invincibility frames. See "G3b result". | CI: both scripts once inside the invincibility window, again after it; gbs2: a turnip from the side knocks back, a stomp does not. |
+| **G4** | Parallax bands via H-blank effects.                                                                                                                                                                                             | GDB: per-band scroll values vs the camera; eyes-on in Parallax Example.                                                            |
+| **G5** | Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it.                                                                    | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                       |
 
 Order: G1 first (small, clears the build log), then G2 (it blocks the hub, so it blocks
 G5), then G3 and G4, then G5. G3b goes before G5: the playthrough cannot take a hit
