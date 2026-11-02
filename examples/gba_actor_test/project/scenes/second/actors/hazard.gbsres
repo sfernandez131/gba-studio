@@ -1,0 +1,35 @@
+{
+  "_resourceType": "actor",
+  "id": "bbbbbbbb-0000-4000-8000-000000000003",
+  "_index": 1,
+  "name": "Hazard",
+  "symbol": "actor_hazard",
+  "spriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
+  "x": 12,
+  "y": 29,
+  "direction": "down",
+  "moveSpeed": 1,
+  "animSpeed": 15,
+  "paletteId": "",
+  "animate": false,
+  "frame": 0,
+  "isPinned": false,
+  "persistent": false,
+  "collisionGroup": "1",
+  "prefabId": "",
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "c3b30000-0000-4000-8000-000000000005",
+      "command": "EVENT_INC_VALUE",
+      "args": {
+        "variable": "25"
+      }
+    }
+  ],
+  "startScript": [],
+  "updateScript": [],
+  "hit1Script": [],
+  "hit2Script": [],
+  "hit3Script": []
+}

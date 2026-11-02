@@ -249,9 +249,53 @@
       "args": {
         "state": "knockback"
       }
+    },
+    {
+      "id": "c3b30000-0000-4000-8000-000000000001",
+      "command": "EVENT_SET_TIMER_SCRIPT",
+      "args": {
+        "timer": 1,
+        "units": "frames",
+        "frames": 160,
+        "__scriptTabs": "end"
+      },
+      "children": {
+        "script": [
+          {
+            "id": "c3b30000-0000-4000-8000-000000000002",
+            "command": "EVENT_ACTOR_SET_POSITION",
+            "args": {
+              "actorId": "player",
+              "x": {
+                "type": "number",
+                "value": 12
+              },
+              "y": {
+                "type": "number",
+                "value": 29
+              }
+            }
+          },
+          {
+            "id": "c3b30000-0000-4000-8000-000000000003",
+            "command": "EVENT_TIMER_DISABLE",
+            "args": {
+              "timer": 1
+            }
+          }
+        ]
+      }
     }
   ],
-  "playerHit1Script": [],
+  "playerHit1Script": [
+    {
+      "id": "c3b30000-0000-4000-8000-000000000004",
+      "command": "EVENT_INC_VALUE",
+      "args": {
+        "variable": "26"
+      }
+    }
+  ],
   "playerHit2Script": [],
   "playerHit3Script": []
 }
