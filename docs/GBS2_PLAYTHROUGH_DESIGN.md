@@ -277,7 +277,7 @@ gbavm#92 and gba-studio#133.
 
 ## Move Relative fix (2026-11-04)
 
-gbavm#93, then the gba-studio PR that pins it.
+gbavm#93 and gba-studio#134.
 
 - **What gbavm did.** `VM_ACTOR_MOVE_TO_INIT` took the block's X, Y as the destination
   and ignored its attribute byte, so a relative move's offset became the target. Turnip
