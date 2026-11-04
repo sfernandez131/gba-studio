@@ -279,7 +279,7 @@ gbavm#92 and gba-studio#133.
 
 ## Custom-event arguments (2026-11-04): the call frame
 
-gbavm#94 and gba-studio#NNN, before G5. They fix two of the bugs found above: On Blank's
+gbavm#94 and gba-studio#135, before G5. They fix two of the bugs found above: On Blank's
 respawn (G3) and the enemies steering the player (G3c).
 
 - **The cause.** GB Studio passes a custom event's arguments on the VM stack. The callee
