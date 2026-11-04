@@ -1,0 +1,54 @@
+{
+  "_resourceType": "script",
+  "id": "a2a20000-0000-4000-8000-000000000001",
+  "name": "Arg Probe",
+  "symbol": "script_arg_probe",
+  "description": "Moves its actor argument to (X, Y) and counts a run into Runs",
+  "variables": {
+    "V0": {
+      "id": "V0",
+      "name": "X",
+      "passByReference": false
+    },
+    "V1": {
+      "id": "V1",
+      "name": "Y",
+      "passByReference": false
+    },
+    "V2": {
+      "id": "V2",
+      "name": "Runs",
+      "passByReference": true
+    }
+  },
+  "actors": {
+    "0": {
+      "id": "0",
+      "name": "Target"
+    }
+  },
+  "script": [
+    {
+      "id": "a2a20000-0000-4000-8000-000000000002",
+      "command": "EVENT_ACTOR_SET_POSITION",
+      "args": {
+        "actorId": "0",
+        "x": {
+          "type": "variable",
+          "value": "V0"
+        },
+        "y": {
+          "type": "variable",
+          "value": "V1"
+        }
+      }
+    },
+    {
+      "id": "a2a20000-0000-4000-8000-000000000003",
+      "command": "EVENT_INC_VALUE",
+      "args": {
+        "variable": "V2"
+      }
+    }
+  ]
+}

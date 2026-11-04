@@ -39,6 +39,8 @@
 #      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
 #  14. Timer 2 also arms timer 3, which 60 frames later enters the Wide scene: 151 x 18
 #      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at.
+#  15. The Wide init calls a custom event with an actor argument, two by-value arguments
+#      and one by-reference argument (gbs2 G5).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -222,6 +224,10 @@ timeout 300 gdb-multiarch -batch \
   -ex "print script_memory[28]" \
   -ex "print/d gba_camera_px_x" \
   -ex "print/d gba_camera_px_y" \
+  -ex "echo \n@ARGS\n" \
+  -ex "print script_memory[29]" \
+  -ex "print script_memory[30]" \
+  -ex "print script_memory[31]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -468,7 +474,19 @@ HIT3=$(hit_vals "@HIT3")
 #     (the old cap pinned it at 392), and centred vertically (72) in a 144 px scene.
 val_after "@WIDELOAD" "^r1" | grep -q " 1208$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r1" | awk '{print $NF}') px wide, expected 1208 (not capped at 512)"
 val_after "@WIDELOAD" "^r2" | grep -q " 144$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r2" | awk '{print $NF}') px tall, expected 144"
-WIDE=$(awk '/@WIDE$/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
+
+# Custom-event arguments (gbs2 G5: Space Battle's enemies, the platformer's On Blank). The
+# Wide init calls the custom event Arg Probe with the actor Target (at tile 10, 4), X 20 and
+# Y 3 by value, and variable 38 by reference; Arg Probe moves its actor to (X, Y) and counts
+# a run into its reference. The init then stores Target's position in variables 36/37
+# ([29]/[30]; the count is [31]). GB Studio addresses the arguments past gbvm's 2-word
+# far-call frame, so a frame of another size reads the caller's words: the actor came out
+# as 0 and the player was moved instead, Target stayed at (80, 32) px and the count stayed
+# 0. That also breaks the player and camera checks below, so this one goes first.
+ARGS=$(hit_vals "@ARGS")
+[ "$ARGS" = "160 24 1 " ] || fail "after Arg Probe [target-x target-y runs] = [$ARGS], expected [160 24 1] (the actor and value arguments must reach the custom event)"
+
+WIDE=$(hit_vals "@WIDE$")
 [ "$WIDE" = "1120 120 77 1088 72 " ] || fail "in the Wide scene [player-x player-y trigger camera-x camera-y] = [$WIDE], expected [1120 120 77 1088 72]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px)"
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments)"
