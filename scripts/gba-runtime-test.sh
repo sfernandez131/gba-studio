@@ -43,6 +43,7 @@
 #      and one by-reference argument (gbs2 G5).
 #  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
 #      one in tiles and one in pixels, and stores where it lands.
+#  17. The Wide scene also has two parallax bands over its normal view (gbs2 G4).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -233,6 +234,9 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@WALKER\n" \
   -ex "print script_memory[32]" \
   -ex "print script_memory[33]" \
+  -ex "echo \n@PARALLAX\n" \
+  -ex "print gba_parallax_px[0]" \
+  -ex "print gba_parallax_px[1]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -503,4 +507,12 @@ WIDE=$(hit_vals "@WIDE$")
 WALKER=$(hit_vals "@WALKER")
 [ "$WALKER" = "992 94 " ] || fail "after Move Relative +4 tiles x, -10 px y from (960, 104) the Walker is at [$WALKER], expected [992 94]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative)"
+# Parallax (gbs2 G4). The Wide scene has three parallax layers: tile rows 0-3 at speed 1/4
+# (gbvm shift 2), rows 4-7 at 1/2 (shift 1), then the normal view. gbvm scrolls a band to
+# the view's left edge >> shift. With the camera centre clamped at x 1088 above, the GBA
+# view's left edge is 1088 - 120 = 968 px, so the bands must sit at 968 >> 2 = 242 and
+# 968 >> 1 = 484 px. Without parallax there are no bands to scroll.
+PARALLAX=$(hit_vals "@PARALLAX")
+[ "$PARALLAX" = "242 484 " ] || fail "with the view's left edge at 968 px the parallax bands scroll to [$PARALLAX], expected [242 484]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax)"

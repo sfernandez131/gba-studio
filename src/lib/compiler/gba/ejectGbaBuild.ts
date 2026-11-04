@@ -31,6 +31,7 @@ import { parseGbvmAsm, parseGameGlobals } from "./parseGbvmAsm";
 import { compileGbaHugeSong } from "./gbaHugeSong";
 import { playerSpriteSheetIdFor, spriteBoundsSubpx } from "./gbaPlayerSprite";
 import { platStateAnimRows } from "./gbaPlatformAnims";
+import { gbaParallaxBands, parallaxBandImage } from "./gbaParallax";
 import { collectPsgSfx, psgSfxC, PSG_SFX_FLAG } from "./gbaPsgSfx";
 import { loadUGESong } from "shared/lib/uge/ugeHelper";
 import {
@@ -863,12 +864,14 @@ const ejectGbaBuild = async ({
   // item json must say bpp_4_manual so Butano keeps per-tile bank attribution
   // (M12a; layout + quantizer behaviour verified by spike 2026-07-14). shiftX/Y
   // is where to create the bg so the scene sits centred on the world origin
-  // (bgCanvasLayout).
+  // (bgCanvasLayout). img + palette are kept for the parallax bands (G4).
   type ConvertedBackground = {
     bmp: Buffer;
     multiBank: boolean;
     shiftX: number;
     shiftY: number;
+    img: IndexedSource;
+    palette: Rgb[];
   };
   const regularBg = (
     img: IndexedSource,
@@ -881,6 +884,8 @@ const ejectGbaBuild = async ({
       multiBank,
       shiftX,
       shiftY,
+      img,
+      palette,
     };
   };
   const convertBackground = async (
@@ -984,6 +989,7 @@ const ejectGbaBuild = async ({
   };
   const affineIncludes: string[] = [];
   const affineCases: string[] = [];
+  const parallaxCases: string[] = [];
 
   // M8d: a scene becomes an affine (Mode-7) background when its scripts use the
   // Rotate/Scale Background event (opt-in by event presence; the M10f
@@ -1060,8 +1066,7 @@ const ejectGbaBuild = async ({
       Path.join(engineRoot, "graphics", `${bgName}.bmp`),
       converted.bmp,
     );
-    await writeFile(
-      Path.join(engineRoot, "graphics", `${bgName}.json`),
+    const bgJson =
       JSON.stringify(
         converted.multiBank
           ? // colors_count 128 pads the palette item to all 8 GBC banks so
@@ -1072,17 +1077,63 @@ const ejectGbaBuild = async ({
               ["colors_count"]: 128,
             }
           : { type: "regular_bg" },
-      ) + "\n",
+      ) + "\n";
+    await writeFile(
+      Path.join(engineRoot, "graphics", `${bgName}.json`),
+      bgJson,
     );
     bgIncludes.push(`#include "bn_regular_bg_items_${bgName}.h"`);
     bgCases.push(
       `        case ${s}: return bn::regular_bg_items::${bgName}.create_bg(${converted.shiftX}, ${converted.shiftY});`,
     );
 
+    const affine = sceneIsAffine(scene);
+
+    // gbs2 G4: each upper parallax band -> graphics/scene<s>_parallax<b>.bmp, the
+    // scene bg with only that band's rows (same canvas, palette and offset). The
+    // engine draws it over the scene bg and scrolls it. An affine scene runs in
+    // Mode 1, which leaves no regular bg slots for bands.
+    const bands = gbaParallaxBands(scene.parallax, scene.width);
+    if (bands.length > 0 && affine) {
+      warnings(
+        `GBA: scene "${scene.name}" uses Rotate/Scale Background, so its parallax ` +
+          `is dropped - an affine scene has no room for the band backgrounds`,
+      );
+    } else if (bands.length > 0) {
+      const bandCases: string[] = [];
+      for (let b = 0; b < bands.length; b++) {
+        const bandName = `scene${s}_parallax${b}`;
+        await writeFile(
+          Path.join(engineRoot, "graphics", `${bandName}.bmp`),
+          indexedImageToBmp(
+            parallaxBandImage(converted.img, bands[b]),
+            converted.palette,
+            { align: 256 },
+          ),
+        );
+        await writeFile(
+          Path.join(engineRoot, "graphics", `${bandName}.json`),
+          bgJson,
+        );
+        bgIncludes.push(`#include "bn_regular_bg_items_${bandName}.h"`);
+        bandCases.push(
+          `                case ${b}: *shift = ${bands[b].shift}; return bn::regular_bg_items::${bandName}.create_bg(${converted.shiftX}, ${converted.shiftY});`,
+        );
+      }
+      parallaxCases.push(
+        `        case ${s}:`,
+        "            switch(band) {",
+        ...bandCases,
+        "            default: break;",
+        "            }",
+        "            break;",
+      );
+    }
+
     // M8d: affine (Mode-7) scenes additionally emit an 8bpp square affine BMP.
     // The regular bg above stays (it's the gba_create_scene_bg fallback), but the
     // engine uses this affine bg at runtime (gba_create_scene_affine_bg wins).
-    if (sceneIsAffine(scene)) {
+    if (affine) {
       const affName = `scene${s}_affine_bg`;
       await writeFile(
         Path.join(engineRoot, "graphics", `${affName}.bmp`),
@@ -1291,6 +1342,17 @@ const ejectGbaBuild = async ({
     "    default: break;",
     "    }",
     "    return bn::optional<bn::affine_bg_ptr>();",
+    "}",
+    "// gbs2 G4: a scene's parallax bands, top first - each a regular bg holding",
+    "// only that band's rows, with gbvm's shift in *shift; nullopt past the last.",
+    "inline bn::optional<bn::regular_bg_ptr> gba_create_scene_parallax_bg(int sceneIdx, int band, int* shift) {",
+    "    *shift = 0;",
+    "    switch(sceneIdx) {",
+    ...parallaxCases,
+    "    default: break;",
+    "    }",
+    "    (void)band;",
+    "    return bn::optional<bn::regular_bg_ptr>();",
     "}",
     "inline const GbaActorSprite* gba_actor_sprite(int sceneIdx, int actorIdx) {",
     "    switch(sceneIdx) {",
