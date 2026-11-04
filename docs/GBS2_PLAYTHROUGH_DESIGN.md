@@ -331,7 +331,7 @@ gbavm#93 and gba-studio#134.
 
 ## Replace Tile fix (2026-11-04)
 
-gbavm#95 and the gba-studio PR that pins it.
+gbavm#95 and gba-studio#137.
 
 - **Two lookups were wrong.** `hw_replace_bg_tile_xy` took GB's x, y as map cells, read
   row by row. But GB's x, y are scene tiles, and the eject centres a scene on a map padded
