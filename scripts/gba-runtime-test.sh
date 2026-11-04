@@ -43,7 +43,8 @@
 #      and one by-reference argument (gbs2 G5).
 #  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
 #      one in tiles and one in pixels, and stores where it lands.
-#  17. The main init and the Wide init each run a Replace Tile (gbs2 G5), whose result
+#  17. The Wide scene also has two parallax bands over its normal view (gbs2 G4).
+#  18. The main init and the Wide init each run a Replace Tile (gbs2 G5), whose result
 #      is read back from the BG map in VRAM.
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
@@ -256,10 +257,13 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@WALKER\n" \
   -ex "print script_memory[32]" \
   -ex "print script_memory[33]" \
+  -ex "echo \n@PARALLAX\n" \
+  -ex "print gba_parallax_px[0]" \
+  -ex "print gba_parallax_px[1]" \
   -ex "echo \n@TILEWIDE\n" \
   -ex "print/x *(unsigned short *)0x04000000" \
   -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
-  -ex "bgcell 310" \
+  -ex "bgcell 534" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -530,6 +534,14 @@ WIDE=$(hit_vals "@WIDE$")
 WALKER=$(hit_vals "@WALKER")
 [ "$WALKER" = "992 94 " ] || fail "after Move Relative +4 tiles x, -10 px y from (960, 104) the Walker is at [$WALKER], expected [992 94]"
 
+# Parallax (gbs2 G4). The Wide scene has three parallax layers: tile rows 0-3 at speed 1/4
+# (gbvm shift 2), rows 4-7 at 1/2 (shift 1), then the normal view. gbvm scrolls a band to
+# the view's left edge >> shift. With the camera centre clamped at x 1088 above, the GBA
+# view's left edge is 1088 - 120 = 968 px, so the bands must sit at 968 >> 2 = 242 and
+# 968 >> 1 = 484 px. Without parallax there are no bands to scroll.
+PARALLAX=$(hit_vals "@PARALLAX")
+[ "$PARALLAX" = "242 484 " ] || fail "with the view's left edge at 968 px the parallax bands scroll to [$PARALLAX], expected [242 484]"
+
 # Replace Tile (gbs2 G5: Sample Town's animated tiles). GB's x, y are scene tiles, but the
 # eject centres a scene on a map padded to a multiple of 32 tiles, and Butano keeps a map
 # of 64 x 32 cells (not big, not 32 x 32) in the hardware's screenblock layout. Each init
@@ -538,9 +550,10 @@ WALKER=$(hit_vals "@WALKER")
 # the map entry (bgcell); one enabled BG must show the probe. Only enabled BGs count: a
 # disabled one keeps its last BGxCNT, which can point at the replaced tile by chance.
 #   - Main, 48 x 32 tiles on a 64 x 32 map: scene tile (0, 0) is map cell (8, 0), entry 8.
-#   - Wide, 151 x 18 tiles on a 160 x 32 big map: scene tile (146, 2) is map cell (150, 9).
+#   - Wide, 151 x 18 tiles on a 160 x 32 big map: scene tile (146, 9) is map cell (150, 16).
 #     Butano streams a big map into a 32 x 32 hardware map at (x & 31, y & 31), so entry
-#     9 * 32 + 22 = 310; the camera is at the right edge, so the cell is on screen.
+#     16 * 32 + 22 = 534; the camera is at the right edge, so the cell is on screen, and
+#     row 9 is below the parallax bands (each its own bg, which would cover it).
 # gbavm used to take x, y as map cells, row by row: both replaced a padding cell's tile.
 tile_rows() { awk -v m="$1" '$0 ~ m {f=1; next} /^@/ {f=0} f && /^\$/ {sub(/^[^=]*= /,""); print}' "$LOG"; }
 shows_probe() {
@@ -554,6 +567,6 @@ shows_probe() {
   return 1
 }
 shows_probe "@TILEMAIN" || fail "Main scene tile (0, 0) does not show the replaced tile (map entry 8 of an enabled BG): $(tile_rows "@TILEMAIN" | tr '\n' ' ')"
-shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 2) does not show the replaced tile (big-map entry 310 of an enabled BG): $(tile_rows "@TILEWIDE" | tr '\n' ' ')"
+shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 9) does not show the replaced tile (big-map entry 534 of an enabled BG): $(tile_rows "@TILEWIDE" | tr '\n' ' ')"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, Replace Tile on a padded map)"
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map)"

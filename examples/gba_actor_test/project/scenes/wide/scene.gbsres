@@ -24,6 +24,20 @@
   ],
   "spritePaletteIds": [],
   "autoFadeSpeed": 1,
+  "parallax": [
+    {
+      "height": 4,
+      "speed": 2
+    },
+    {
+      "height": 4,
+      "speed": 1
+    },
+    {
+      "height": 10,
+      "speed": 0
+    }
+  ],
   "script": [
     {
       "id": "e1de0000-0000-4000-8000-000000000004",
@@ -62,7 +76,7 @@
         },
         "y": {
           "type": "number",
-          "value": 2
+          "value": 9
         },
         "tilesetId": "7113e700-0000-4000-8000-000000001115",
         "tileIndex": {
