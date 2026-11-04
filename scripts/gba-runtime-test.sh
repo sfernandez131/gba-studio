@@ -41,6 +41,8 @@
 #      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at.
 #  15. The Wide init calls a custom event with an actor argument, two by-value arguments
 #      and one by-reference argument (gbs2 G5).
+#  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
+#      one in tiles and one in pixels, and stores where it lands.
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -228,6 +230,9 @@ timeout 300 gdb-multiarch -batch \
   -ex "print script_memory[29]" \
   -ex "print script_memory[30]" \
   -ex "print script_memory[31]" \
+  -ex "echo \n@WALKER\n" \
+  -ex "print script_memory[32]" \
+  -ex "print script_memory[33]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -489,4 +494,13 @@ ARGS=$(hit_vals "@ARGS")
 WIDE=$(hit_vals "@WIDE$")
 [ "$WIDE" = "1120 120 77 1088 72 " ] || fail "in the Wide scene [player-x player-y trigger camera-x camera-y] = [$WIDE], expected [1120 120 77 1088 72]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments)"
+# Move Relative. After reading the player, the Wide scene's timer moves the Walker, placed
+# at tile (120, 13) = (960, 104) px, by +4 tiles in x (tile units: the destination snaps to
+# a tile) and then by -10 px in y (pixel units: it snaps to a pixel), and stores where it
+# ends up in variables 39/40 ([32]/[33]). Each offset must be added to where the actor
+# stands: (992, 94). gbavm used to move to the offset itself - to x = 4 tiles, which the
+# Walker would still be walking toward.
+WALKER=$(hit_vals "@WALKER")
+[ "$WALKER" = "992 94 " ] || fail "after Move Relative +4 tiles x, -10 px y from (960, 104) the Walker is at [$WALKER], expected [992 94]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative)"

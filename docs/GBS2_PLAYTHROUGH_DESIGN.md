@@ -218,9 +218,8 @@ VM.
   read as a side hit. The fix for the lock gap covers this.
 - **The turnips walk the wrong way.** On GBA, Turnip 1 walks right without stopping,
   away from the player. Its update script should step 4 tiles toward the player, then
-  wait a second. Its hit script resolves the same "self" actor correctly. Not
-  investigated: G5 territory. G3c found a likely cause: gbavm ignores Move Relative's
-  relative flag (see "Found along the way (not G3c)").
+  wait a second. Its hit script resolves the same "self" actor correctly. **Fixed:**
+  gbavm ignored Move Relative's relative flag (see "Move Relative fix").
 - **Pinned actors collide.** GB Studio gives a pinned actor no collision flag; the eject
   doesn't pass "pinned", so on GBA it collides like any other actor. gbs2's two (the
   health display in Path to Sample Town, one in Space Battle) have no group, but as the
@@ -265,7 +264,7 @@ gbavm#92 and gba-studio#133.
   `.ACTOR_ATTR_RELATIVE_SNAP_PX` and `_TILE` on `VM_ACTOR_MOVE_TO_INIT`, so it treats the
   relative offset as an absolute destination. Space Battle's init moves the player "+4
   tiles" to x=1024 subpixels (tile 4). This is the likely cause of the turnips walking
-  the wrong way (G3b).
+  the wrong way (G3b). **Fixed** (see "Move Relative fix").
 - **A custom event's actor argument resolves to the player.** All 15 Space Battle
   enemies run "Enemy Ship Movement" with themselves as the actor, but every move reached
   `hw_actor_move_init` with actor 0. So they all steer the player. The first contact runs
@@ -300,8 +299,33 @@ respawn (G3) and the enemies steering the player (G3c).
     player's own scene move), then 2, 3 … 12, each enemy itself. Before, all 12 had 0.
   - **Path to Sample Town**, with BLANK forced at the end of its init: On Blank sets the
     player to (12800, 3328) subpixels, which is tile (50, 13).
-- **Space Battle still needs the Move Relative fix:** the enemies move themselves, but
-  still to their offsets taken as absolute positions.
+- **Space Battle also needed the Move Relative fix** (next section): the enemies moved
+  themselves, but still to their offsets taken as absolute positions.
+
+## Move Relative fix (2026-11-04)
+
+gbavm#93 and gba-studio#134.
+
+- **What gbavm did.** `VM_ACTOR_MOVE_TO_INIT` took the block's X, Y as the destination
+  and ignored its attribute byte, so a relative move's offset became the target. Turnip
+  1's "−4 tiles" arrived as 0xFC00 subpixels (tile 252), past the scene's right edge, so
+  it walked right for good.
+- **Now it does what gbvm's `vm_actor_move_to_init` does.** The init snaps the actor to a
+  whole pixel. With `RELATIVE_SNAP_PX` or `_TILE` set, it adds the offset to that
+  position (clamped to 0..0xFFFF), snaps the result to a pixel or a tile, and writes it
+  back into the block. The single-op `VM_ACTOR_MOVE_TO` does the same on its first run
+  only, like gbvm, so the offset isn't added again every frame.
+- **The bridge's attribute numbers were its own.** `parseGbvmAsm` gave `.ACTOR_ATTR_*`
+  made-up values (relative px / tile at 0x20 / 0x40). They are now gbvm's `vm.i` numbers
+  (0x08 / 0x10), which the engine reads. gbavm still ignores the collision bits: walls
+  stop an actor as it steps, and other actors don't (`CHECK_COLL_ACTORS`).
+- **Verified.** In CI, a timer in the Wide scene moves the Walker from tile (120, 13) by
+  +4 tiles in x, then by −10 px in y, and it lands at (992, 94) px. Before the fix it
+  read (0, 0) at the check: it was still walking toward x = 4 tiles. On a scratch copy of
+  gbs2 started in Path to Sample Town at tile (6, 13), Turnip 1 starts a move every 124
+  frames (64 walking at 0.5 px a frame, then the 1 s wait), to tiles 68, 64, 60 and 56:
+  4 tiles toward the player each time. Before, its first destination was tile 252, and
+  no second move came within 400 frames.
 
 ## Slice plan
 

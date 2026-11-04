@@ -79,6 +79,57 @@
               "vectorY": "34",
               "units": "pixels"
             }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000007",
+            "command": "EVENT_ACTOR_MOVE_RELATIVE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "x": {
+                "type": "number",
+                "value": 4
+              },
+              "y": {
+                "type": "number",
+                "value": 0
+              },
+              "units": "tiles",
+              "moveType": "horizontal",
+              "collideWith": [
+                "walls",
+                "actors"
+              ]
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000008",
+            "command": "EVENT_ACTOR_MOVE_RELATIVE",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "x": {
+                "type": "number",
+                "value": 0
+              },
+              "y": {
+                "type": "number",
+                "value": -10
+              },
+              "units": "pixels",
+              "moveType": "horizontal",
+              "collideWith": [
+                "walls"
+              ]
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000009",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "vectorX": "39",
+              "vectorY": "40",
+              "units": "pixels"
+            }
           }
         ]
       }
