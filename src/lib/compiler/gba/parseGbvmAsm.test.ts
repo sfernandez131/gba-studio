@@ -273,6 +273,21 @@ describe("parseGbvmAsm — P0 opcodes", () => {
     ]);
   });
 
+  // gbavm reads the relative bits by gbvm's numbers (vm_actor.h), so the attr byte
+  // must keep them: H_FIRST 0x01 | WALLS 0x02 | ACTORS 0x20 | SNAP_TILE 0x10.
+  test("Move Relative: VM_ACTOR_MOVE_TO_INIT keeps gbvm's attr bits", () => {
+    const attr =
+      "^/(.ACTOR_ATTR_CHECK_COLL_WALLS | .ACTOR_ATTR_CHECK_COLL_ACTORS | .ACTOR_ATTR_H_FIRST | .ACTOR_ATTR_RELATIVE_SNAP_TILE)/";
+    expect(
+      parseGbvmAsm(`        VM_ACTOR_MOVE_TO_INIT .ARG2, ${attr}\n`).items,
+    ).toEqual([{ kind: "op", op: 0x32, operands: [-3, 0x33] }]);
+    expect(
+      parseGbvmAsm(
+        "        VM_ACTOR_MOVE_TO_INIT .ARG2, ^/(.ACTOR_ATTR_CHECK_COLL | .ACTOR_ATTR_RELATIVE_SNAP_PX)/\n",
+      ).items,
+    ).toEqual([{ kind: "op", op: 0x32, operands: [-3, 0x2a] }]);
+  });
+
   test("M11c: bridges VM_OVERLAY_CLEAR to op 0x96 (box geometry)", () => {
     const { items, skipped } = parseGbvmAsm(
       "        VM_OVERLAY_CLEAR 0, 0, 10, 6, .UI_COLOR_WHITE, ^/(.UI_DRAW_FRAME | .UI_AUTO_SCROLL)/\n",

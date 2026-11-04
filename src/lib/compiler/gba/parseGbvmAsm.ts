@@ -667,15 +667,16 @@ const BASE_CONSTS: Record<string, number> = {
   ".DIR_RIGHT": 1,
   ".DIR_UP": 2,
   ".DIR_LEFT": 3,
-  // actor move-to attribute flags (gbavm ignores collision/axis bits - it uses the
-  // emitted op sequence - but the operand must still evaluate to a byte).
-  ".ACTOR_ATTR_CHECK_COLL": 0x01,
-  ".ACTOR_ATTR_H_FIRST": 0x02,
+  // actor move-to attribute flags, gbvm's vm.i numbers. gbavm resolves the relative
+  // bits (Move Relative: offset from the actor, snapped to a pixel or tile) and
+  // ignores collision/axis bits - it uses the emitted op sequence.
+  ".ACTOR_ATTR_H_FIRST": 0x01,
+  ".ACTOR_ATTR_CHECK_COLL": 0x22,
+  ".ACTOR_ATTR_CHECK_COLL_WALLS": 0x02,
+  ".ACTOR_ATTR_CHECK_COLL_ACTORS": 0x20,
   ".ACTOR_ATTR_DIAGONAL": 0x04,
-  ".ACTOR_ATTR_CHECK_COLL_WALLS": 0x08,
-  ".ACTOR_ATTR_CHECK_COLL_ACTORS": 0x10,
-  ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x20,
-  ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x40,
+  ".ACTOR_ATTR_RELATIVE_SNAP_PX": 0x08,
+  ".ACTOR_ATTR_RELATIVE_SNAP_TILE": 0x10,
   // fade
   ".FADE_OUT": 0x00,
   ".FADE_IN": 0x02,
