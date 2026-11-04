@@ -43,11 +43,12 @@ import {
 } from "./linkGbaProgram";
 import type { ProjectileData } from "../generateGBVMData";
 import {
+  bgCanvasLayout,
   indexedImageToBmp,
   hexToRgb,
   composeBankedImage,
 } from "./writeIndexedBmp";
-import type { Rgb } from "./writeIndexedBmp";
+import type { IndexedSource, Rgb } from "./writeIndexedBmp";
 import {
   buildSpriteSheet,
   dominantPaletteIndex,
@@ -567,13 +568,15 @@ const ejectGbaBuild = async ({
         queue.push(symbol);
       }
     });
-    // Scene logical size (px) = its background's dimensions, for the camera clamp.
-    // Capped at 512 (the largest Butano regular_bg map); default to one screen.
+    // Scene logical size (px) = its background's dimensions, for the camera clamp
+    // and the collision grid; default to one screen. Not capped: past 512 px Butano
+    // makes the bg a big map, which it streams into VRAM as the camera scrolls, and
+    // GB Studio's 255-tile limit keeps positions inside the engine's 16-bit subpixels.
     const sceneBg = projectData.backgrounds.find(
       (b) => b.id === scene.backgroundId,
     );
-    const widthPx = Math.min(512, (sceneBg ? sceneBg.width : 30) * 8);
-    const heightPx = Math.min(512, (sceneBg ? sceneBg.height : 20) * 8);
+    const widthPx = (sceneBg ? sceneBg.width : 30) * 8;
+    const heightPx = (sceneBg ? sceneBg.height : 20) * 8;
     // Placed actors' initial state (runtime index i+1; player = 0). Position in
     // subpixels (256 per 8px tile, 32 per pixel); direction -> engine dir code.
     const dirCode = { down: 0, right: 1, up: 2, left: 3 } as const;
@@ -858,20 +861,38 @@ const ejectGbaBuild = async ({
   // the scene has none). Colour scenes return multiBank=true: the BMP palette is
   // laid out as 16-colour banks (GBC palette i -> bank i, colours 1..4) and the
   // item json must say bpp_4_manual so Butano keeps per-tile bank attribution
-  // (M12a; layout + quantizer behaviour verified by spike 2026-07-14).
+  // (M12a; layout + quantizer behaviour verified by spike 2026-07-14). shiftX/Y
+  // is where to create the bg so the scene sits centred on the world origin
+  // (bgCanvasLayout).
+  type ConvertedBackground = {
+    bmp: Buffer;
+    multiBank: boolean;
+    shiftX: number;
+    shiftY: number;
+  };
+  const regularBg = (
+    img: IndexedSource,
+    palette: Rgb[],
+    multiBank: boolean,
+  ): ConvertedBackground => {
+    const { shiftX, shiftY } = bgCanvasLayout(img.width, img.height, 256);
+    return {
+      bmp: indexedImageToBmp(img, palette, { align: 256 }),
+      multiBank,
+      shiftX,
+      shiftY,
+    };
+  };
   const convertBackground = async (
     scene: (typeof scenes)[number],
-  ): Promise<{ bmp: Buffer; multiBank: boolean }> => {
+  ): Promise<ConvertedBackground> => {
     const bg = projectData.backgrounds.find((b) => b.id === scene.backgroundId);
     if (!bg) {
-      return {
-        bmp: indexedImageToBmp(
-          { width: 8, height: 8, data: new Uint8Array(64) },
-          [hexToRgb(settings.customColorsBlack || "202850")],
-          { align: 256 },
-        ),
-        multiBank: false,
-      };
+      return regularBg(
+        { width: 8, height: 8, data: new Uint8Array(64) },
+        [hexToRgb(settings.customColorsBlack || "202850")],
+        false,
+      );
     }
     if (sceneIsColor(scene)) {
       // GBC palette model (M12a): per-pixel GB shade (0..3) + per-tile palette
@@ -912,10 +933,7 @@ const ejectGbaBuild = async ({
         tileBanks,
         bankPalettes,
       );
-      return {
-        bmp: indexedImageToBmp(img, palette, { align: 256 }),
-        multiBank: true,
-      };
+      return regularBg(img, palette, true);
     }
     progress(`Converting background ${bg.filename}...`);
     // GBA bg colour 0 is transparent, so map the 4 GB shades to indices 1..4.
@@ -932,14 +950,11 @@ const ejectGbaBuild = async ({
     );
     const data = new Uint8Array(src.data.length);
     for (let i = 0; i < data.length; i++) data[i] = (src.data[i] & 0x03) + 1;
-    return {
-      bmp: indexedImageToBmp(
-        { width: src.width, height: src.height, data },
-        palette,
-        { align: 256 },
-      ),
-      multiBank: false,
-    };
+    return regularBg(
+      { width: src.width, height: src.height, data },
+      palette,
+      false,
+    );
   };
 
   const bgIncludes: string[] = [];
@@ -1061,7 +1076,7 @@ const ejectGbaBuild = async ({
     );
     bgIncludes.push(`#include "bn_regular_bg_items_${bgName}.h"`);
     bgCases.push(
-      `        case ${s}: return bn::regular_bg_items::${bgName}.create_bg(0, 0);`,
+      `        case ${s}: return bn::regular_bg_items::${bgName}.create_bg(${converted.shiftX}, ${converted.shiftY});`,
     );
 
     // M8d: affine (Mode-7) scenes additionally emit an 8bpp square affine BMP.

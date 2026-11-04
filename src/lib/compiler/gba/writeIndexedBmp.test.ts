@@ -1,4 +1,5 @@
 import {
+  bgCanvasLayout,
   composeBankedImage,
   indexedImageToBmp,
 } from "lib/compiler/gba/writeIndexedBmp";
@@ -58,6 +59,45 @@ describe("indexedImageToBmp multi-bank passthrough", () => {
     expect(bmp[pixelOffset]).toBe(50);
     // >16-colour palette emits the full 256-entry table.
     expect(bmp.readUInt32LE(46)).toBe(256);
+  });
+});
+
+describe("bgCanvasLayout (regular bgs on the tile grid)", () => {
+  test("an odd tile count stays on the grid and reports the 4px shift", () => {
+    // gbs2's Path to Sample Town: 161x18 tiles on a 1536x256 big map. Centring would
+    // put it at x=124, half a tile off the grid.
+    expect(bgCanvasLayout(161 * 8, 18 * 8)).toEqual({
+      canvasW: 1536,
+      canvasH: 256,
+      offX: 120,
+      offY: 56,
+      shiftX: 4,
+      shiftY: 0,
+    });
+  });
+
+  test("an even tile count is centred exactly, with no shift", () => {
+    expect(bgCanvasLayout(20 * 8, 18 * 8)).toMatchObject({
+      offX: 48,
+      offY: 56,
+      shiftX: 0,
+      shiftY: 0,
+    });
+  });
+
+  test("indexedImageToBmp draws the source where the layout says", () => {
+    // 3x1 tiles (index 9) on a 256x256 canvas: offX 112, not the centred 116.
+    const bmp = indexedImageToBmp(
+      { width: 24, height: 8, data: new Uint8Array(24 * 8).fill(9) },
+      new Array(16).fill([0, 0, 0]),
+      { align: 256 },
+    );
+    const pixelOffset = bmp.readUInt32LE(10);
+    const row = 256 - 1 - 124; // offY = (256 - 8) / 2 = 124, rows bottom-up
+    expect(bmp[pixelOffset + row * 256 + 111]).toBe(0);
+    expect(bmp[pixelOffset + row * 256 + 112]).toBe(9);
+    expect(bmp[pixelOffset + row * 256 + 135]).toBe(9);
+    expect(bmp[pixelOffset + row * 256 + 136]).toBe(0);
   });
 });
 

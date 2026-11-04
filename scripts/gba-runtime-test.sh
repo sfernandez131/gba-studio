@@ -37,6 +37,8 @@
 #      must not count down until the init ends.
 #  13. Last in that init, arms timer 2, which 160 frames later puts the player on the
 #      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
+#  14. Timer 2 also arms timer 3, which 60 frames later enters the Wide scene: 151 x 18
+#      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at.
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -206,6 +208,20 @@ timeout 300 gdb-multiarch -batch \
   -ex "print script_memory[24]" \
   -ex "print script_memory[25]" \
   -ex "print/d player_iframes" \
+  -ex "delete" \
+  -ex "break hw_load_scene if \$r1 > 512" \
+  -ex "continue" \
+  -ex "echo \n@WIDELOAD\n" -ex "info registers r1 r2" \
+  -ex "delete" \
+  -ex "break hw_render" \
+  -ex "ignore 16 120" \
+  -ex "continue" \
+  -ex "echo \n@WIDE\n" \
+  -ex "print script_memory[26]" \
+  -ex "print script_memory[27]" \
+  -ex "print script_memory[28]" \
+  -ex "print/d gba_camera_px_x" \
+  -ex "print/d gba_camera_px_y" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -431,7 +447,7 @@ PLAT_END=$(awk '/@PLATEND/{f=1;next} /@HIT1/{f=0} f && /^\$/{sub(/.*= /,""); pri
 # still touch. So the counts are [1 1] on the frame after the hit (invincibility 20) and on
 # the last invincible frame, 19 frames later (1), and the next hit lands right after it: two
 # frames on, the counts are [2 2] and invincibility is back at 20.
-hit_vals() { awk -v m="$1" '$0 ~ m {f=1; next} /@HIT/ {f=0} f && /^\$/ {sub(/.*= /,""); printf "%s ", $0}' "$LOG"; }
+hit_vals() { awk -v m="$1" '$0 ~ m {f=1; next} /^@/ {f=0} f && /^\$/ {sub(/.*= /,""); printf "%s ", $0}' "$LOG"; }
 HIT1=$(hit_vals "@HIT1")
 HIT2=$(hit_vals "@HIT2")
 HIT3=$(hit_vals "@HIT3")
@@ -439,4 +455,20 @@ HIT3=$(hit_vals "@HIT3")
 [ "$HIT2" = "1 1 1 " ] || fail "on the last invincible frame [actor-script scene-script iframes] = [$HIT2], expected [1 1 1]"
 [ "$HIT3" = "2 2 20 " ] || fail "after the invincibility ran out [actor-script scene-script iframes] = [$HIT3], expected [2 2 20]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision)"
+# Scenes wider than 512 px (gbs2's Path to Sample Town is 161 tiles, Space Battle 255).
+# The eject used to cap a scene at 512 px, so past tile 64 there was no collision grid
+# and the camera stopped. The Wide scene is 151 x 18 tiles (1208 x 144 px) with a floor
+# on rows 16-17 along its whole length, and the player enters it at tile (140, 12):
+#   - the load must get the real size (hw_load_scene's width and height, r1 and r2);
+#   - 120 frames later the player must stand on that floor at x 1120, y 120 px, read by a
+#     timer into variables 33/34 ([26]/[27]) - without the grid there it falls forever;
+#   - the trigger around the landing spot (tiles 136-143) must have set variable 35 ([28])
+#     to 77;
+#   - the camera centre must be clamped to the scene's real right edge, 1208 - 120 = 1088
+#     (the old cap pinned it at 392), and centred vertically (72) in a 144 px scene.
+val_after "@WIDELOAD" "^r1" | grep -q " 1208$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r1" | awk '{print $NF}') px wide, expected 1208 (not capped at 512)"
+val_after "@WIDELOAD" "^r2" | grep -q " 144$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r2" | awk '{print $NF}') px tall, expected 144"
+WIDE=$(awk '/@WIDE$/{f=1;next} f && /^\$/{sub(/.*= /,""); printf "%s ", $0}' "$LOG")
+[ "$WIDE" = "1120 120 77 1088 72 " ] || fail "in the Wide scene [player-x player-y trigger camera-x camera-y] = [$WIDE], expected [1120 120 77 1088 72]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px)"
