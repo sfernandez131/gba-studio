@@ -67,6 +67,26 @@
       }
     },
     {
+      "id": "e1de0000-0000-4000-8000-0000000001a1",
+      "command": "EVENT_REPLACE_TILE_XY",
+      "args": {
+        "x": {
+          "type": "number",
+          "value": 146
+        },
+        "y": {
+          "type": "number",
+          "value": 9
+        },
+        "tilesetId": "7113e700-0000-4000-8000-000000001115",
+        "tileIndex": {
+          "type": "number",
+          "value": 1
+        },
+        "tileSize": "8px"
+      }
+    },
+    {
       "id": "e1de0000-0000-4000-8000-000000000001",
       "command": "EVENT_SET_TIMER_SCRIPT",
       "args": {
