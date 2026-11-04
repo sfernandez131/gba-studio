@@ -26,6 +26,33 @@
   "autoFadeSpeed": 1,
   "script": [
     {
+      "id": "e1de0000-0000-4000-8000-000000000004",
+      "command": "EVENT_CALL_CUSTOM_EVENT",
+      "args": {
+        "customEventId": "a2a20000-0000-4000-8000-000000000001",
+        "$actor[0]$": "bbbbbbbb-0000-4000-8000-000000000004",
+        "$variable[V0]$": {
+          "type": "number",
+          "value": 20
+        },
+        "$variable[V1]$": {
+          "type": "number",
+          "value": 3
+        },
+        "$variable[V2]$": "38"
+      }
+    },
+    {
+      "id": "e1de0000-0000-4000-8000-000000000005",
+      "command": "EVENT_ACTOR_GET_POSITION",
+      "args": {
+        "actorId": "bbbbbbbb-0000-4000-8000-000000000004",
+        "vectorX": "36",
+        "vectorY": "37",
+        "units": "pixels"
+      }
+    },
+    {
       "id": "e1de0000-0000-4000-8000-000000000001",
       "command": "EVENT_SET_TIMER_SCRIPT",
       "args": {
@@ -54,7 +81,7 @@
             }
           },
           {
-            "id": "e1de0000-0000-4000-8000-000000000004",
+            "id": "e1de0000-0000-4000-8000-000000000007",
             "command": "EVENT_ACTOR_MOVE_RELATIVE",
             "args": {
               "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
@@ -75,7 +102,7 @@
             }
           },
           {
-            "id": "e1de0000-0000-4000-8000-000000000005",
+            "id": "e1de0000-0000-4000-8000-000000000008",
             "command": "EVENT_ACTOR_MOVE_RELATIVE",
             "args": {
               "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
@@ -95,12 +122,12 @@
             }
           },
           {
-            "id": "e1de0000-0000-4000-8000-000000000006",
+            "id": "e1de0000-0000-4000-8000-000000000009",
             "command": "EVENT_ACTOR_GET_POSITION",
             "args": {
               "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
-              "vectorX": "36",
-              "vectorY": "37",
+              "vectorX": "39",
+              "vectorY": "40",
               "units": "pixels"
             }
           }

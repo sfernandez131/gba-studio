@@ -168,7 +168,8 @@ need the same thing. Slice **G3b** below.
 - **On Blank's respawn lands at the wrong place.** The scene calls the On Blank custom
   event with ResetPosX 50 and ResetPosY 13, passed by value; the player arrives at tile
   (7, 0). The state change itself is right, so the by-value arguments look lost on the way
-  into the custom event. G5 territory.
+  into the custom event. G5 territory. **Fixed** (see "Custom-event arguments"): it now
+  lands at (50, 13).
 
 ## G3b result (2026-11-02): player-vs-actor collision
 
@@ -269,11 +270,37 @@ gbavm#92 and gba-studio#133.
   `hw_actor_move_init` with actor 0. So they all steer the player. The first contact runs
   "Enemy Ship Destroy", which deactivates the player, and the scroll stops. This is
   probably the same lost-argument bug as On Blank's respawn (G3). It blocks Space Battle
-  in G5.
+  in G5. **Fixed** (see "Custom-event arguments"): it was, and each enemy now moves itself.
 - **Replace Tile addresses the padded map, not the scene.** `hw_replace_bg_tile_xy` uses
   the scene's tile x, y as map cells without the centring offset. So it hits the right
   cell only in a scene whose size is a multiple of 32 tiles on both axes (no padding).
   Anywhere else it is off by the padding, whatever the scene's size.
+
+## Custom-event arguments (2026-11-04): the call frame
+
+gbavm#94 and gba-studio#135, before G5. They fix two of the bugs found above: On Blank's
+respawn (G3) and the enemies steering the player (G3c).
+
+- **The cause.** GB Studio passes a custom event's arguments on the VM stack. The callee
+  reads them past the call's frame: `.SCRIPT_ARG_n = -(3 + locals + n)`, and two of
+  those three words are gbvm's far-call frame (the PC and the bank). gbavm keeps its
+  32-bit return addresses on a separate return stack, and its calls put nothing on the
+  data stack. So every argument read landed two words low, in the caller's own stack.
+  Space Battle's enemies read 0 for their actor, which is the player.
+- **The fix (engine only).** A call now takes gbvm's words on the data stack: 1 for a near
+  call and 2 for a far one, holding gbvm's contents (the PC's low half, then the bank).
+  The real return address stays on the return stack, and the returns drop the frame words
+  before the arguments. The compiler and the bridge are unchanged.
+- **Verified.** In CI, the Wide scene's init calls a custom event with an actor (Target),
+  X 20 and Y 3 by value, and a variable by reference. Target ends at (160, 24) px, which
+  is tile (20, 3), and the run is counted once. On the old engine the player moved
+  instead, Target stayed at (80, 32), and the count stayed 0. On scratch copies of gbs2:
+  - **Space Battle:** the first 12 moves reach `hw_actor_move_init` with actor 0 (the
+    player's own scene move), then 2, 3 … 12, each enemy itself. Before, all 12 had 0.
+  - **Path to Sample Town**, with BLANK forced at the end of its init: On Blank sets the
+    player to (12800, 3328) subpixels, which is tile (50, 13).
+- **Space Battle also needed the Move Relative fix** (next section): the enemies moved
+  themselves, but still to their offsets taken as absolute positions.
 
 ## Move Relative fix (2026-11-04)
 
