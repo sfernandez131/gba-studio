@@ -274,7 +274,9 @@ gbavm#92 and gba-studio#133.
 - **Replace Tile addresses the padded map, not the scene.** `hw_replace_bg_tile_xy` uses
   the scene's tile x, y as map cells without the centring offset. So it hits the right
   cell only in a scene whose size is a multiple of 32 tiles on both axes (no padding).
-  Anywhere else it is off by the padding, whatever the scene's size.
+  Anywhere else it is off by the padding, whatever the scene's size. **Fixed** (see
+  "Replace Tile fix"): it also read a 64-tile map's cells in the wrong order, and Sample
+  Town's three animated tiles now change their own cells.
 
 ## Custom-event arguments (2026-11-04): the call frame
 
@@ -326,6 +328,32 @@ gbavm#93 and gba-studio#134.
   frames (64 walking at 0.5 px a frame, then the 1 s wait), to tiles 68, 64, 60 and 56:
   4 tiles toward the player each time. Before, its first destination was tile 252, and
   no second move came within 400 frames.
+
+## Replace Tile fix (2026-11-04)
+
+gbavm#95 and the gba-studio PR that pins it.
+
+- **Two lookups were wrong.** `hw_replace_bg_tile_xy` took GB's x, y as map cells, read
+  row by row. But GB's x, y are scene tiles, and the eject centres a scene on a map padded
+  to a multiple of 32 tiles, rounded down onto the grid. And Butano keeps a map of
+  64 × 32, 32 × 64 or 64 × 64 cells in the hardware's screenblock order; only big maps
+  and 32 × 32 ones are stored row by row. Sample Town (56 × 56 tiles on a 64 × 64 map)
+  hit both.
+- **Now** the cell is the scene tile plus half the padding (floored), looked up in the
+  map's own order. A position outside the scene does nothing, since the padding's
+  backdrop tile is not a script's to change. The tile's graphics are still what gets
+  replaced, so every cell using that tile changes, as on GB.
+- **Verified.** In CI the result is read back from VRAM: for each enabled BG, BGxCNT, then
+  the screen entry, then that tile's 8 words, against the probe tileset's tile in ROM.
+  The Main scene (48 × 32 on a 64 × 32 map) replaces scene tile (0, 0), which is
+  screenblock entry 8. The Wide scene (151 × 18 on a 160 × 32 big map) replaces
+  (146, 2), which Butano streams to hardware entry 310. Both show the probe; on the old
+  engine both showed the scene's own tile. On a scratch copy of gbs2 started in Sample
+  Town, the first timer tick replaces (22, 6) and (22, 17) with waterfall frames 0 and 4,
+  and (4, 11) with flower frame 0. With the BG map dumped from VRAM and drawn against the BMP the eject
+  wrote, 63 cells differ: those sharing the three tiles (the waterfall's top three, its
+  foot, and all 59 flowers), each showing its frame. Before, none of the three changed;
+  the backdrop under all 960 padding cells did, and two common tiles elsewhere.
 
 ## Slice plan
 

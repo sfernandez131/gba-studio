@@ -43,6 +43,8 @@
 #      and one by-reference argument (gbs2 G5).
 #  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
 #      one in tiles and one in pixels, and stores where it lands.
+#  17. The main init and the Wide init each run a Replace Tile (gbs2 G5), whose result
+#      is read back from the BG map in VRAM.
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -62,11 +64,28 @@ MGBA_PID=$!
 trap 'kill $MGBA_PID 2>/dev/null || true' EXIT
 sleep 3
 
+# `bgcell N`: for each of BG0-3, the 4bpp tile (8 words) that entry N of its screen map
+# shows, read through the hardware's own registers: BGxCNT gives the screen and char
+# blocks, the map entry the tile. What the console would draw, whichever BG is the scene's.
+BGCELL=runtime-test-bgcell.gdb
+cat > "$BGCELL" <<'EOF'
+define bgcell
+  set $bg = 0
+  while $bg < 4
+    set $cnt = *(unsigned short *)(0x04000008 + $bg * 2)
+    set $entry = *(unsigned short *)(0x06000000 + (($cnt >> 8) & 31) * 0x800 + $arg0 * 2)
+    print/x *(unsigned int (*)[8])(0x06000000 + (($cnt >> 2) & 3) * 0x4000 + ($entry & 0x3ff) * 32)
+    set $bg = $bg + 1
+  end
+end
+EOF
+
 # A run that misses a breakpoint would wait on it forever; the timeout turns that into a
 # log with markers missing, which the asserts below then report.
 timeout 300 gdb-multiarch -batch \
   -ex "set pagination off" \
   -ex "set confirm off" \
+  -ex "source $BGCELL" \
   -ex "target remote localhost:2345" \
   -ex "break hw_overlay_show" \
   -ex "continue" \
@@ -118,6 +137,10 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
   -ex "print script_memory[1]" \
+  -ex "echo \n@TILEMAIN\n" \
+  -ex "print/x *(unsigned short *)0x04000000" \
+  -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
+  -ex "bgcell 8" \
   -ex "echo \n@PLATFORM\n" \
   -ex "print/d plat_grav" \
   -ex "print/d plat_jump_vel" \
@@ -233,6 +256,10 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@WALKER\n" \
   -ex "print script_memory[32]" \
   -ex "print script_memory[33]" \
+  -ex "echo \n@TILEWIDE\n" \
+  -ex "print/x *(unsigned short *)0x04000000" \
+  -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
+  -ex "bgcell 310" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -503,4 +530,30 @@ WIDE=$(hit_vals "@WIDE$")
 WALKER=$(hit_vals "@WALKER")
 [ "$WALKER" = "992 94 " ] || fail "after Move Relative +4 tiles x, -10 px y from (960, 104) the Walker is at [$WALKER], expected [992 94]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative)"
+# Replace Tile (gbs2 G5: Sample Town's animated tiles). GB's x, y are scene tiles, but the
+# eject centres a scene on a map padded to a multiple of 32 tiles, and Butano keeps a map
+# of 64 x 32 cells (not big, not 32 x 32) in the hardware's screenblock layout. Each init
+# replaces a scene tile with tile 1 of the probe tileset, which must then be what the BG
+# map shows there. Each block reads DISPCNT, the probe tile from ROM, then BG0-3's tile at
+# the map entry (bgcell); one enabled BG must show the probe. Only enabled BGs count: a
+# disabled one keeps its last BGxCNT, which can point at the replaced tile by chance.
+#   - Main, 48 x 32 tiles on a 64 x 32 map: scene tile (0, 0) is map cell (8, 0), entry 8.
+#   - Wide, 151 x 18 tiles on a 160 x 32 big map: scene tile (146, 2) is map cell (150, 9).
+#     Butano streams a big map into a 32 x 32 hardware map at (x & 31, y & 31), so entry
+#     9 * 32 + 22 = 310; the camera is at the right edge, so the cell is on screen.
+# gbavm used to take x, y as map cells, row by row: both replaced a padding cell's tile.
+tile_rows() { awk -v m="$1" '$0 ~ m {f=1; next} /^@/ {f=0} f && /^\$/ {sub(/^[^=]*= /,""); print}' "$LOG"; }
+shows_probe() {
+  local rows disp bg
+  mapfile -t rows < <(tile_rows "$1")
+  [ "${#rows[@]}" -eq 6 ] || return 1
+  disp=$((rows[0]))
+  for bg in 0 1 2 3; do
+    if (( disp & (0x100 << bg) )) && [ "${rows[bg + 2]}" = "${rows[1]}" ]; then return 0; fi
+  done
+  return 1
+}
+shows_probe "@TILEMAIN" || fail "Main scene tile (0, 0) does not show the replaced tile (map entry 8 of an enabled BG): $(tile_rows "@TILEMAIN" | tr '\n' ' ')"
+shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 2) does not show the replaced tile (big-map entry 310 of an enabled BG): $(tile_rows "@TILEWIDE" | tr '\n' ' ')"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, Replace Tile on a padded map)"
