@@ -332,6 +332,44 @@
             "args": {
               "timer": 2
             }
+          },
+          {
+            "id": "c3b30000-0000-4000-8000-000000000006",
+            "command": "EVENT_SET_TIMER_SCRIPT",
+            "args": {
+              "timer": 3,
+              "units": "frames",
+              "frames": 60,
+              "__scriptTabs": "end"
+            },
+            "children": {
+              "script": [
+                {
+                  "id": "c3b30000-0000-4000-8000-000000000007",
+                  "command": "EVENT_TIMER_DISABLE",
+                  "args": {
+                    "timer": 3
+                  }
+                },
+                {
+                  "id": "c3b30000-0000-4000-8000-000000000008",
+                  "command": "EVENT_SWITCH_SCENE",
+                  "args": {
+                    "sceneId": "aaaaaaaa-0000-4000-8000-000000000003",
+                    "x": {
+                      "type": "number",
+                      "value": 140
+                    },
+                    "y": {
+                      "type": "number",
+                      "value": 12
+                    },
+                    "direction": "right",
+                    "fadeSpeed": 2
+                  }
+                }
+              ]
+            }
           }
         ]
       }

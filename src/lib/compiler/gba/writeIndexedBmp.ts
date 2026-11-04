@@ -7,8 +7,9 @@
 // 4bpp nibble packing and keeps the encoder trivial.
 //
 // Regular backgrounds must be sized in multiples of 256 (butano_graphics_tool.py
-// RegularBgItem), so the source image is centred on a 256-multiple canvas and the
-// surround is filled with palette index 0 (the backdrop).
+// RegularBgItem), so the source image is centred on a 256-multiple canvas (on the
+// 8px tile grid - see bgCanvasLayout) and the surround is filled with palette
+// index 0 (the backdrop).
 
 export type Rgb = [number, number, number];
 
@@ -20,6 +21,44 @@ export interface IndexedSource {
 
 const ceilTo = (v: number, m: number): number =>
   Math.max(m, Math.ceil(v / m) * m);
+
+/**
+ * Where indexedImageToBmp puts a source on a regular-bg canvas: centred, then
+ * rounded down onto the 8px tile grid. Centring alone puts a source with an odd
+ * tile count (gbs2's 161- and 255-tile scenes) half a tile off the grid, so each
+ * canvas tile holds halves of two source tiles - in a colour background, from two
+ * 16-colour banks where a GBA tile has one, and half of it draws in the wrong
+ * colours. `shiftX`/`shiftY` (0 or 4) are how far that moved the source's centre
+ * left/up of the canvas centre: create the bg that far right/down and the source
+ * is centred on the world origin again, which is where the engine expects it.
+ */
+export function bgCanvasLayout(
+  width: number,
+  height: number,
+  align = 256,
+): {
+  canvasW: number;
+  canvasH: number;
+  offX: number;
+  offY: number;
+  shiftX: number;
+  shiftY: number;
+} {
+  const canvasW = ceilTo(width, align);
+  const canvasH = ceilTo(height, align);
+  const centreX = (canvasW - width) / 2;
+  const centreY = (canvasH - height) / 2;
+  const offX = Math.floor(centreX / 8) * 8;
+  const offY = Math.floor(centreY / 8) * 8;
+  return {
+    canvasW,
+    canvasH,
+    offX,
+    offY,
+    shiftX: centreX - offX,
+    shiftY: centreY - offY,
+  };
+}
 
 /**
  * Compose a GBC-style banked background image (M12a): per-pixel GB shades
@@ -57,23 +96,27 @@ export function composeBankedImage(
 /**
  * Encode an indexed image as an 8bpp BMP (16-colour palette), centred on a
  * canvas whose dimensions are rounded up to a multiple of `align` (256 for
- * regular backgrounds). Returns the BMP file bytes.
+ * regular backgrounds), as bgCanvasLayout places it. Returns the BMP file bytes.
  *
  * M8d: pass `square` to force a SxS canvas instead (S must be a power-of-two in
  * {128,256,512,1024} - Butano's affine/Mode-7 backgrounds require square,
- * power-of-two, 8bpp maps). The source image is centred and the surround filled
- * with palette index 0 (the backdrop), same as the regular-bg path.
+ * power-of-two, 8bpp maps). The source image is centred exactly (an 8bpp map has
+ * no banks to split) and the surround filled with palette index 0 (the backdrop),
+ * same as the regular-bg path.
  */
 export function indexedImageToBmp(
   src: IndexedSource,
   palette: Rgb[],
   opts: { align?: number; square?: number } = {},
 ): Buffer {
-  const align = opts.align ?? 256;
-  const canvasW = opts.square ?? ceilTo(src.width, align);
-  const canvasH = opts.square ?? ceilTo(src.height, align);
-  const offX = Math.floor((canvasW - src.width) / 2);
-  const offY = Math.floor((canvasH - src.height) / 2);
+  const { canvasW, canvasH, offX, offY } = opts.square
+    ? {
+        canvasW: opts.square,
+        canvasH: opts.square,
+        offX: Math.floor((opts.square - src.width) / 2),
+        offY: Math.floor((opts.square - src.height) / 2),
+      }
+    : bgCanvasLayout(src.width, src.height, opts.align);
 
   // Canvas is top-down here; index 0 = backdrop, source image centred. Indices
   // above 15 are legal: multi-bank images (M12) address 16-colour banks as

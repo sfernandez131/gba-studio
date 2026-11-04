@@ -1,0 +1,27 @@
+{
+  "_resourceType": "trigger",
+  "id": "d00d0000-0000-4000-8000-000000000006",
+  "_index": 0,
+  "name": "Landing",
+  "symbol": "trigger_landing",
+  "prefabId": "",
+  "x": 136,
+  "y": 10,
+  "width": 8,
+  "height": 6,
+  "prefabScriptOverrides": {},
+  "script": [
+    {
+      "id": "d00d0000-0000-4000-8000-000000000007",
+      "command": "EVENT_SET_VALUE",
+      "args": {
+        "variable": "35",
+        "value": {
+          "type": "number",
+          "value": 77
+        }
+      }
+    }
+  ],
+  "leaveScript": []
+}
