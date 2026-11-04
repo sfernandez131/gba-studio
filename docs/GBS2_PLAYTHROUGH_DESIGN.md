@@ -329,7 +329,7 @@ gbavm#93 and gba-studio#134.
 
 ## G4 result (2026-11-04): parallax
 
-gbavm#96 and gba-studio#PENDING.
+gbavm#96 and gba-studio#136.
 
 - **What gbvm does.** `compileParallax` emits up to three `PARALLAX_STEP` rows, and
   gbvm's LCD interrupt walks them down the screen. A row with an end is an upper band: it
@@ -377,7 +377,7 @@ gbavm#96 and gba-studio#PENDING.
 | G3     | **Done (2026-11-01), gbavm#88 / gba-studio#129.** Knockback + blank, `plat_next_state`, state scripts and animation overrides. See "G3 result".                                                                                 | CI: the scripted chain knockback → blank → ground; gbs2: a pit and a scripted knockback. The turnip hit moved to G3b.                                      |
 | G3b    | **Done (2026-11-02), gbavm#91 / gba-studio#132.** Player-vs-actor collision: the overlap test in each controller, then the scene's player-hit script, the actor's On Hit: Player and 20 invincibility frames. See "G3b result". | CI: both scripts once inside the invincibility window, again after it; gbs2: a turnip from the side knocks back, a stomp does not.                         |
 | G3c    | **Done (2026-11-04), gbavm#92 / gba-studio#133.** Scenes wider than 512 px: no cap in the eject (Butano streams big maps), the scene on the tile grid, set-pos facing past 1024 px. See "G3c result".                           | CI: a 151-tile scene's size, landing, trigger and camera clamp; gbs2: Path to Sample Town walked to a turnip, Space Battle's full scroll, VRAM vs the BMP. |
-| G4     | **Done (2026-11-04), gbavm#96 / gba-studio#PENDING.** Parallax: each upper band is its own background over the scene bg, scrolled from the camera each frame (not H-blank effects: big maps). See "G4 result".                  | CI: both bands' scroll at the Wide scene's right clamp; gbs2: three camera positions in Parallax Example, a captured frame vs the source art.              |
+| G4     | **Done (2026-11-04), gbavm#96 / gba-studio#136.** Parallax: each upper band is its own background over the scene bg, scrolled from the camera each frame (not H-blank effects: big maps). See "G4 result".                      | CI: both bands' scroll at the Wide scene's right clamp; gbs2: three camera positions in Parallax Example, a captured frame vs the source art.              |
 | **G5** | Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it.                                                                    | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                                               |
 
 Order: G1 first (small, clears the build log), then G2 (it blocks the hub, so it blocks
