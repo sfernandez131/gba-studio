@@ -38,7 +38,8 @@
 #  13. Last in that init, arms timer 2, which 160 frames later puts the player on the
 #      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
 #  14. Timer 2 also arms timer 3, which 60 frames later enters the Wide scene: 151 x 18
-#      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at.
+#      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at. The
+#      PLATFORM scene's background palettes are its own, so Wide's cannot share them.
 #  15. The Wide init calls a custom event with an actor argument, two by-value arguments
 #      and one by-reference argument (gbs2 G5).
 #  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
@@ -46,6 +47,9 @@
 #  17. The Wide scene also has two parallax bands over its normal view (gbs2 G4).
 #  18. The main init and the Wide init each run a Replace Tile (gbs2 G5), whose result
 #      is read back from the BG map in VRAM.
+#  19. After Move Relative, the timer moves the Walker three more times - onto the floor
+#      with wall collisions, into the Block actor with actor collisions, and into the
+#      floor with none - and stores where each move ends (gbs2 G5).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -264,6 +268,15 @@ timeout 300 gdb-multiarch -batch \
   -ex "print/x *(unsigned short *)0x04000000" \
   -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
   -ex "bgcell 534" \
+  -ex "ignore 16 60" \
+  -ex "continue" \
+  -ex "echo \n@MOVES\n" \
+  -ex "print script_memory[34]" \
+  -ex "print script_memory[35]" \
+  -ex "print script_memory[36]" \
+  -ex "print script_memory[37]" \
+  -ex "print script_memory[38]" \
+  -ex "print script_memory[39]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -504,12 +517,22 @@ HIT3=$(hit_vals "@HIT3")
 #   - the load must get the real size (hw_load_scene's width and height, r1 and r2);
 #   - 120 frames later the player must stand on that floor at x 1120, y 120 px, read by a
 #     timer into variables 33/34 ([26]/[27]) - without the grid there it falls forever;
-#   - the trigger around the landing spot (tiles 136-143) must have set variable 35 ([28])
-#     to 77;
+#   - the trigger beside the landing spot must have set variable 35 ([28]) to 77. It
+#     covers tiles 141-143, which the player's 16 px box reaches from x 1120 but its
+#     origin, in tile 140, does not: gbvm tests every tile under the box (gbs2 G5), and
+#     gbs2's exit from Path to Sample Town is a trigger the player reaches only that way;
 #   - the camera centre must be clamped to the scene's real right edge, 1208 - 120 = 1088
 #     (the old cap pinned it at 392), and centred vertically (72) in a 144 px scene.
 val_after "@WIDELOAD" "^r1" | grep -q " 1208$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r1" | awk '{print $NF}') px wide, expected 1208 (not capped at 512)"
 val_after "@WIDELOAD" "^r2" | grep -q " 144$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r2" | awk '{print $NF}') px tall, expected 144"
+
+# Scene backgrounds (gbs2 G5). A colour scene's background holds 8 of the 16 bg palettes,
+# and the PLATFORM scene's are its own (bank 0 is default-bg-6), so Wide's background
+# cannot share them. gbavm created the new scene's background before freeing the old
+# one, so both scenes' palettes and the dialogue panel's were needed at once: Butano
+# asserted inside the load ("BPP4 palette create failed") and the Wide scene never ran.
+# gbs2 hit it going from its title screen into Parallax Example.
+grep -q '^@WIDE$' "$LOG" || fail "the Wide scene loaded but never ran (did creating its background run out of bg palettes?)"
 
 # Custom-event arguments (gbs2 G5: Space Battle's enemies, the platformer's On Blank). The
 # Wide init calls the custom event Arg Probe with the actor Target (at tile 10, 4), X 20 and
@@ -569,4 +592,18 @@ shows_probe() {
 shows_probe "@TILEMAIN" || fail "Main scene tile (0, 0) does not show the replaced tile (map entry 8 of an enabled BG): $(tile_rows "@TILEMAIN" | tr '\n' ' ')"
 shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 9) does not show the replaced tile (big-map entry 534 of an enabled BG): $(tile_rows "@TILEWIDE" | tr '\n' ' ')"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map)"
+# Scripted moves and collisions (gbs2 G5). gbvm's Actor Move To checks walls only when the
+# event asks for it, and then once, at the start: it clips the destination where the
+# actor's bounding box first meets a wall. The Walker's box reaches 7 px below its origin
+# (the sprite's bounds are y -8, 16 tall, like gbs2's ice block), so a move down onto the
+# floor at row 16 (128 px) stops at y 120, not with the origin at the floor. Then, with
+# actor collisions, a move right toward tile 132 stops at the last step before its box
+# overlaps the Block's at x 1024: 1024 - 16 = 1008. Last, a move with no collisions goes
+# into the floor, to tile row 17 (136 px). Each lands in variables 41-46 ([34]..[39]).
+# gbavm used to stop every move once its origin entered a solid tile, whatever it asked
+# for, and never tested actors: gbs2's ice block slid a tile into the wall, and pushed
+# rocks slid through each other.
+MOVES=$(hit_vals "@MOVES")
+[ "$MOVES" = "992 120 1008 120 1008 136 " ] || fail "the Walker's moves [onto-floor x y, into-Block x y, no-collisions x y] = [$MOVES], expected [992 120 1008 120 1008 136]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map, scripted-move collisions, scene background swap)"
