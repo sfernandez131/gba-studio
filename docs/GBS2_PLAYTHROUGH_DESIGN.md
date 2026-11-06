@@ -274,7 +274,9 @@ gbavm#92 and gba-studio#133.
 - **Replace Tile addresses the padded map, not the scene.** `hw_replace_bg_tile_xy` uses
   the scene's tile x, y as map cells without the centring offset. So it hits the right
   cell only in a scene whose size is a multiple of 32 tiles on both axes (no padding).
-  Anywhere else it is off by the padding, whatever the scene's size.
+  Anywhere else it is off by the padding, whatever the scene's size. **Fixed** (see
+  "Replace Tile fix"): it also read a 64-tile map's cells in the wrong order, and Sample
+  Town's three animated tiles now change their own cells.
 
 ## Custom-event arguments (2026-11-04): the call frame
 
@@ -368,17 +370,104 @@ gbavm#96 and gba-studio#136.
 - **Not covered.** Replace Tile in a band's rows changes the scene bg's tile, which the
   band covers. Walking through Parallax Example on the GBA is the user's eyes-on check.
 
+## Replace Tile fix (2026-11-04)
+
+gbavm#95 and gba-studio#137.
+
+- **Two lookups were wrong.** `hw_replace_bg_tile_xy` took GB's x, y as map cells, read
+  row by row. But GB's x, y are scene tiles, and the eject centres a scene on a map padded
+  to a multiple of 32 tiles, rounded down onto the grid. And Butano keeps a map of
+  64 × 32, 32 × 64 or 64 × 64 cells in the hardware's screenblock order; only big maps
+  and 32 × 32 ones are stored row by row. Sample Town (56 × 56 tiles on a 64 × 64 map)
+  hit both.
+- **Now** the cell is the scene tile plus half the padding (floored), looked up in the
+  map's own order. A position outside the scene does nothing, since the padding's
+  backdrop tile is not a script's to change. The tile's graphics are still what gets
+  replaced, so every cell using that tile changes, as on GB.
+- **Verified.** In CI the result is read back from VRAM: for each enabled BG, BGxCNT, then
+  the screen entry, then that tile's 8 words, against the probe tileset's tile in ROM.
+  The Main scene (48 × 32 on a 64 × 32 map) replaces scene tile (0, 0), which is
+  screenblock entry 8. The Wide scene (151 × 18 on a 160 × 32 big map) replaces
+  (146, 9), below its parallax bands, which Butano streams to hardware entry 534. Both
+  show the probe; on the old engine both showed the scene's own tile. On a scratch copy
+  of gbs2 started in Sample Town, the first timer tick replaces (22, 6) and (22, 17) with
+  waterfall frames 0 and 4, and (4, 11) with flower frame 0. With the BG map dumped from
+  VRAM and drawn against the BMP the eject wrote, 63 cells differ: those sharing the
+  three tiles (the waterfall's top three, its foot, and all 59 flowers), each showing its
+  frame. Before, none of the three changed; the backdrop under all 960 padding cells
+  did, and two common tiles elsewhere.
+- **Still not covered** (G4): a band is its own background with its own tiles, so
+  Replace Tile in a band's rows still changes only the scene bg's copy, under the band.
+
+## G5, first round (2026-11-06): what the autopilot ran into
+
+gbavm#97 and gba-studio#138.
+
+- **How it drives the game.** A probe, not committed, feeds Butano's keypad a scripted
+  button sequence, one route per stretch of the game. gdb breakpoints log each scene
+  load, note and failed step. In a platformer the route walks right and jumps when the
+  player is stuck. In a top-down scene it follows a path planned over the scene's
+  collision grid.
+- **Reached.** The title → Parallax Example → Path to Sample Town, up to the hill. Path to
+  Sample Town from past the hill → Sample Town. The whole hub: Music House, Top House,
+  the Cave and Launch Site, and back. Space Battle → Deep Space → Dream → Parallax
+  Example. The Underground rock and ice puzzle → Deeper Underground. Player's House,
+  through its door.
+- **Fixed, each as gbvm does it:**
+  - _Scene swap._ The engine now frees the old scene's backgrounds before it creates the
+    new ones. A colour background holds 8 of the 16 bg palettes, so two of them and the
+    dialogue panel's ran out, and Butano asserted going from the title into Parallax
+    Example.
+  - _Triggers._ A trigger fires when any tile under the player's box is in it. gbs2's exit
+    from Path to Sample Town is reached only that way. A platformer also re-fires the
+    trigger it stands in when Up goes down, and the door into Player's House checks Up.
+  - _Top-down grid._ The player steps a whole grid square (`topdown_grid`). Triggers and
+    interaction run when it lands, and a scene starts with the player snapped onto the
+    grid. Free movement let Sample Town's paired entrance triggers hand the player back
+    and forth for good.
+  - _Interaction._ A takes the actor that the player's box would overlap one grid square
+    ahead, and a top-down NPC turns to face the player. The ice block could be pushed from
+    only two of its sides.
+  - _Scripted moves._ A move checks walls only when its event asks. It then stops where
+    the actor's box first meets a wall, and with actor collisions it stops at the last
+    step clear of another actor. The ice block slid a tile into the wall, and pushed rocks
+    went through each other.
+- **Verified.** In CI:
+
+  - The PLATFORM fixture scene has its own palettes, so the Wide scene's background cannot
+    share them. Without the fix, Butano asserts as Wide loads.
+  - The Wide trigger covers only tiles the player's box reaches, not its origin. It sets
+    77, or 0 without the fix.
+  - Three Walker moves (onto the floor, into the Block, through the floor) end at y 120,
+    x 1008 and y 136. Without the fix they end at 126, 1056 and 126.
+
+  The rest needs a key press, which the GDB stub cannot send, so the autopilot covered it
+  on gbs2.
+
+- **Blocked: platformer slopes.** gbavm's platformer collides at a few points of a 16 × 16
+  box: the centre and the feet. gbvm's slopes live in its bounding-box `move_and_collide`,
+  so the next step is porting that routine whole. The hill on Path to Sample Town is a
+  slope, and the autopilot cannot climb it.
+- **Ledger, not fixed:**
+  - A trigger's leave script never runs on the GBA.
+  - Replace Tile in a parallax band's rows (see G4).
+  - A project's engine-field values do not reach the GBA: gbavm does not run GB Studio's
+    engine-init script, so the C defaults always apply (the platformer tunables,
+    `topdown_grid`, `fade_style`). gbs2 uses the defaults.
+- **Not driven yet.** The Launch Site machine puzzle (the pod to Space Battle), the pause
+  menus, and the Deeper Underground chest.
+
 ## Slice plan
 
-| Slice  | Scope                                                                                                                                                                                                                           | Verify                                                                                                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G1     | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                                                                                   | Unit tests; seed checked on the title (23,269 at frame 90).                                                                                                |
-| G2     | **Done (2026-09-24), gbavm#87 / gba-studio#128.** Point-and-click, and the player-sprite default: gbs2 had no player in any scene. See "G2 result".                                                                             | Cursor position exact against gbvm's arithmetic; a trigger hovered and fired on Player's House.                                                            |
-| G3     | **Done (2026-11-01), gbavm#88 / gba-studio#129.** Knockback + blank, `plat_next_state`, state scripts and animation overrides. See "G3 result".                                                                                 | CI: the scripted chain knockback → blank → ground; gbs2: a pit and a scripted knockback. The turnip hit moved to G3b.                                      |
-| G3b    | **Done (2026-11-02), gbavm#91 / gba-studio#132.** Player-vs-actor collision: the overlap test in each controller, then the scene's player-hit script, the actor's On Hit: Player and 20 invincibility frames. See "G3b result". | CI: both scripts once inside the invincibility window, again after it; gbs2: a turnip from the side knocks back, a stomp does not.                         |
-| G3c    | **Done (2026-11-04), gbavm#92 / gba-studio#133.** Scenes wider than 512 px: no cap in the eject (Butano streams big maps), the scene on the tile grid, set-pos facing past 1024 px. See "G3c result".                           | CI: a 151-tile scene's size, landing, trigger and camera clamp; gbs2: Path to Sample Town walked to a turnip, Space Battle's full scroll, VRAM vs the BMP. |
-| G4     | **Done (2026-11-04), gbavm#96 / gba-studio#136.** Parallax: each upper band is its own background over the scene bg, scrolled from the camera each frame (not H-blank effects: big maps). See "G4 result".                      | CI: both bands' scroll at the Wide scene's right clamp; gbs2: three camera positions in Parallax Example, a captured frame vs the source art.              |
-| **G5** | Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it.                                                                    | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                                               |
+| Slice  | Scope                                                                                                                                                                                                                                                     | Verify                                                                                                                                                     |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1     | **Done (2026-09-23), gbavm#86 / gba-studio#127.** Text layer no-op, `VM_RANDOMIZE`; the scroll region is not needed by gbs2. See "G1 result".                                                                                                             | Unit tests; seed checked on the title (23,269 at frame 90).                                                                                                |
+| G2     | **Done (2026-09-24), gbavm#87 / gba-studio#128.** Point-and-click, and the player-sprite default: gbs2 had no player in any scene. See "G2 result".                                                                                                       | Cursor position exact against gbvm's arithmetic; a trigger hovered and fired on Player's House.                                                            |
+| G3     | **Done (2026-11-01), gbavm#88 / gba-studio#129.** Knockback + blank, `plat_next_state`, state scripts and animation overrides. See "G3 result".                                                                                                           | CI: the scripted chain knockback → blank → ground; gbs2: a pit and a scripted knockback. The turnip hit moved to G3b.                                      |
+| G3b    | **Done (2026-11-02), gbavm#91 / gba-studio#132.** Player-vs-actor collision: the overlap test in each controller, then the scene's player-hit script, the actor's On Hit: Player and 20 invincibility frames. See "G3b result".                           | CI: both scripts once inside the invincibility window, again after it; gbs2: a turnip from the side knocks back, a stomp does not.                         |
+| G3c    | **Done (2026-11-04), gbavm#92 / gba-studio#133.** Scenes wider than 512 px: no cap in the eject (Butano streams big maps), the scene on the tile grid, set-pos facing past 1024 px. See "G3c result".                                                     | CI: a 151-tile scene's size, landing, trigger and camera clamp; gbs2: Path to Sample Town walked to a turnip, Space Battle's full scroll, VRAM vs the BMP. |
+| G4     | **Done (2026-11-04), gbavm#96 / gba-studio#136.** Parallax: each upper band is its own background over the scene bg, scrolled from the camera each frame (not H-blank effects: big maps). See "G4 result".                                                | CI: both bands' scroll at the Wide scene's right clamp; gbs2: three camera positions in Parallax Example, a captured frame vs the source art.              |
+| **G5** | **In progress.** Playthrough: drive the sample from the title through each area with scripted input (a probe replaying a button sequence), log what breaks, fix or ledger it. First round (2026-11-06), gbavm#97 / gba-studio#138. See "G5, first round". | Every area reached; an eyes-on playthrough by the user closes the milestone.                                                                               |
 
 Order: G1 first (small, clears the build log), then G2 (it blocks the hub, so it blocks
 G5), then G3 and G4, then G5. G3b goes before G5: the playthrough cannot take a hit

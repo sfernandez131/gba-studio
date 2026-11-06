@@ -38,12 +38,18 @@
 #  13. Last in that init, arms timer 2, which 160 frames later puts the player on the
 #      Hazard, an actor in collision group 1, and leaves it there (gbs2 G3b).
 #  14. Timer 2 also arms timer 3, which 60 frames later enters the Wide scene: 151 x 18
-#      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at.
+#      tiles of PLATFORM, wider than the 512 px the eject used to cap scenes at. The
+#      PLATFORM scene's background palettes are its own, so Wide's cannot share them.
 #  15. The Wide init calls a custom event with an actor argument, two by-value arguments
 #      and one by-reference argument (gbs2 G5).
 #  16. In the Wide scene, timer 4 moves the Walker actor with two Move Relative events,
 #      one in tiles and one in pixels, and stores where it lands.
 #  17. The Wide scene also has two parallax bands over its normal view (gbs2 G4).
+#  18. The main init and the Wide init each run a Replace Tile (gbs2 G5), whose result
+#      is read back from the BG map in VRAM.
+#  19. After Move Relative, the timer moves the Walker three more times - onto the floor
+#      with wall collisions, into the Block actor with actor collisions, and into the
+#      floor with none - and stores where each move ends (gbs2 G5).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -63,11 +69,28 @@ MGBA_PID=$!
 trap 'kill $MGBA_PID 2>/dev/null || true' EXIT
 sleep 3
 
+# `bgcell N`: for each of BG0-3, the 4bpp tile (8 words) that entry N of its screen map
+# shows, read through the hardware's own registers: BGxCNT gives the screen and char
+# blocks, the map entry the tile. What the console would draw, whichever BG is the scene's.
+BGCELL=runtime-test-bgcell.gdb
+cat > "$BGCELL" <<'EOF'
+define bgcell
+  set $bg = 0
+  while $bg < 4
+    set $cnt = *(unsigned short *)(0x04000008 + $bg * 2)
+    set $entry = *(unsigned short *)(0x06000000 + (($cnt >> 8) & 31) * 0x800 + $arg0 * 2)
+    print/x *(unsigned int (*)[8])(0x06000000 + (($cnt >> 2) & 3) * 0x4000 + ($entry & 0x3ff) * 32)
+    set $bg = $bg + 1
+  end
+end
+EOF
+
 # A run that misses a breakpoint would wait on it forever; the timeout turns that into a
 # log with markers missing, which the asserts below then report.
 timeout 300 gdb-multiarch -batch \
   -ex "set pagination off" \
   -ex "set confirm off" \
+  -ex "source $BGCELL" \
   -ex "target remote localhost:2345" \
   -ex "break hw_overlay_show" \
   -ex "continue" \
@@ -119,6 +142,10 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@VARS\n" \
   -ex "print script_memory[0]" \
   -ex "print script_memory[1]" \
+  -ex "echo \n@TILEMAIN\n" \
+  -ex "print/x *(unsigned short *)0x04000000" \
+  -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
+  -ex "bgcell 8" \
   -ex "echo \n@PLATFORM\n" \
   -ex "print/d plat_grav" \
   -ex "print/d plat_jump_vel" \
@@ -237,6 +264,19 @@ timeout 300 gdb-multiarch -batch \
   -ex "echo \n@PARALLAX\n" \
   -ex "print gba_parallax_px[0]" \
   -ex "print gba_parallax_px[1]" \
+  -ex "echo \n@TILEWIDE\n" \
+  -ex "print/x *(unsigned short *)0x04000000" \
+  -ex "print/x *(unsigned int (*)[8])((char *)&tileset_0_bn_gfxTiles + 32)" \
+  -ex "bgcell 534" \
+  -ex "ignore 16 60" \
+  -ex "continue" \
+  -ex "echo \n@MOVES\n" \
+  -ex "print script_memory[34]" \
+  -ex "print script_memory[35]" \
+  -ex "print script_memory[36]" \
+  -ex "print script_memory[37]" \
+  -ex "print script_memory[38]" \
+  -ex "print script_memory[39]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -477,12 +517,22 @@ HIT3=$(hit_vals "@HIT3")
 #   - the load must get the real size (hw_load_scene's width and height, r1 and r2);
 #   - 120 frames later the player must stand on that floor at x 1120, y 120 px, read by a
 #     timer into variables 33/34 ([26]/[27]) - without the grid there it falls forever;
-#   - the trigger around the landing spot (tiles 136-143) must have set variable 35 ([28])
-#     to 77;
+#   - the trigger beside the landing spot must have set variable 35 ([28]) to 77. It
+#     covers tiles 141-143, which the player's 16 px box reaches from x 1120 but its
+#     origin, in tile 140, does not: gbvm tests every tile under the box (gbs2 G5), and
+#     gbs2's exit from Path to Sample Town is a trigger the player reaches only that way;
 #   - the camera centre must be clamped to the scene's real right edge, 1208 - 120 = 1088
 #     (the old cap pinned it at 392), and centred vertically (72) in a 144 px scene.
 val_after "@WIDELOAD" "^r1" | grep -q " 1208$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r1" | awk '{print $NF}') px wide, expected 1208 (not capped at 512)"
 val_after "@WIDELOAD" "^r2" | grep -q " 144$" || fail "Wide scene loaded $(val_after "@WIDELOAD" "^r2" | awk '{print $NF}') px tall, expected 144"
+
+# Scene backgrounds (gbs2 G5). A colour scene's background holds 8 of the 16 bg palettes,
+# and the PLATFORM scene's are its own (bank 0 is default-bg-6), so Wide's background
+# cannot share them. gbavm created the new scene's background before freeing the old
+# one, so both scenes' palettes and the dialogue panel's were needed at once: Butano
+# asserted inside the load ("BPP4 palette create failed") and the Wide scene never ran.
+# gbs2 hit it going from its title screen into Parallax Example.
+grep -q '^@WIDE$' "$LOG" || fail "the Wide scene loaded but never ran (did creating its background run out of bg palettes?)"
 
 # Custom-event arguments (gbs2 G5: Space Battle's enemies, the platformer's On Blank). The
 # Wide init calls the custom event Arg Probe with the actor Target (at tile 10, 4), X 20 and
@@ -515,4 +565,45 @@ WALKER=$(hit_vals "@WALKER")
 PARALLAX=$(hit_vals "@PARALLAX")
 [ "$PARALLAX" = "242 484 " ] || fail "with the view's left edge at 968 px the parallax bands scroll to [$PARALLAX], expected [242 484]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax)"
+# Replace Tile (gbs2 G5: Sample Town's animated tiles). GB's x, y are scene tiles, but the
+# eject centres a scene on a map padded to a multiple of 32 tiles, and Butano keeps a map
+# of 64 x 32 cells (not big, not 32 x 32) in the hardware's screenblock layout. Each init
+# replaces a scene tile with tile 1 of the probe tileset, which must then be what the BG
+# map shows there. Each block reads DISPCNT, the probe tile from ROM, then BG0-3's tile at
+# the map entry (bgcell); one enabled BG must show the probe. Only enabled BGs count: a
+# disabled one keeps its last BGxCNT, which can point at the replaced tile by chance.
+#   - Main, 48 x 32 tiles on a 64 x 32 map: scene tile (0, 0) is map cell (8, 0), entry 8.
+#   - Wide, 151 x 18 tiles on a 160 x 32 big map: scene tile (146, 9) is map cell (150, 16).
+#     Butano streams a big map into a 32 x 32 hardware map at (x & 31, y & 31), so entry
+#     16 * 32 + 22 = 534; the camera is at the right edge, so the cell is on screen, and
+#     row 9 is below the parallax bands (each its own bg, which would cover it).
+# gbavm used to take x, y as map cells, row by row: both replaced a padding cell's tile.
+tile_rows() { awk -v m="$1" '$0 ~ m {f=1; next} /^@/ {f=0} f && /^\$/ {sub(/^[^=]*= /,""); print}' "$LOG"; }
+shows_probe() {
+  local rows disp bg
+  mapfile -t rows < <(tile_rows "$1")
+  [ "${#rows[@]}" -eq 6 ] || return 1
+  disp=$((rows[0]))
+  for bg in 0 1 2 3; do
+    if (( disp & (0x100 << bg) )) && [ "${rows[bg + 2]}" = "${rows[1]}" ]; then return 0; fi
+  done
+  return 1
+}
+shows_probe "@TILEMAIN" || fail "Main scene tile (0, 0) does not show the replaced tile (map entry 8 of an enabled BG): $(tile_rows "@TILEMAIN" | tr '\n' ' ')"
+shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 9) does not show the replaced tile (big-map entry 534 of an enabled BG): $(tile_rows "@TILEWIDE" | tr '\n' ' ')"
+
+# Scripted moves and collisions (gbs2 G5). gbvm's Actor Move To checks walls only when the
+# event asks for it, and then once, at the start: it clips the destination where the
+# actor's bounding box first meets a wall. The Walker's box reaches 7 px below its origin
+# (the sprite's bounds are y -8, 16 tall, like gbs2's ice block), so a move down onto the
+# floor at row 16 (128 px) stops at y 120, not with the origin at the floor. Then, with
+# actor collisions, a move right toward tile 132 stops at the last step before its box
+# overlaps the Block's at x 1024: 1024 - 16 = 1008. Last, a move with no collisions goes
+# into the floor, to tile row 17 (136 px). Each lands in variables 41-46 ([34]..[39]).
+# gbavm used to stop every move once its origin entered a solid tile, whatever it asked
+# for, and never tested actors: gbs2's ice block slid a tile into the wall, and pushed
+# rocks slid through each other.
+MOVES=$(hit_vals "@MOVES")
+[ "$MOVES" = "992 120 1008 120 1008 136 " ] || fail "the Walker's moves [onto-floor x y, into-Block x y, no-collisions x y] = [$MOVES], expected [992 120 1008 120 1008 136]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map, scripted-move collisions, scene background swap)"

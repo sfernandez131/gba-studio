@@ -67,6 +67,26 @@
       }
     },
     {
+      "id": "e1de0000-0000-4000-8000-0000000001a1",
+      "command": "EVENT_REPLACE_TILE_XY",
+      "args": {
+        "x": {
+          "type": "number",
+          "value": 146
+        },
+        "y": {
+          "type": "number",
+          "value": 9
+        },
+        "tilesetId": "7113e700-0000-4000-8000-000000001115",
+        "tileIndex": {
+          "type": "number",
+          "value": 1
+        },
+        "tileSize": "8px"
+      }
+    },
+    {
       "id": "e1de0000-0000-4000-8000-000000000001",
       "command": "EVENT_SET_TIMER_SCRIPT",
       "args": {
@@ -142,6 +162,97 @@
               "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
               "vectorX": "39",
               "vectorY": "40",
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000a",
+            "command": "EVENT_ACTOR_MOVE_TO",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "x": {
+                "type": "number",
+                "value": 124
+              },
+              "y": {
+                "type": "number",
+                "value": 17
+              },
+              "units": "tiles",
+              "moveType": "horizontal",
+              "collideWith": [
+                "walls"
+              ],
+              "lockDirection": []
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000b",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "vectorX": "41",
+              "vectorY": "42",
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000c",
+            "command": "EVENT_ACTOR_MOVE_TO",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "x": {
+                "type": "number",
+                "value": 132
+              },
+              "y": {
+                "type": "number",
+                "value": 15
+              },
+              "units": "tiles",
+              "moveType": "horizontal",
+              "collideWith": [
+                "actors"
+              ],
+              "lockDirection": []
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000d",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "vectorX": "43",
+              "vectorY": "44",
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000e",
+            "command": "EVENT_ACTOR_MOVE_TO",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "x": {
+                "type": "number",
+                "value": 126
+              },
+              "y": {
+                "type": "number",
+                "value": 17
+              },
+              "units": "tiles",
+              "moveType": "horizontal",
+              "collideWith": [],
+              "lockDirection": []
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-00000000000f",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
+              "vectorX": "45",
+              "vectorY": "46",
               "units": "pixels"
             }
           }
