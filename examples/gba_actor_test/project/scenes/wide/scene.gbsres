@@ -9,7 +9,7 @@
   "y": 100,
   "width": 151,
   "height": 18,
-  "collisions": "00970+0f12e+",
+  "collisions": "00811+20!0f8+008d+20!0095+20!0032+0f12e+",
   "backgroundId": "1e5f9d6a-bdbc-43e6-8c34-22f5bb5dea06",
   "playerSpriteSheetId": "581d34d0-9591-4e6e-a609-1d94f203b0cd",
   "tilesetId": "",
@@ -253,6 +253,98 @@
               "actorId": "bbbbbbbb-0000-4000-8000-000000000010",
               "vectorX": "45",
               "vectorY": "46",
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000010",
+            "command": "EVENT_WAIT",
+            "args": {
+              "time": {
+                "type": "number",
+                "value": 0.5
+              },
+              "frames": {
+                "type": "number",
+                "value": 60
+              },
+              "units": "frames"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000011",
+            "command": "EVENT_ACTOR_SET_POSITION",
+            "args": {
+              "actorId": "player",
+              "x": {
+                "type": "number",
+                "value": 806
+              },
+              "y": {
+                "type": "number",
+                "value": 80
+              },
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000012",
+            "command": "EVENT_WAIT",
+            "args": {
+              "time": {
+                "type": "number",
+                "value": 0.5
+              },
+              "frames": {
+                "type": "number",
+                "value": 30
+              },
+              "units": "frames"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000013",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "player",
+              "vectorX": "47",
+              "vectorY": "48",
+              "units": "pixels"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000014",
+            "command": "EVENT_ENGINE_FIELD_SET",
+            "args": {
+              "engineFieldKey": "plat_vel_x",
+              "value": {
+                "type": "number",
+                "value": 8000
+              }
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000015",
+            "command": "EVENT_WAIT",
+            "args": {
+              "time": {
+                "type": "number",
+                "value": 0.5
+              },
+              "frames": {
+                "type": "number",
+                "value": 60
+              },
+              "units": "frames"
+            }
+          },
+          {
+            "id": "e1de0000-0000-4000-8000-000000000016",
+            "command": "EVENT_ACTOR_GET_POSITION",
+            "args": {
+              "actorId": "player",
+              "vectorX": "49",
+              "vectorY": "50",
               "units": "pixels"
             }
           }
