@@ -50,6 +50,8 @@
 #  19. After Move Relative, the timer moves the Walker three more times - onto the floor
 #      with wall collisions, into the Block actor with actor collisions, and into the
 #      floor with none - and stores where each move ends (gbs2 G5).
+#  20. Then it drops the player onto a 45-degree ramp and pushes it up onto the flat
+#      top, storing where it stands after each (gbs2 G5: platformer slopes).
 # Throughout, the main scene plays a .uge track on the hUGE player (M14d), whose "call
 # routine" effects run scripts attached with the Music Routine event (M14e); and it plays
 # an FX Hammer sound effect on the Game Boy channels, borrowing one from the song (M14f).
@@ -277,6 +279,13 @@ timeout 300 gdb-multiarch -batch \
   -ex "print script_memory[37]" \
   -ex "print script_memory[38]" \
   -ex "print script_memory[39]" \
+  -ex "ignore 16 120" \
+  -ex "continue" \
+  -ex "echo \n@SLOPE\n" \
+  -ex "print script_memory[40]" \
+  -ex "print script_memory[41]" \
+  -ex "print script_memory[42]" \
+  -ex "print script_memory[43]" \
   -ex "quit" \
   "$ELF" > "$LOG" 2>&1 || true
 
@@ -595,15 +604,33 @@ shows_probe "@TILEWIDE" || fail "Wide scene tile (146, 9) does not show the repl
 # Scripted moves and collisions (gbs2 G5). gbvm's Actor Move To checks walls only when the
 # event asks for it, and then once, at the start: it clips the destination where the
 # actor's bounding box first meets a wall. The Walker's box reaches 7 px below its origin
-# (the sprite's bounds are y -8, 16 tall, like gbs2's ice block), so a move down onto the
-# floor at row 16 (128 px) stops at y 120, not with the origin at the floor. Then, with
-# actor collisions, a move right toward tile 132 stops at the last step before its box
-# overlaps the Block's at x 1024: 1024 - 16 = 1008. Last, a move with no collisions goes
-# into the floor, to tile row 17 (136 px). Each lands in variables 41-46 ([34]..[39]).
+# (its sprite is 16 x 8 at y 0; gbs2's ice block, 16 tall from y -8, ends there too), so
+# a move down onto the floor at row 16 (128 px) stops at y 120, not with the origin at
+# the floor. Then, with actor collisions, a move right toward tile 132 stops at the last
+# step before its box overlaps the Block's at x 1024: 1024 - 16 = 1008. Last, a move
+# with no collisions goes into the floor, to tile row 17 (136 px). Each lands in
+# variables 41-46 ([34]..[39]).
 # gbavm used to stop every move once its origin entered a solid tile, whatever it asked
 # for, and never tested actors: gbs2's ice block slid a tile into the wall, and pushed
 # rocks slid through each other.
 MOVES=$(hit_vals "@MOVES")
 [ "$MOVES" = "992 120 1008 120 1008 136 " ] || fail "the Walker's moves [onto-floor x y, into-Block x y, no-collisions x y] = [$MOVES], expected [992 120 1008 120 1008 136]"
 
-echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map, scripted-move collisions, scene background swap)"
+# Platformer slopes (gbs2 G5: the hill on Path to Sample Town). gbvm's move_and_collide
+# tests the player's bounding box against the tiles, and a slope tile under the box's
+# middle (1 px right of its centre) holds the feet on its surface. The Wide scene has a
+# hollow ramp of 45-degree tiles rising right (0x20), at (100, 15), (101, 14) and
+# (102, 13), and a solid flat top at row 13 from x 103. The timer drops the player at
+# x 806, y 80 px. Its box is 16 x 8 at y 0, so its middle is 806 * 32 + 255 + 32 subpx:
+# 223 subpx into tile 101, where the slope's surface is 223 subpx above the tile's
+# bottom. The feet land there, at y (14 * 256 + 33 - 255 - 1) / 32 = 105 px (variables
+# 47/48, [40]/[41]). Then plat_vel_x is set to 8000: the player walks up the ramp, past
+# the solid tile level with its top (which gbvm does not let block a walk up a slope),
+# and stops on the flat top, y 104 - 8 = 96 px ([42]/[43]). Slowing by plat_dec (208)
+# a frame, decelerating before each step, carries it 35.5 px to x 841; that tile would
+# have stopped it at x 808. gbavm tested points, not the box, and knew no slopes: the
+# player fell through the ramp to the floor (y 120) and slid along it.
+SLOPE=$(hit_vals "@SLOPE")
+[ "$SLOPE" = "806 105 841 96 " ] || fail "the player on the ramp [dropped x y, pushed x y] = [$SLOPE], expected [806 105 841 96]"
+
+echo "RUNTIME TESTS PASSED (overlay cover, palettes, projectiles, choice, menu, result vars, platform + shmup tunables, input attach, actor animation control, camera control, printer + device checks, .uge music at 64 Hz, music routines, PSG sound effects, player + timers held under the VM lock, platformer states + state scripts + speed, player-vs-actor collision, scenes wider than 512 px, custom-event arguments, Move Relative, parallax, Replace Tile on a padded map, scripted-move collisions, scene background swap, platformer slopes)"
