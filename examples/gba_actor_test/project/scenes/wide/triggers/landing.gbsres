@@ -5,9 +5,9 @@
   "name": "Landing",
   "symbol": "trigger_landing",
   "prefabId": "",
-  "x": 136,
+  "x": 141,
   "y": 10,
-  "width": 8,
+  "width": 3,
   "height": 6,
   "prefabScriptOverrides": {},
   "script": [
